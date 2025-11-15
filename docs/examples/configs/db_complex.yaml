@@ -10,29 +10,47 @@ platform:
       allow_parquet: true
       parquet_compression: "zstd"
 
-source:
-  type: "db"
-  system: "customers_dw"
-  table: "customer_snapshot"
-  db:
-    conn_str_env: "CUSTOMER_DB_CONN"
-    base_query: |
-      SELECT CustomerID, Name, Email, UpdatedAt FROM dbo.Customers WHERE UpdatedAt >= ? AND UpdatedAt < ?
-    incremental:
-      enabled: true
-      cursor_column: "UpdatedAt"
-      state_file: "./state/customers.cursor"
-      cursor_type: "datetime"
-      # Use cursor_type "string" if your cursor stores text, or omit state_file for stateless runs.
-  run:
-    load_pattern: "current_history"
-    write_parquet: true
-    write_csv: false
-    parallel_workers: 8
-    max_file_size_mb: 512
-    require_checksum: true
-    cleanup_on_failure: true
-    # Toggle parallel_workers based on available CPU/memory.
+sources:
+  - name: customer_snapshot
+    source:
+      type: "db"
+      system: "customers_dw"
+      table: "customer_snapshot"
+      db:
+        conn_str_env: "CUSTOMER_DB_CONN"
+        base_query: |
+          SELECT ClaimID, MemberID, ServiceDate, Amount, UpdatedAt
+          FROM dbo.ClaimsHeader
+          WHERE UpdatedAt >= ? AND UpdatedAt < ?
+        incremental:
+          enabled: true
+          cursor_column: "UpdatedAt"
+          state_file: "./state/customers.cursor"
+          cursor_type: "datetime"
+      run:
+        load_pattern: "current_history"
+        write_parquet: true
+        write_csv: false
+        parallel_workers: 8
+        max_file_size_mb: 512
+        require_checksum: true
+        cleanup_on_failure: true
+  - name: claim_cdc
+    source:
+      type: "db"
+      system: "claims_dw"
+      table: "claims_cdc"
+      db:
+        conn_str_env: "CLAIMS_DB_CONN_STR"
+        base_query: |
+          SELECT ClaimID, Status, UpdatedAt
+          FROM dbo.ClaimsDelta
+      run:
+        load_pattern: "cdc"
+        write_parquet: true
+        write_csv: false
+        max_rows_per_file: 400000
+        require_checksum: true
 
 silver:
   write_parquet: true
@@ -44,13 +62,13 @@ silver:
     empty_strings_as_null: true
   schema:
     rename_map:
-      CustomerID: customer_id
+      ClaimID: claim_id
       UpdatedAt: updated_at
     column_order:
-      - customer_id
-      - name
-      - email
-      - region
+      - claim_id
+      - member_id
+      - service_date
+      - amount
       - updated_at
   error_handling:
     enabled: true

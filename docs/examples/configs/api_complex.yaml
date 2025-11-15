@@ -10,51 +10,55 @@ platform:
       allow_parquet: true
       parquet_compression: "snappy"
 
-source:
-  type: "api"
-  system: "orders"
-  table: "orders_full"
-  api:
-    base_url: "https://api.example.com"
-    endpoint: "/orders"
-    method: "GET"
-    auth_type: "bearer"
-    auth_token_env: "ORDERS_API_TOKEN"
-    # Only one auth_type can be active; uncomment the section below for the alternative.
-    # auth_type: "basic"
-    # auth_user_env: "API_USER"
-    # auth_pass_env: "API_PASS"
-    # auth_type: "api_key"
-    # api_key_env: "ORDERS_API_KEY"
-    # Alternative authentication:
-    # auth_type: "basic"
-    # auth_user_env: "API_USER"
-    # auth_pass_env: "API_PASS"
-    # auth_type: "api_key"
-    # api_key_env: "ORDERS_API_KEY"
-    params:
-      page_size: 1000
-      include_inactive: false
-    pagination:
-      type: "page"
-      page_param: "page"
-      start_page: 1
-      max_pages: 1000
-    incremental:
-      enabled: true
-      cursor_field: "updated_at"
-      cursor_param: "updated_since"
-      initial_cursor_value: "2025-01-01T00:00:00Z"
-  run:
-    load_pattern: "current_history"
-    write_parquet: true
-    write_csv: false
-    max_rows_per_file: 250000
-    parallel_workers: 4
-    require_checksum: true
-    # Optional performance knobs:
-    # max_file_size_mb: 512
-    # cleanup_on_failure: false
+sources:
+  - name: orders_batch
+    source:
+      type: "api"
+      system: "orders"
+      table: "orders_full"
+      api:
+        base_url: "https://api.example.com"
+        endpoint: "/orders"
+        method: "GET"
+        auth_type: "bearer"
+        auth_token_env: "ORDERS_API_TOKEN"
+        params:
+          page_size: 1000
+          include_inactive: false
+        pagination:
+          type: "page"
+          page_param: "page"
+          start_page: 1
+          max_pages: 1000
+        incremental:
+          enabled: true
+          cursor_field: "updated_at"
+          cursor_param: "updated_since"
+          initial_cursor_value: "2025-01-01T00:00:00Z"
+      run:
+        load_pattern: "current_history"
+        write_parquet: true
+        write_csv: false
+        max_rows_per_file: 250000
+        parallel_workers: 4
+        require_checksum: true
+  - name: invoices_delta
+    source:
+      type: "api"
+      system: "billing"
+      table: "invoices"
+      api:
+        base_url: "https://api.example.com"
+        endpoint: "/invoices"
+        method: "GET"
+        auth_type: "api_key"  # alternative auth for this source
+        api_key_env: "INVOICE_API_KEY"
+      run:
+        load_pattern: "cdc"
+        write_parquet: true
+        write_csv: false
+        max_rows_per_file: 150000
+        require_checksum: true
 
 silver:
   write_parquet: true
@@ -64,6 +68,7 @@ silver:
   schema:
     rename_map:
       OrderID: order_id
+      UpdatedAt: updated_at
     column_order:
       - order_id
       - status
@@ -73,6 +78,6 @@ silver:
     empty_strings_as_null: true
   error_handling:
     enabled: true
-    max_bad_records: 100
+    max_bad_records: 25
     max_bad_percent: 2.0
   require_checksum: true
