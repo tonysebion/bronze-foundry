@@ -26,8 +26,9 @@ from core.parallel import run_parallel_extracts
 from core.logging_config import setup_logging
 from core.storage import get_storage_backend
 from core.patterns import LoadPattern
-from core.catalog import notify_catalog, report_run_metadata, report_lineage, report_quality_snapshot
+from core.catalog import notify_catalog, report_lineage, report_quality_snapshot, report_run_metadata
 from core.hooks import fire_webhooks
+from core.run_options import RunOptions
 
 __version__ = "1.0.0"
 
@@ -144,6 +145,8 @@ class BronzeOrchestrator:
         self.args = args
         self.config_paths = [p.strip() for p in args.config.split(",")] if args.config else []
         self._hook_context: Dict[str, Any] = {"layer": "bronze", "config_paths": list(self.config_paths)}
+        self._run_options: Optional[RunOptions] = None
+        self._configs_info: List[Dict[str, Any]] = []
         self._configs_info: List[Dict[str, Any]] = []
 
     def execute(self) -> int:
@@ -176,6 +179,7 @@ class BronzeOrchestrator:
 
         run_date = dt.date.fromisoformat(self.args.date) if self.args.date else dt.date.today()
         self._record_configs_info(configs, run_date)
+        self._run_options = self._build_run_options(configs, run_date)
         self._update_hook_context(run_date=run_date.isoformat())
         local_output_base = Path(configs[0]["source"]["run"].get("local_output_dir", "./output"))
         self._update_hook_context(
@@ -267,7 +271,12 @@ class BronzeOrchestrator:
         if extra:
             payload.update(extra)
 
-        urls = self.args.on_success_webhook if success else self.args.on_failure_webhook
+        if self._run_options:
+            urls = (
+                self._run_options.on_success_webhooks if success else self._run_options.on_failure_webhooks
+            )
+        else:
+            urls = self.args.on_success_webhook if success else self.args.on_failure_webhook
         fire_webhooks(urls, payload)
 
         event = "bronze_run_completed" if success else "bronze_run_failed"
@@ -278,6 +287,31 @@ class BronzeOrchestrator:
         for key, value in kwargs.items():
             if value is not None:
                 self._hook_context[key] = value
+
+    def _build_run_options(self, configs: List[Dict[str, Any]], run_date: dt.date) -> RunOptions:
+        run_cfg = configs[0]["source"]["run"]
+        silver_cfg = configs[0].get("silver", {})
+        load_pattern = LoadPattern.normalize(run_cfg.get("load_pattern"))
+        write_parquet = run_cfg.get("write_parquet", True)
+        write_csv = run_cfg.get("write_csv", False)
+        parquet_compression = run_cfg.get("parquet_compression", "snappy")
+        primary_keys = silver_cfg.get("primary_keys", []) or []
+        order_column = silver_cfg.get("order_column")
+        partition_columns = silver_cfg.get("partitioning", {}).get("columns", [])
+
+        return RunOptions(
+            load_pattern=load_pattern,
+            require_checksum=silver_cfg.get("require_checksum", False),
+            write_parquet=write_parquet,
+            write_csv=write_csv,
+            parquet_compression=parquet_compression,
+            primary_keys=primary_keys,
+            order_column=order_column,
+            partition_columns=partition_columns,
+            artifact_names=RunOptions.default_artifacts(),
+            on_success_webhooks=self.args.on_success_webhook or [],
+            on_failure_webhooks=self.args.on_failure_webhook or [],
+        )
 
     def _record_configs_info(self, configs: List[Dict[str, Any]], run_date: dt.date) -> None:
         self._configs_info = []

@@ -27,6 +27,7 @@ from core.catalog import (
     report_lineage,
 )
 from core.hooks import fire_webhooks
+from core.run_options import RunOptions
 
 logger = logging.getLogger(__name__)
 
@@ -379,46 +380,40 @@ def _select_config(cfgs: List[Dict[str, Any]], source_name: Optional[str]) -> Di
 
 @dataclass
 class PromotionOptions:
+    run_options: RunOptions
     schema_cfg: Dict[str, Any]
     normalization_cfg: Dict[str, Any]
     error_cfg: Dict[str, Any]
-    primary_keys: List[str]
-    order_column: Optional[str]
-    partition_columns: List[str]
-    write_parquet: bool
-    write_csv: bool
-    parquet_compression: str
-    artifact_names: Dict[str, str]
-    require_checksum: bool
 
     @classmethod
-    def from_inputs(cls, silver_cfg: Dict[str, Any], args: argparse.Namespace) -> "PromotionOptions":
-        schema_cfg = silver_cfg.get("schema") or {"rename_map": {}, "column_order": None}
-        normalization_cfg = silver_cfg.get("normalization") or {"trim_strings": False, "empty_strings_as_null": False}
-        error_cfg = silver_cfg.get("error_handling") or {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0}
-
-        cli_primary = parse_primary_keys(args.primary_key) if args.primary_key is not None else None
-        primary_keys = list(cli_primary if cli_primary is not None else silver_cfg.get("primary_keys", []))
-
-        cli_order_column = args.order_column if args.order_column is not None else None
-        order_column = cli_order_column if cli_order_column is not None else silver_cfg.get("order_column")
-
-        partition_columns = list(silver_cfg.get("partitioning", {}).get("columns", []))
+    def from_inputs(
+        cls,
+        silver_cfg: Dict[str, Any],
+        args: argparse.Namespace,
+        load_pattern: LoadPattern,
+    ) -> "PromotionOptions":
+        schema_cfg = silver_cfg.get("schema", {"rename_map": {}, "column_order": None})
+        normalization_cfg = silver_cfg.get("normalization", {"trim_strings": False, "empty_strings_as_null": False})
+        error_cfg = silver_cfg.get("error_handling", {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0})
 
         rename_map = schema_cfg.get("rename_map") or {}
-        primary_keys = [rename_map.get(pk, pk) for pk in primary_keys]
-        if order_column:
-            order_column = rename_map.get(order_column, order_column)
-        partition_columns = [rename_map.get(col, col) for col in partition_columns]
+
+        cli_primary = parse_primary_keys(args.primary_key) if args.primary_key is not None else None
+        primary_keys_raw = list(cli_primary if cli_primary is not None else silver_cfg.get("primary_keys", []))
+        primary_keys = [rename_map.get(pk, pk) for pk in primary_keys_raw]
+
+        cli_order_column = args.order_column if args.order_column is not None else None
+        order_column_raw = cli_order_column if cli_order_column is not None else silver_cfg.get("order_column")
+        order_column = rename_map.get(order_column_raw, order_column_raw) if order_column_raw else None
+
+        partition_columns = [rename_map.get(col, col) for col in silver_cfg.get("partitioning", {}).get("columns", [])]
 
         write_parquet = args.write_parquet if args.write_parquet is not None else silver_cfg.get("write_parquet", True)
         write_csv = args.write_csv if args.write_csv is not None else silver_cfg.get("write_csv", False)
         if not write_parquet and not write_csv:
             raise ValueError("At least one output format (Parquet or CSV) must be enabled")
 
-        parquet_compression = (
-            args.parquet_compression if args.parquet_compression else silver_cfg.get("parquet_compression", "snappy")
-        )
+        parquet_compression = args.parquet_compression if args.parquet_compression else silver_cfg.get("parquet_compression", "snappy")
 
         artifact_names = {
             "full_snapshot": args.full_output_name or silver_cfg.get("full_output_name", "full_snapshot"),
@@ -427,22 +422,25 @@ class PromotionOptions:
             "history": args.history_output_name or silver_cfg.get("history_output_name", "history"),
         }
 
-        require_checksum = (
-            args.require_checksum if args.require_checksum is not None else silver_cfg.get("require_checksum", False)
-        )
-
-        return cls(
-            schema_cfg=schema_cfg,
-            normalization_cfg=normalization_cfg,
-            error_cfg=error_cfg,
-            primary_keys=primary_keys,
-            order_column=order_column,
-            partition_columns=partition_columns,
+        run_options = RunOptions(
+            load_pattern=load_pattern,
+            require_checksum=args.require_checksum if args.require_checksum is not None else silver_cfg.get("require_checksum", False),
             write_parquet=write_parquet,
             write_csv=write_csv,
             parquet_compression=parquet_compression,
+            primary_keys=primary_keys,
+            order_column=order_column,
+            partition_columns=partition_columns,
             artifact_names=artifact_names,
-            require_checksum=require_checksum,
+            on_success_webhooks=args.on_success_webhook or [],
+            on_failure_webhooks=args.on_failure_webhook or [],
+        )
+
+        return cls(
+            run_options=run_options,
+            schema_cfg=schema_cfg,
+            normalization_cfg=normalization_cfg,
+            error_cfg=error_cfg,
         )
 
 
@@ -470,6 +468,7 @@ class SilverPromotionService:
         self.cfg_list = load_configs(args.config) if args.config else None
         self._silver_identity: Optional[Tuple[Any, Any, int, str, bool]] = None
         self._hook_context: Dict[str, Any] = {"layer": "silver"}
+        self._run_options: Optional[RunOptions] = None
 
     def execute(self) -> int:
         try:
@@ -505,6 +504,7 @@ class SilverPromotionService:
             domain=context.domain,
             entity=context.entity,
         )
+        self._run_options = context.options.run_options
         self._maybe_verify_checksum(context)
 
         if self.args.dry_run:
@@ -516,17 +516,18 @@ class SilverPromotionService:
         normalized_df = normalize_dataframe(normalized_df, context.options.normalization_cfg)
         logger.info("Loaded %s records from Bronze path %s", len(normalized_df), bronze_path)
 
+        run_opts = context.options.run_options
         outputs = write_silver_outputs(
             normalized_df,
             silver_partition,
             context.load_pattern,
-            context.options.primary_keys,
-            context.options.order_column,
-            context.options.write_parquet,
-            context.options.write_csv,
-            context.options.parquet_compression,
-            context.options.artifact_names,
-            context.options.partition_columns,
+            run_opts.primary_keys,
+            run_opts.order_column,
+            run_opts.write_parquet,
+            run_opts.write_csv,
+            run_opts.parquet_compression,
+            run_opts.artifact_names,
+            run_opts.partition_columns,
             context.options.error_cfg,
         )
 
@@ -644,7 +645,7 @@ class SilverPromotionService:
     ) -> PromotionContext:
         silver_cfg = cfg["silver"] if cfg else _default_silver_cfg()
         try:
-            options = PromotionOptions.from_inputs(silver_cfg, self.args)
+            options = PromotionOptions.from_inputs(silver_cfg, self.args, load_pattern)
         except ValueError as exc:
             self.parser.error(str(exc))
 
@@ -671,7 +672,7 @@ class SilverPromotionService:
         )
 
     def _maybe_verify_checksum(self, context: PromotionContext) -> None:
-        if not context.options.require_checksum:
+        if not context.options.run_options.require_checksum:
             return
         manifest = verify_checksum_manifest(context.bronze_path, expected_pattern=context.load_pattern.value)
         manifest_path = context.bronze_path / "_checksums.json"
@@ -694,22 +695,22 @@ class SilverPromotionService:
             extra_metadata={
                 "load_pattern": context.load_pattern.value,
                 "bronze_path": str(context.bronze_path),
-                "primary_keys": context.options.primary_keys,
-                "order_column": context.options.order_column,
+                "primary_keys": context.options.run_options.primary_keys,
+                "order_column": context.options.run_options.order_column,
                 "domain": context.domain,
                 "entity": context.entity,
                 "version": context.version,
                 "load_partition_name": context.load_partition_name,
                 "include_pattern_folder": context.include_pattern_folder,
-                "partition_columns": context.options.partition_columns,
-                "write_parquet": context.options.write_parquet,
-                "write_csv": context.options.write_csv,
-                "parquet_compression": context.options.parquet_compression,
+                "partition_columns": context.options.run_options.partition_columns,
+                "write_parquet": context.options.run_options.write_parquet,
+                "write_csv": context.options.run_options.write_csv,
+                "parquet_compression": context.options.run_options.parquet_compression,
                 "normalization": context.options.normalization_cfg,
                 "schema": context.options.schema_cfg,
                 "error_handling": context.options.error_cfg,
                 "artifacts": {label: [p.name for p in paths] for label, paths in outputs.items()},
-                "require_checksum": context.options.require_checksum,
+                "require_checksum": context.options.run_options.require_checksum,
             },
         )
         logger.debug("Wrote Silver metadata to %s", metadata_path)
@@ -729,7 +730,7 @@ class SilverPromotionService:
         schema_snapshot = [{"name": name, "dtype": str(dtype)} for name, dtype in df.dtypes.items()]
         stats = {
             "record_count": int(len(df)),
-            "primary_key_count": len(context.options.primary_keys),
+            "primary_key_count": len(context.options.run_options.primary_keys),
         }
 
         extra = {
@@ -751,7 +752,7 @@ class SilverPromotionService:
             "load_pattern": context.load_pattern.value,
             "silver_partition": str(context.silver_partition),
             "artifact_names": list(outputs.keys()),
-            "require_checksum": context.options.require_checksum,
+            "require_checksum": context.options.run_options.require_checksum,
             "manifest_path": manifest_path.name,
         }
         report_run_metadata(dataset_id, run_metadata)
@@ -775,7 +776,12 @@ class SilverPromotionService:
         if extra:
             payload.update(extra)
 
-        urls = self.args.on_success_webhook if success else self.args.on_failure_webhook
+        if self._run_options:
+            urls = (
+                self._run_options.on_success_webhooks if success else self._run_options.on_failure_webhooks
+            )
+        else:
+            urls = self.args.on_success_webhook if success else self.args.on_failure_webhook
         fire_webhooks(urls, payload)
 
         event = "silver_promotion_completed" if success else "silver_promotion_failed"
