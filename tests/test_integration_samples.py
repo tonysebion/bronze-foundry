@@ -15,10 +15,12 @@ import yaml
 
 BRONZE_SAMPLE_ROOT = Path("docs/examples/data/bronze_samples")
 REPO_ROOT = Path(__file__).resolve().parents[1]
+GENERATE_SCRIPT = Path("scripts") / "generate_sample_data.py"
 
 
 @pytest.fixture(scope="module")
 def bronze_samples_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    subprocess.run([sys.executable, str(GENERATE_SCRIPT)], check=True, cwd=REPO_ROOT)
     if not BRONZE_SAMPLE_ROOT.exists():
         pytest.skip("sample data missing; run scripts/generate_sample_data.py")
 
