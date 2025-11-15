@@ -30,11 +30,13 @@ source:
     class_name: "SalesforceExampleExtractor"
 
   salesforce:
+    # Your extractor can read this section as needed
     soql_query: "SELECT Id, Name, LastModifiedDate FROM Account"
+    # Add incremental or field filters as needed (e.g., cursor fields, event types)
 
   run:
-    max_rows_per_file: 500000
-    write_csv: true
-    write_parquet: true
-    s3_enabled: false
+    max_rows_per_file: 500000      # large chunk size for custom runs
+    write_csv: true                # ease of debugging
+    write_parquet: true            # analytics format
+    s3_enabled: false              # keep local while experimenting
     local_output_dir: "./output"

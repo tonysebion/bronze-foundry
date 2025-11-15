@@ -35,6 +35,8 @@ source:
           ServiceDate,
           Amount
       FROM dbo.ClaimsHeader
+    # Add incremental clause or WHERE filters as needed
+
 
   run:
     max_rows_per_file: 500000

@@ -23,7 +23,7 @@ platform:
 
 source:
   type: "api"
-  system: "example_product"
+  system: "example_product"  # policies use system/table paths
   table: "tickets"
 
   api:
@@ -31,18 +31,22 @@ source:
     endpoint: "/v1/tickets"
     method: "GET"
 
-    auth_type: "bearer"
+    auth_type: "bearer"  # swap to api_key/basic if needed
     auth_token_env: "EXAMPLE_API_TOKEN"
 
     params:
       page_size: 100
 
     pagination:
-      type: "none"
+      type: "none"  # starts without paging; uncomment offsets/pages below as needed
+    # pagination:
+    #   type: "page"
+    #   page_size: 100
+    #   page_param: "page"
 
   run:
-    max_rows_per_file: 500000
-    write_csv: true
-    write_parquet: true
+    max_rows_per_file: 500000  # large chunk size for sampling
+    write_csv: true  # keep CSV for debugging
+    write_parquet: true  # analytics default
     s3_enabled: false
     local_output_dir: "./output"
