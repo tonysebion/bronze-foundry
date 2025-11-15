@@ -7,7 +7,7 @@ import datetime as dt
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
@@ -85,6 +85,97 @@ def build_current_view(
     )
 
 
+def apply_schema_settings(df: pd.DataFrame, schema_cfg: Dict[str, Any]) -> pd.DataFrame:
+    rename_map = schema_cfg.get("rename_map") or {}
+    column_order = schema_cfg.get("column_order")
+
+    result = df.copy()
+    if rename_map:
+        missing = [col for col in rename_map if col not in result.columns]
+        if missing:
+            logger.warning("schema.rename_map references missing columns: %s", missing)
+        result = result.rename(columns=rename_map)
+
+    if column_order:
+        missing_order_cols = [col for col in column_order if col not in result.columns]
+        if missing_order_cols:
+            logger.warning("schema.column_order missing columns: %s", missing_order_cols)
+        ordered = [col for col in column_order if col in result.columns]
+        remaining = [col for col in result.columns if col not in ordered]
+        result = result[ordered + remaining]
+
+    return result
+
+
+def normalize_dataframe(df: pd.DataFrame, normalization_cfg: Dict[str, Any]) -> pd.DataFrame:
+    trim_strings = normalization_cfg.get("trim_strings", False)
+    empty_as_null = normalization_cfg.get("empty_strings_as_null", False)
+
+    result = df.copy()
+    if trim_strings or empty_as_null:
+        object_cols = result.select_dtypes(include="object").columns
+        for col in object_cols:
+            if trim_strings:
+                result[col] = result[col].apply(lambda val: val.strip() if isinstance(val, str) else val)
+            if empty_as_null:
+                result[col] = result[col].apply(lambda val: None if isinstance(val, str) and val == "" else val)
+    return result
+
+
+def partition_dataframe(df: pd.DataFrame, partition_column: Optional[str]) -> Dict[Optional[str], pd.DataFrame]:
+    if not partition_column or partition_column not in df.columns:
+        if partition_column and partition_column not in df.columns:
+            logger.warning("Partition column '%s' not found; skipping partitioning", partition_column)
+        return {None: df}
+
+    partitions = {}
+    for value, subset in df.groupby(partition_column):
+        partitions[value] = subset
+    return partitions
+
+
+def handle_error_rows(
+    df: pd.DataFrame,
+    primary_keys: List[str],
+    error_cfg: Dict[str, Any],
+    dataset_name: str,
+    output_dir: Path,
+) -> pd.DataFrame:
+    if not error_cfg.get("enabled") or not primary_keys:
+        if error_cfg.get("enabled") and not primary_keys:
+            logger.warning("Error handling enabled but no primary_keys specified; skipping validation")
+        return df
+
+    missing_cols = [col for col in primary_keys if col not in df.columns]
+    if missing_cols:
+        logger.warning("Primary key columns %s not found; skipping error handling", missing_cols)
+        return df
+
+    invalid_mask = df[primary_keys].isnull().any(axis=1)
+    invalid_count = int(invalid_mask.sum())
+    if invalid_count == 0:
+        return df
+
+    total_rows = len(df)
+    percent = (invalid_count / total_rows) * 100 if total_rows else 0
+
+    error_dir = output_dir / "_errors"
+    error_dir.mkdir(parents=True, exist_ok=True)
+    error_path = error_dir / f"{dataset_name}.csv"
+    df.loc[invalid_mask].to_csv(error_path, index=False)
+    logger.warning("Wrote %s invalid rows to %s", invalid_count, error_path)
+
+    max_records = error_cfg.get("max_bad_records", 0)
+    max_percent = error_cfg.get("max_bad_percent", 0.0)
+
+    if (max_records == 0 and invalid_count > 0) or (invalid_count > max_records and percent > max_percent):
+        raise ValueError(
+            f"Error threshold exceeded for {dataset_name}: {invalid_count} invalid rows ({percent:.2f}%)"
+        )
+
+    return df.loc[~invalid_mask].copy()
+
+
 def _write_dataset(
     df: pd.DataFrame,
     base_name: str,
@@ -94,6 +185,7 @@ def _write_dataset(
     parquet_compression: str,
 ) -> List[Path]:
     files: List[Path] = []
+    output_dir.mkdir(parents=True, exist_ok=True)
     if write_parquet:
         parquet_path = output_dir / f"{base_name}.parquet"
         df.to_parquet(parquet_path, index=False, compression=parquet_compression)
@@ -115,30 +207,50 @@ def write_silver_outputs(
     write_csv: bool,
     parquet_compression: str,
     artifact_names: Dict[str, str],
+    partition_column: Optional[str],
+    error_cfg: Dict[str, Any],
 ) -> Dict[str, List[Path]]:
     output_dir.mkdir(parents=True, exist_ok=True)
     outputs: Dict[str, List[Path]] = {}
 
+    def process_dataset(dataset_df: pd.DataFrame, name: str) -> List[Path]:
+        partitions = partition_dataframe(dataset_df, partition_column)
+        written_files: List[Path] = []
+        for partition_value, partition_df in partitions.items():
+            target_dir = output_dir
+            suffix = ""
+            if partition_column and partition_value is not None:
+                safe_value = str(partition_value).replace("/", "_")
+                target_dir = output_dir / f"{partition_column}={safe_value}"
+                suffix = f" ({partition_column}={safe_value})"
+            cleaned_df = handle_error_rows(partition_df, primary_keys, error_cfg, name, target_dir)
+            written_files.extend(
+                _write_dataset(
+                    cleaned_df,
+                    name,
+                    target_dir,
+                    write_parquet,
+                    write_csv,
+                    parquet_compression,
+                )
+            )
+            if partition_value is not None:
+                logger.info("Written partition%s for %s", suffix, name)
+        return written_files
+
     if pattern == LoadPattern.FULL:
         name = artifact_names.get("full_snapshot", "full_snapshot")
-        outputs[name] = _write_dataset(df, name, output_dir, write_parquet, write_csv, parquet_compression)
+        outputs[name] = process_dataset(df, name)
     elif pattern == LoadPattern.CDC:
         name = artifact_names.get("cdc", "cdc_changes")
-        outputs[name] = _write_dataset(df, name, output_dir, write_parquet, write_csv, parquet_compression)
+        outputs[name] = process_dataset(df, name)
     elif pattern == LoadPattern.CURRENT_HISTORY:
         history_name = artifact_names.get("history", "history")
-        outputs[history_name] = _write_dataset(df, history_name, output_dir, write_parquet, write_csv, parquet_compression)
+        outputs[history_name] = process_dataset(df, history_name)
 
         current_df = build_current_view(df, primary_keys, order_column)
         current_name = artifact_names.get("current", "current")
-        outputs[current_name] = _write_dataset(
-            current_df,
-            current_name,
-            output_dir,
-            write_parquet,
-            write_csv,
-            parquet_compression,
-        )
+        outputs[current_name] = process_dataset(current_df, current_name)
     else:
         raise ValueError(f"Unsupported load pattern {pattern}")
 
@@ -309,26 +421,33 @@ def main() -> int:
         )
         load_pattern = metadata_pattern
 
-    primary_keys = (
-        parse_primary_keys(args.primary_key)
-        if args.primary_key is not None
-        else (cfg["silver"].get("primary_keys", []) if cfg else [])
-    )
-    order_column = (
-        args.order_column
-        if args.order_column is not None
-        else (cfg["silver"].get("order_column") if cfg else None)
-    )
+    cli_primary_keys = parse_primary_keys(args.primary_key) if args.primary_key is not None else None
+    cli_order_column = args.order_column if args.order_column is not None else None
+
+    def _default_silver_cfg() -> Dict[str, Any]:
+        return {
+            "schema": {"rename_map": {}, "column_order": None},
+            "normalization": {"trim_strings": False, "empty_strings_as_null": False},
+            "partitioning": {"column": None},
+            "error_handling": {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0},
+            "primary_keys": [],
+            "order_column": None,
+            "write_parquet": True,
+            "write_csv": False,
+            "parquet_compression": "snappy",
+            "full_output_name": "full_snapshot",
+            "cdc_output_name": "cdc_changes",
+            "current_output_name": "current",
+            "history_output_name": "history",
+        }
+
+    silver_cfg = cfg["silver"] if cfg else _default_silver_cfg()
 
     write_parquet = (
-        args.write_parquet
-        if args.write_parquet is not None
-        else (cfg["silver"]["write_parquet"] if cfg else True)
+        args.write_parquet if args.write_parquet is not None else silver_cfg.get("write_parquet", True)
     )
     write_csv = (
-        args.write_csv
-        if args.write_csv is not None
-        else (cfg["silver"]["write_csv"] if cfg else False)
+        args.write_csv if args.write_csv is not None else silver_cfg.get("write_csv", False)
     )
 
     if not write_parquet and not write_csv:
@@ -337,15 +456,14 @@ def main() -> int:
     parquet_compression = (
         args.parquet_compression
         if args.parquet_compression
-        else (cfg["silver"]["parquet_compression"] if cfg else "snappy")
+        else silver_cfg.get("parquet_compression", "snappy")
     )
 
     artifact_names = {
-        "full_snapshot": args.full_output_name
-        or (cfg["silver"].get("full_output_name") if cfg else "full_snapshot"),
-        "cdc": args.cdc_output_name or (cfg["silver"].get("cdc_output_name") if cfg else "cdc_changes"),
-        "current": args.current_output_name or (cfg["silver"].get("current_output_name") if cfg else "current"),
-        "history": args.history_output_name or (cfg["silver"].get("history_output_name") if cfg else "history"),
+        "full_snapshot": args.full_output_name or silver_cfg.get("full_output_name", "full_snapshot"),
+        "cdc": args.cdc_output_name or silver_cfg.get("cdc_output_name", "cdc_changes"),
+        "current": args.current_output_name or silver_cfg.get("current_output_name", "current"),
+        "history": args.history_output_name or silver_cfg.get("history_output_name", "history"),
     }
 
     silver_partition = silver_base / derive_relative_partition(bronze_path)
@@ -359,6 +477,23 @@ def main() -> int:
         return 0
 
     df = load_bronze_records(bronze_path)
+
+    schema_cfg = silver_cfg.get("schema", {})
+    rename_map = schema_cfg.get("rename_map") or {}
+
+    primary_keys = cli_primary_keys if cli_primary_keys is not None else silver_cfg.get("primary_keys", [])
+    order_column = cli_order_column if cli_order_column is not None else silver_cfg.get("order_column")
+    partition_column = silver_cfg.get("partitioning", {}).get("column")
+
+    primary_keys = [rename_map.get(pk, pk) for pk in primary_keys]
+    if order_column:
+        order_column = rename_map.get(order_column, order_column)
+    if partition_column:
+        partition_column = rename_map.get(partition_column, partition_column)
+
+    normalized_df = apply_schema_settings(df, schema_cfg)
+    normalized_df = normalize_dataframe(normalized_df, silver_cfg.get("normalization", {}))
+    df = normalized_df
     logger.info("Loaded %s records from Bronze path %s", len(df), bronze_path)
 
     outputs = write_silver_outputs(
@@ -371,6 +506,8 @@ def main() -> int:
         write_csv,
         parquet_compression,
         artifact_names,
+        partition_column,
+        silver_cfg.get("error_handling", {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0}),
     )
 
     write_batch_metadata(
@@ -382,9 +519,13 @@ def main() -> int:
             "bronze_path": str(bronze_path),
             "primary_keys": primary_keys,
             "order_column": order_column,
+            "partition_column": partition_column,
             "write_parquet": write_parquet,
             "write_csv": write_csv,
             "parquet_compression": parquet_compression,
+            "normalization": silver_cfg.get("normalization", {}),
+            "schema": schema_cfg,
+            "error_handling": silver_cfg.get("error_handling", {}),
             "artifacts": {label: [p.name for p in paths] for label, paths in outputs.items()},
         },
     )

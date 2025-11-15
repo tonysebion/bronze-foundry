@@ -222,6 +222,58 @@ def load_config(path: str) -> Dict[str, Any]:
         if key in silver_cfg and silver_cfg[key] is not None and not isinstance(silver_cfg[key], str):
             raise ValueError(f"silver.{key} must be a string when provided")
 
+    schema_cfg = silver_cfg.get("schema", {})
+    if not isinstance(schema_cfg, dict):
+        raise ValueError("silver.schema must be a dictionary")
+    column_order = schema_cfg.get("column_order")
+    if column_order is not None and (not isinstance(column_order, list) or any(not isinstance(col, str) for col in column_order)):
+        raise ValueError("silver.schema.column_order must be a list of strings")
+    rename_map = schema_cfg.get("rename_map")
+    if rename_map is not None:
+        if not isinstance(rename_map, dict) or any(not isinstance(k, str) or not isinstance(v, str) for k, v in rename_map.items()):
+            raise ValueError("silver.schema.rename_map must be a mapping of strings")
+    schema_cfg.setdefault("column_order", None)
+    schema_cfg.setdefault("rename_map", {})
+    silver_cfg["schema"] = schema_cfg
+
+    normalization_cfg = silver_cfg.get("normalization", {})
+    if not isinstance(normalization_cfg, dict):
+        raise ValueError("silver.normalization must be a dictionary")
+    for key in ["trim_strings", "empty_strings_as_null"]:
+        value = normalization_cfg.get(key)
+        if value is not None and not isinstance(value, bool):
+            raise ValueError(f"silver.normalization.{key} must be a boolean")
+    normalization_cfg.setdefault("trim_strings", False)
+    normalization_cfg.setdefault("empty_strings_as_null", False)
+    silver_cfg["normalization"] = normalization_cfg
+
+    error_cfg = silver_cfg.get("error_handling", {})
+    if not isinstance(error_cfg, dict):
+        raise ValueError("silver.error_handling must be a dictionary")
+    if "enabled" in error_cfg and not isinstance(error_cfg["enabled"], bool):
+        raise ValueError("silver.error_handling.enabled must be a boolean")
+    for key in ["max_bad_records", "max_bad_percent"]:
+        if key in error_cfg:
+            value = error_cfg[key]
+            if key == "max_bad_records":
+                if not isinstance(value, int) or value < 0:
+                    raise ValueError("silver.error_handling.max_bad_records must be a non-negative integer")
+            else:
+                if not isinstance(value, (int, float)) or value < 0:
+                    raise ValueError("silver.error_handling.max_bad_percent must be a non-negative number")
+    error_cfg.setdefault("enabled", False)
+    error_cfg.setdefault("max_bad_records", 0)
+    error_cfg.setdefault("max_bad_percent", 0.0)
+    silver_cfg["error_handling"] = error_cfg
+
+    partition_cfg = silver_cfg.get("partitioning", {})
+    if not isinstance(partition_cfg, dict):
+        raise ValueError("silver.partitioning must be a dictionary")
+    if "column" in partition_cfg and partition_cfg["column"] is not None and not isinstance(partition_cfg["column"], str):
+        raise ValueError("silver.partitioning.column must be a string when provided")
+    partition_cfg.setdefault("column", None)
+    silver_cfg["partitioning"] = partition_cfg
+
     silver_cfg.setdefault("output_dir", "./silver_output")
     silver_cfg.setdefault("write_parquet", True)
     silver_cfg.setdefault("write_csv", False)
@@ -475,6 +527,12 @@ def _validate_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     silver_cfg.setdefault("current_output_name", "current")
     silver_cfg.setdefault("history_output_name", "history")
     silver_cfg.setdefault("cdc_output_name", "cdc_changes")
+
+    if pattern == LoadPattern.CURRENT_HISTORY:
+        if not silver_cfg["primary_keys"]:
+            raise ValueError("silver.primary_keys must be provided when load_pattern='current_history'")
+        if not silver_cfg.get("order_column"):
+            raise ValueError("silver.order_column must be provided when load_pattern='current_history'")
 
     cfg["silver"] = silver_cfg
 

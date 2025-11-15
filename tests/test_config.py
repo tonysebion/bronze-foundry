@@ -207,6 +207,28 @@ class TestConfigLoading:
         names = [cfg["source"]["config_name"] for cfg in configs]
         assert names == ["full_orders", "cdc_orders"]
 
+    def test_current_history_requires_primary_keys(self, tmp_path):
+        config = {
+            "platform": {
+                "bronze": {"s3_bucket": "test", "s3_prefix": "bronze"},
+                "s3_connection": {},
+            },
+            "silver": {},
+            "source": {
+                "type": "file",
+                "system": "demo",
+                "table": "orders",
+                "file": {"path": "./data/orders.csv", "format": "csv"},
+                "run": {"load_pattern": "current_history"},
+            },
+        }
+        config_file = tmp_path / "current_history.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config, f)
+
+        with pytest.raises(ValueError, match="silver\\.primary_keys"):
+            load_config(str(config_file))
+
     def test_invalid_load_pattern(self, tmp_path):
         """Test that invalid load patterns raise ValueError."""
         config = {

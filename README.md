@@ -224,6 +224,12 @@ python silver_extract.py --config docs/examples/configs/file_example.yaml --date
   - Partition overrides still available via `--bronze-path`/`--silver-base` when you need to promote ad-hoc data
 - Define many inputs in a single YAML by using the `sources:` list (each item holds its own `source` and optional `silver` overrides). Bronze automatically runs every entry; Silver uses `--source-name <entry>` to pick the one you want when the config contains multiple sources.
 
+### Silver Refinement Options
+- `silver.schema`: rename or reorder columns for standardized curated tables.
+- `silver.normalization`: toggle `trim_strings` / `empty_strings_as_null` to keep formatting consistent across datasets.
+- `silver.error_handling`: set `enabled`, `max_bad_records`, and `max_bad_percent` to quarantine bad rows into `_errors/` files instead of failing immediately (exceeds threshold → fail).
+- `silver.partitioning`: add a secondary partition column (e.g., status, region) for Silver outputs while still mirroring the Bronze folder layout.
+
 ### Core Features
 - ✅ Proper Python package structure
 - ✅ Comprehensive configuration validation

@@ -33,4 +33,17 @@ silver:
   order_column: updated_at
   current_output_name: current
   history_output_name: history
+  schema:
+    rename_map:
+      order_total: total_amount
+    column_order: ["order_id", "customer_id", "status", "total_amount", "updated_at"]
+  normalization:
+    trim_strings: true
+    empty_strings_as_null: true
+  error_handling:
+    enabled: true
+    max_bad_records: 5
+    max_bad_percent: 1.0
+  partitioning:
+    column: status
   cdc_output_name: cdc_changes
