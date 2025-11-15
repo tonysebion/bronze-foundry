@@ -15,22 +15,6 @@ class SilverModel(str, Enum):
     FULL_MERGE_DEDUPE = "full_merge_dedupe"
     PERIODIC_SNAPSHOT = "periodic_snapshot"
 
-    _ALIASES: Mapping[str, str] = {
-        "scd_type_1": "scd_type_1",
-        "scd1": "scd_type_1",
-        "scd type 1": "scd_type_1",
-        "scd_type_2": "scd_type_2",
-        "scd2": "scd_type_2",
-        "scd type 2": "scd_type_2",
-        "incremental_merge": "incremental_merge",
-        "incremental": "incremental_merge",
-        "full_merge_dedupe": "full_merge_dedupe",
-        "full_merge": "full_merge_dedupe",
-        "full merge": "full_merge_dedupe",
-        "periodic_snapshot": "periodic_snapshot",
-        "periodic": "periodic_snapshot",
-    }
-
     @classmethod
     def choices(cls) -> List[str]:
         return [member.value for member in cls]
@@ -42,7 +26,7 @@ class SilverModel(str, Enum):
         if not raw:
             raise ValueError("Silver model must be provided")
         candidate = raw.strip().lower()
-        canonical = cls._ALIASES.get(candidate, candidate)
+        canonical = SILVER_MODEL_ALIASES.get(candidate, candidate)
         for member in cls:
             if member.value == canonical:
                 return member
@@ -74,3 +58,20 @@ class SilverModel(str, Enum):
             self.PERIODIC_SNAPSHOT: "Emit the exact Bronze snapshot for periodic refreshes",
         }
         return descriptions.get(self, self.value)
+
+
+SILVER_MODEL_ALIASES: Mapping[str, str] = {
+    "scd_type_1": "scd_type_1",
+    "scd1": "scd_type_1",
+    "scd type 1": "scd_type_1",
+    "scd_type_2": "scd_type_2",
+    "scd2": "scd_type_2",
+    "scd type 2": "scd_type_2",
+    "incremental_merge": "incremental_merge",
+    "incremental": "incremental_merge",
+    "full_merge_dedupe": "full_merge_dedupe",
+    "full_merge": "full_merge_dedupe",
+    "full merge": "full_merge_dedupe",
+    "periodic_snapshot": "periodic_snapshot",
+    "periodic": "periodic_snapshot",
+}

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from pathlib import Path
 
 import pandas as pd
 import pytest
 
 from core.patterns import LoadPattern
 from core.silver_models import SilverModel
-from silver_extract import SilverModelPlanner
+from silver_extract import SilverModelPlanner, write_silver_outputs
 
 
 PRIMARY_KEYS = ["order_id"]
@@ -38,16 +39,16 @@ class TrackingWriter:
         return []
 
 
-@pytest.mark.parametrize(
-    "silver_model,expected_labels",
-    [
-        (SilverModel.SCD_TYPE_1, {"current"}),
-        (SilverModel.SCD_TYPE_2, {"history", "current"}),
-        (SilverModel.INCREMENTAL_MERGE, {"cdc"}),
-        (SilverModel.FULL_MERGE_DEDUPE, {"full_snapshot"}),
-        (SilverModel.PERIODIC_SNAPSHOT, {"full_snapshot"}),
-    ],
-)
+MODEL_LABELS = [
+    (SilverModel.SCD_TYPE_1, {"current"}),
+    (SilverModel.SCD_TYPE_2, {"history", "current"}),
+    (SilverModel.INCREMENTAL_MERGE, {"cdc"}),
+    (SilverModel.FULL_MERGE_DEDUPE, {"full_snapshot"}),
+    (SilverModel.PERIODIC_SNAPSHOT, {"full_snapshot"}),
+]
+
+
+@pytest.mark.parametrize("silver_model,expected_labels", MODEL_LABELS)
 @pytest.mark.parametrize("bronze_pattern", list(LoadPattern))
 def test_silver_model_planner_handles_all_combinations(
     bronze_pattern: LoadPattern,
@@ -80,6 +81,64 @@ def test_silver_model_planner_handles_all_combinations(
         history_df = writer.written[history_name][0]
         assert "is_current" in history_df.columns
         assert history_df["is_current"].sum() == len(history_df["order_id"].unique())
+
+
+@pytest.mark.parametrize("silver_model,expected_labels", MODEL_LABELS)
+@pytest.mark.parametrize("bronze_pattern", list(LoadPattern))
+def test_silver_output_files_saved_to_sample_structure(
+    tmp_path: Path,
+    bronze_pattern: LoadPattern,
+    silver_model: SilverModel,
+    expected_labels: set[str],
+) -> None:
+    sample_df = _build_sample_df()
+    base_dir = (
+        tmp_path
+        / "silver_samples"
+        / bronze_pattern.value
+        / "domain=test"
+        / "entity=orders"
+        / "v1"
+        / "load_date=2025-11-14"
+    )
+
+    artifact_names = {
+        "full_snapshot": f"full_snapshot_{bronze_pattern.value}",
+        "cdc": f"cdc_{bronze_pattern.value}",
+        "history": f"history_{bronze_pattern.value}",
+        "current": f"current_{bronze_pattern.value}",
+    }
+
+    primary_keys = PRIMARY_KEYS if silver_model.requires_dedupe else []
+    order_column = ORDER_COLUMN if silver_model.requires_dedupe else None
+
+    outputs = write_silver_outputs(
+        sample_df,
+        base_dir,
+        bronze_pattern,
+        primary_keys,
+        order_column,
+        write_parquet=False,
+        write_csv=True,
+        parquet_compression="snappy",
+        artifact_names=artifact_names,
+        partition_columns=[],
+        error_cfg={"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0},
+        silver_model=silver_model,
+    )
+
+    assert base_dir.exists(), "Sample structure should be created"
+    expected_file_names = {artifact_names[label] for label in expected_labels}
+    assert set(outputs.keys()) == expected_file_names
+
+    for dataset_name, paths in outputs.items():
+        assert paths, f"{dataset_name} should have at least one output file"
+        for path in paths:
+            assert path.exists()
+            assert path.suffix == ".csv"
+            assert path.parent == base_dir
+            contents = path.read_text(encoding="utf-8")
+            assert "order_id" in contents
 
 
 def test_silver_model_defaults_match_load_pattern() -> None:
