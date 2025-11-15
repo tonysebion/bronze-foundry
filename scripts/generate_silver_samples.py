@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import shutil
 import subprocess
 import sys
@@ -61,7 +62,14 @@ def _rewrite_config(original: Path, run_date: str, temp_dir: Path) -> Path:
     return target
 
 
-def _rewrite_silver_config(original: Path, run_date: str, temp_dir: Path, silver_model: str) -> Path:
+def _rewrite_silver_config(
+    original: Path,
+    run_date: str,
+    temp_dir: Path,
+    silver_model: str,
+    enable_parquet: bool,
+    enable_csv: bool,
+) -> Path:
     cfg = yaml.safe_load(original.read_text())
     bronze_path = _build_sample_path(cfg, run_date)
     bronze_out = temp_dir / f"bronze_out_{run_date}"
@@ -74,10 +82,23 @@ def _rewrite_silver_config(original: Path, run_date: str, temp_dir: Path, silver
     silver_base.mkdir(parents=True, exist_ok=True)
     cfg.setdefault("silver", {})
     cfg["silver"]["output_dir"] = str(silver_base)
+    cfg["silver"]["write_parquet"] = enable_parquet
+    cfg["silver"]["write_csv"] = enable_csv
 
     target = temp_dir / f"{original.stem}_{silver_model}_{run_date}.yaml"
     target.write_text(yaml.safe_dump(cfg))
     return target
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Generate Silver samples derived from the Bronze fixtures")
+    parser.add_argument(
+        "--formats",
+        choices=["parquet", "csv", "both"],
+        default="both",
+        help="Which Silver artifact formats to write",
+    )
+    return parser.parse_args()
 
 
 def _run_cli(cmd: list[str]) -> None:
@@ -89,6 +110,10 @@ def main() -> None:
         shutil.rmtree(SILVER_SAMPLE_ROOT)
     SILVER_SAMPLE_ROOT.mkdir(parents=True, exist_ok=True)
 
+    args = parse_args()
+    enable_parquet = args.formats in {"parquet", "both"}
+    enable_csv = args.formats in {"csv", "both"}
+
     with tempfile.TemporaryDirectory(prefix="silver_samples_gen_") as tmp_dir:
         tmp_dir_path = Path(tmp_dir)
         for config_name in CONFIG_FILES:
@@ -97,7 +122,14 @@ def main() -> None:
                 bronze_cfg = _rewrite_config(config_path, run_date, tmp_dir_path)
                 _run_cli(["bronze_extract.py", "--config", str(bronze_cfg), "--date", run_date])
                 for silver_model in SILVER_MODELS:
-                    silver_cfg = _rewrite_silver_config(config_path, run_date, tmp_dir_path, silver_model)
+                    silver_cfg = _rewrite_silver_config(
+                        config_path,
+                        run_date,
+                        tmp_dir_path,
+                        silver_model,
+                        enable_parquet=enable_parquet,
+                        enable_csv=enable_csv,
+                    )
                     _run_cli(
                         [
                             "silver_extract.py",
