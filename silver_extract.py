@@ -501,6 +501,7 @@ class SilverPromotionService:
         )
 
         self._write_metadata(normalized_df, outputs, context)
+        self._write_checksum_manifest(normalized_df, outputs, context)
 
         for label, paths in outputs.items():
             for path in paths:
@@ -682,6 +683,37 @@ class SilverPromotionService:
             },
         )
         logger.debug("Wrote Silver metadata to %s", metadata_path)
+
+    def _write_checksum_manifest(
+        self,
+        df: pd.DataFrame,
+        outputs: Dict[str, List[Path]],
+        context: PromotionContext,
+    ) -> None:
+        files = [path for paths in outputs.values() for path in paths]
+        if not files:
+            logger.warning("No Silver artifacts produced; skipping checksum manifest")
+            return
+
+        schema_snapshot = [{"name": name, "dtype": str(dtype)} for name, dtype in df.dtypes.items()]
+        stats = {
+            "record_count": int(len(df)),
+            "primary_key_count": len(context.options.primary_keys),
+        }
+
+        extra = {
+            "load_pattern": context.load_pattern.value,
+            "bronze_path": str(context.bronze_path),
+            "schema": schema_snapshot,
+            "stats": stats,
+        }
+        manifest_path = write_checksum_manifest(
+            context.silver_partition,
+            files,
+            context.load_pattern.value,
+            extra_metadata=extra,
+        )
+        logger.info("Wrote Silver checksum manifest to %s", manifest_path)
 
 
 def build_parser() -> argparse.ArgumentParser:
