@@ -65,11 +65,15 @@ def _iter_bronze_frames(bronze_path: Path):
 def load_bronze_records(bronze_path: Path) -> pd.DataFrame:
     frame_iter = _iter_bronze_frames(bronze_path)
     try:
-        first_frame = next(frame_iter)
+        combined = next(frame_iter)
     except StopIteration:
         raise FileNotFoundError(f"No chunk files found in {bronze_path}")
 
-    return pd.concat(itertools.chain([first_frame], frame_iter), ignore_index=True)
+    for frame in frame_iter:
+        combined = pd.concat([combined, frame], ignore_index=True)
+        del frame
+
+    return combined
 
 
 def derive_relative_partition(bronze_path: Path) -> Path:
