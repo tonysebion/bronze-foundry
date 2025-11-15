@@ -1,11 +1,18 @@
 """Tests for IO functions (chunking, CSV, Parquet)."""
 
-import pytest
 from pathlib import Path
 import csv
 import pandas as pd
 
-from core.io import chunk_records, write_csv_chunk, write_parquet_chunk
+import pytest
+
+from core.io import (
+    chunk_records,
+    verify_checksum_manifest,
+    write_checksum_manifest,
+    write_csv_chunk,
+    write_parquet_chunk,
+)
 
 
 class TestChunkRecords:
@@ -114,3 +121,26 @@ class TestWriteParquetChunk:
         
         # File shouldn't be created for empty chunk
         assert not parquet_path.exists()
+
+
+class TestChecksumManifest:
+    def test_verify_checksum_manifest_success(self, tmp_path):
+        data_file = tmp_path / "part-0001.csv"
+        data_file.write_text("hello,world", encoding="utf-8")
+
+        write_checksum_manifest(tmp_path, [data_file], "full", extra_metadata={"system": "demo"})
+
+        manifest = verify_checksum_manifest(tmp_path, expected_pattern="full")
+        assert manifest["load_pattern"] == "full"
+        assert len(manifest["files"]) == 1
+
+    def test_verify_checksum_manifest_mismatch(self, tmp_path):
+        data_file = tmp_path / "part-0001.csv"
+        data_file.write_text("hello,world", encoding="utf-8")
+        write_checksum_manifest(tmp_path, [data_file], "full")
+
+        # Tamper with the file to force checksum mismatch
+        data_file.write_text("tampered", encoding="utf-8")
+
+        with pytest.raises(ValueError):
+            verify_checksum_manifest(tmp_path, expected_pattern="full")

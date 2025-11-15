@@ -8,6 +8,7 @@ This guide covers the advanced features added to bronze-foundry for production-s
 2. [Multiple Daily Loads & Partitioning](#multiple-daily-loads--partitioning)
 3. [Parallel Extraction](#parallel-extraction)
 4. [Batch Metadata](#batch-metadata)
+5. [Checksum Manifests & Silver Gating](#checksum-manifests--silver-gating)
 
 ---
 
@@ -412,6 +413,44 @@ GROUP BY dt, hour;
 
 -- Compare with _metadata.json total_records
 ```
+
+---
+
+## Checksum Manifests & Silver Gating
+
+Bronze now emits a `_checksums.json` manifest next to every batch. The manifest captures a SHA-256 digest for each chunk plus key metadata so downstream jobs can prove the files have not been altered.
+
+```json
+{
+  "timestamp": "2025-11-13T02:15:41Z",
+  "load_pattern": "full",
+  "system": "claims_api",
+  "table": "claim_header",
+  "run_date": "2025-11-13",
+  "files": [
+    {"path": "full-part-0001.parquet", "size_bytes": 134211221, "sha256": "7f7c..."},
+    {"path": "_metadata.json", "size_bytes": 512, "sha256": "c24a..."}
+  ]
+}
+```
+
+Silver promotions can opt-in to a checksum gate to keep the medallion layers in sync:
+
+- Set `silver.require_checksum: true` in the shared config **or** add `--require-checksum` to the CLI.
+- `silver_extract` verifies the manifest exists, matches the detected load pattern, and re-hashes every file before reading it.
+- If anything is missing or tampered with (including `_metadata.json`), the command fails immediately so the pipeline can retry Bronze.
+- Override per-run with `--no-require-checksum` when you are replaying historical partitions that legitimately lack manifests.
+
+### Example
+```bash
+# Enforce checksum verification before building Silver outputs
+python silver_extract.py \
+  --config configs/claims.yaml \
+  --date 2025-11-13 \
+  --require-checksum
+```
+
+Use this gate when you promote Bronze data to shared environments or when multiple tables must align exactly before Silver transforms begin.
 
 ---
 

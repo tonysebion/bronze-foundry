@@ -13,9 +13,10 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 
 from core.config import build_relative_path, load_configs
-from core.io import write_batch_metadata
+from core.io import write_batch_metadata, verify_checksum_manifest
 from core.logging_config import setup_logging
 from core.patterns import LoadPattern
+from core.paths import build_silver_partition_path
 
 logger = logging.getLogger(__name__)
 
@@ -287,25 +288,6 @@ def _select_config(cfgs: List[Dict[str, Any]], source_name: Optional[str]) -> Di
     raise ValueError("Config contains multiple sources; specify --source-name to select one.")
 
 
-def build_silver_partition_path(
-    base_root: Path,
-    cfg: Dict[str, Any],
-    run_date: dt.date,
-    load_pattern: LoadPattern,
-) -> Path:
-    silver_cfg = cfg["silver"]
-    domain = silver_cfg.get("domain")
-    entity = silver_cfg.get("entity")
-    version = silver_cfg.get("version", 1)
-    load_partition_name = silver_cfg.get("load_partition_name", "load_date")
-
-    path = base_root / f"domain={domain}" / f"entity={entity}" / f"v{version}"
-    if silver_cfg.get("include_pattern_folder"):
-        path /= f"pattern={load_pattern.value}"
-    path /= f"{load_partition_name}={run_date.isoformat()}"
-    return path
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Promote Bronze data to Silver layer with configurable load patterns",
@@ -372,6 +354,19 @@ def main() -> int:
     parser.add_argument("--current-output-name", help="Base name for current view files")
     parser.add_argument("--history-output-name", help="Base name for history view files")
     parser.add_argument("--cdc-output-name", help="Base name for CDC output files")
+    parser.add_argument(
+        "--require-checksum",
+        dest="require_checksum",
+        action="store_true",
+        help="Require Bronze checksum manifest verification before Silver runs",
+    )
+    parser.add_argument(
+        "--no-require-checksum",
+        dest="require_checksum",
+        action="store_false",
+        help="Disable checksum verification even if the config enables it",
+    )
+    parser.set_defaults(require_checksum=None)
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -476,9 +471,15 @@ def main() -> int:
             "version": 1,
             "load_partition_name": "load_date",
             "include_pattern_folder": False,
+            "require_checksum": False,
         }
 
     silver_cfg = cfg["silver"] if cfg else _default_silver_cfg()
+    require_checksum = (
+        args.require_checksum
+        if args.require_checksum is not None
+        else silver_cfg.get("require_checksum", False)
+    )
 
     write_parquet = (
         args.write_parquet if args.write_parquet is not None else silver_cfg.get("write_parquet", True)
@@ -504,11 +505,37 @@ def main() -> int:
     }
     partition_columns = silver_cfg.get("partitioning", {}).get("columns", [])
 
-    silver_partition = build_silver_partition_path(silver_base, cfg, run_date, load_pattern) if cfg else silver_base / derive_relative_partition(bronze_path)
+    if cfg:
+        domain = silver_cfg.get("domain", cfg["source"]["system"])
+        entity = silver_cfg.get("entity", cfg["source"]["table"])
+        version = silver_cfg.get("version", 1)
+        load_partition_name = silver_cfg.get("load_partition_name", "load_date")
+        include_pattern_folder = silver_cfg.get("include_pattern_folder", False)
+        silver_partition = build_silver_partition_path(
+            silver_base,
+            domain,
+            entity,
+            version,
+            load_partition_name,
+            include_pattern_folder,
+            load_pattern,
+            run_date,
+        )
+    else:
+        silver_partition = silver_base / derive_relative_partition(bronze_path)
 
     logger.info("Bronze partition: %s", bronze_path)
     logger.info("Silver partition: %s", silver_partition)
     logger.info("Load pattern: %s", load_pattern.value)
+
+    if require_checksum:
+        manifest = verify_checksum_manifest(bronze_path, expected_pattern=load_pattern.value)
+        manifest_path = bronze_path / "_checksums.json"
+        logger.info(
+            "Verified %s checksum entries from %s",
+            len(manifest.get("files", [])),
+            manifest_path,
+        )
 
     if args.dry_run:
         logger.info("Dry run complete; no files written")
@@ -573,6 +600,7 @@ def main() -> int:
             "schema": schema_cfg,
             "error_handling": silver_cfg.get("error_handling", {}),
             "artifacts": {label: [p.name for p in paths] for label, paths in outputs.items()},
+            "require_checksum": require_checksum,
         },
     )
 

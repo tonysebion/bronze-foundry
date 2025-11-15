@@ -131,3 +131,39 @@ def test_bronze_to_silver_end_to_end(
         for parquet_file in silver_out.rglob("*.parquet"):
             df = pd.read_parquet(parquet_file)
             assert len(df) > 0, f"{parquet_file} should contain rows"
+
+
+def test_silver_require_checksum_succeeds(tmp_path: Path, bronze_samples_dir: Path) -> None:
+    config_path = Path("docs/examples/configs") / "file_example.yaml"
+    run_date = "2025-11-13"
+
+    rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_config(config_path, bronze_samples_dir, tmp_path, run_date)
+    cfg_data.setdefault("silver", {})["require_checksum"] = True
+    rewritten_cfg.write_text(yaml.safe_dump(cfg_data))
+
+    _run_cli(["bronze_extract.py", "--config", str(rewritten_cfg), "--date", run_date])
+
+    # Should succeed because manifest remains intact
+    _run_cli(["silver_extract.py", "--config", str(rewritten_cfg), "--date", run_date])
+
+    assert any(silver_out.rglob("*.parquet")), "Silver output should exist when manifest is present"
+
+
+def test_silver_require_checksum_missing_manifest(tmp_path: Path, bronze_samples_dir: Path) -> None:
+    config_path = Path("docs/examples/configs") / "file_example.yaml"
+    run_date = "2025-11-14"
+
+    rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_config(config_path, bronze_samples_dir, tmp_path, run_date)
+    cfg_data.setdefault("silver", {})["require_checksum"] = True
+    rewritten_cfg.write_text(yaml.safe_dump(cfg_data))
+
+    _run_cli(["bronze_extract.py", "--config", str(rewritten_cfg), "--date", run_date])
+
+    bronze_partition = _collect_bronze_partition(bronze_out)
+    checksum_path = bronze_partition / "_checksums.json"
+    checksum_path.unlink()
+
+    with pytest.raises(subprocess.CalledProcessError):
+        _run_cli(["silver_extract.py", "--config", str(rewritten_cfg), "--date", run_date])
+
+    assert not any(silver_out.rglob("*.parquet")), "Silver output should not be created when checksum is missing"

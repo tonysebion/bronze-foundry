@@ -7,6 +7,8 @@ import copy
 import yaml
 
 from core.patterns import LoadPattern
+from core.config_models import SilverConfig
+from core.paths import build_bronze_relative_path
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,15 @@ def load_config(path: str) -> Dict[str, Any]:
     if "sources" in cfg:
         raise ValueError("Config contains multiple sources; use load_configs() instead.")
     return _validate_config(cfg)
+
+
+def _normalize_silver_config(
+    raw_silver: Dict[str, Any] | None,
+    source: Dict[str, Any],
+    load_pattern: LoadPattern,
+) -> Dict[str, Any]:
+    model = SilverConfig.from_raw(raw_silver, source, load_pattern)
+    return model.to_dict()
 
 def _validate_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     cfg = copy.deepcopy(cfg)
@@ -194,114 +205,10 @@ def _validate_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError(f"platform.bronze.partitioning.partition_strategy must be one of {valid_strategies}")
 
     # Validate silver section (optional)
-    silver_cfg = cfg.get("silver")
-    if silver_cfg is None:
-        silver_cfg = {}
-    elif not isinstance(silver_cfg, dict):
+    raw_silver_cfg = cfg.get("silver")
+    if raw_silver_cfg is not None and not isinstance(raw_silver_cfg, dict):
         raise ValueError("'silver' must be a dictionary when provided")
-
-    silver_cfg.setdefault("output_dir", "./silver_output")
-    silver_cfg.setdefault("write_parquet", True)
-    silver_cfg.setdefault("write_csv", False)
-    silver_cfg.setdefault("parquet_compression", "snappy")
-    silver_cfg.setdefault("domain", source["system"])
-    silver_cfg.setdefault("entity", source["table"])
-    silver_cfg.setdefault("version", 1)
-    silver_cfg.setdefault("load_partition_name", "load_date")
-    silver_cfg.setdefault("include_pattern_folder", False)
-
-    if "primary_keys" in silver_cfg:
-        primary_keys = silver_cfg["primary_keys"]
-        if not isinstance(primary_keys, list) or any(not isinstance(pk, str) for pk in primary_keys):
-            raise ValueError("silver.primary_keys must be a list of strings")
-    else:
-        silver_cfg["primary_keys"] = []
-
-    for key in ["order_column", "current_output_name", "history_output_name", "cdc_output_name", "full_output_name"]:
-        if key in silver_cfg and silver_cfg[key] is not None and not isinstance(silver_cfg[key], str):
-            raise ValueError(f"silver.{key} must be a string when provided")
-
-    schema_cfg = silver_cfg.get("schema", {})
-    if not isinstance(schema_cfg, dict):
-        raise ValueError("silver.schema must be a dictionary")
-    column_order = schema_cfg.get("column_order")
-    if column_order is not None and (not isinstance(column_order, list) or any(not isinstance(col, str) for col in column_order)):
-        raise ValueError("silver.schema.column_order must be a list of strings")
-    rename_map = schema_cfg.get("rename_map")
-    if rename_map is not None:
-        if not isinstance(rename_map, dict) or any(not isinstance(k, str) or not isinstance(v, str) for k, v in rename_map.items()):
-            raise ValueError("silver.schema.rename_map must be a mapping of strings")
-    schema_cfg.setdefault("column_order", None)
-    schema_cfg.setdefault("rename_map", {})
-    silver_cfg["schema"] = schema_cfg
-
-    normalization_cfg = silver_cfg.get("normalization", {})
-    if not isinstance(normalization_cfg, dict):
-        raise ValueError("silver.normalization must be a dictionary")
-    for key in ["trim_strings", "empty_strings_as_null"]:
-        value = normalization_cfg.get(key)
-        if value is not None and not isinstance(value, bool):
-            raise ValueError(f"silver.normalization.{key} must be a boolean")
-    normalization_cfg.setdefault("trim_strings", False)
-    normalization_cfg.setdefault("empty_strings_as_null", False)
-    silver_cfg["normalization"] = normalization_cfg
-
-    error_cfg = silver_cfg.get("error_handling", {})
-    if not isinstance(error_cfg, dict):
-        raise ValueError("silver.error_handling must be a dictionary")
-    if "enabled" in error_cfg and not isinstance(error_cfg["enabled"], bool):
-        raise ValueError("silver.error_handling.enabled must be a boolean")
-    for key in ["max_bad_records", "max_bad_percent"]:
-        if key in error_cfg:
-            value = error_cfg[key]
-            if key == "max_bad_records":
-                if not isinstance(value, int) or value < 0:
-                    raise ValueError("silver.error_handling.max_bad_records must be a non-negative integer")
-            else:
-                if not isinstance(value, (int, float)) or value < 0:
-                    raise ValueError("silver.error_handling.max_bad_percent must be a non-negative number")
-    error_cfg.setdefault("enabled", False)
-    error_cfg.setdefault("max_bad_records", 0)
-    error_cfg.setdefault("max_bad_percent", 0.0)
-    silver_cfg["error_handling"] = error_cfg
-
-    partition_cfg = silver_cfg.get("partitioning", {})
-    if not isinstance(partition_cfg, dict):
-        raise ValueError("silver.partitioning must be a dictionary")
-    columns = partition_cfg.get("columns")
-    column = partition_cfg.get("column")
-    if columns is not None:
-        if not isinstance(columns, list) or any(not isinstance(c, str) for c in columns):
-            raise ValueError("silver.partitioning.columns must be a list of strings")
-    elif column:
-        columns = [column]
-    else:
-        columns = []
-    partition_cfg["columns"] = columns
-    partition_cfg["column"] = columns[0] if columns else None
-    silver_cfg["partitioning"] = partition_cfg
-
-    silver_cfg.setdefault("output_dir", "./silver_output")
-    silver_cfg.setdefault("write_parquet", True)
-    silver_cfg.setdefault("write_csv", False)
-    silver_cfg.setdefault("parquet_compression", "snappy")
-    silver_cfg.setdefault("domain", source["system"])
-    silver_cfg.setdefault("entity", source["table"])
-    silver_cfg.setdefault("version", 1)
-    silver_cfg.setdefault("load_partition_name", "load_date")
-    silver_cfg.setdefault("include_pattern_folder", False)
-    silver_cfg.setdefault("order_column", None)
-    silver_cfg.setdefault("full_output_name", "full_snapshot")
-    silver_cfg.setdefault("current_output_name", "current")
-    silver_cfg.setdefault("history_output_name", "history")
-    silver_cfg.setdefault("cdc_output_name", "cdc_changes")
-
-    if pattern == LoadPattern.CURRENT_HISTORY:
-        if not silver_cfg["primary_keys"]:
-            raise ValueError("silver.primary_keys must be provided when load_pattern='current_history'")
-        if not silver_cfg.get("order_column"):
-            raise ValueError("silver.order_column must be provided when load_pattern='current_history'")
-
+    silver_cfg = _normalize_silver_config(raw_silver_cfg, source, pattern)
     cfg["silver"] = silver_cfg
 
     source.setdefault("config_name", source.get("config_name") or f"{source['system']}.{source['table']}")
@@ -354,53 +261,4 @@ def load_configs(path: str) -> List[Dict[str, Any]]:
 
 def build_relative_path(cfg: Dict[str, Any], run_date: dt.date) -> str:
     """Build the relative Bronze path for a given config and run date."""
-    platform_cfg = cfg["platform"]
-    source_cfg = cfg["source"]
-
-    bronze = platform_cfg["bronze"]
-    partitioning = bronze.get("partitioning", {})
-    use_dt = partitioning.get("use_dt_partition", True)
-    
-    # Support for multiple daily loads with additional partition strategies
-    partition_strategy = partitioning.get("partition_strategy", "date")  # date, hourly, timestamp, batch_id
-    
-    system = source_cfg["system"]
-    table = source_cfg["table"]
-
-    base_path = f"system={system}/table={table}/"
-
-    run_cfg = source_cfg.get("run", {})
-    load_pattern = run_cfg.get("load_pattern", LoadPattern.FULL.value)
-    if load_pattern:
-        base_path += f"pattern={load_pattern}/"
-    
-    if not use_dt:
-        return base_path
-    
-    # Build partition path based on strategy
-    if partition_strategy == "date":
-        # Traditional daily partition
-        return f"{base_path}dt={run_date.isoformat()}/"
-    
-    elif partition_strategy == "hourly":
-        # Hourly partitions for multiple daily loads
-        from datetime import datetime
-        current_hour = datetime.now().strftime("%H")
-        return f"{base_path}dt={run_date.isoformat()}/hour={current_hour}/"
-    
-    elif partition_strategy == "timestamp":
-        # Timestamp-based partitions (down to minute)
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-        return f"{base_path}dt={run_date.isoformat()}/batch={timestamp}/"
-    
-    elif partition_strategy == "batch_id":
-        # Custom batch ID from config or auto-generated
-        from datetime import datetime
-        import uuid
-        batch_id = source_cfg.get("run", {}).get("batch_id") or f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
-        return f"{base_path}dt={run_date.isoformat()}/batch_id={batch_id}/"
-    
-    else:
-        logger.warning(f"Unknown partition_strategy '{partition_strategy}', falling back to date")
-        return f"{base_path}dt={run_date.isoformat()}/"
+    return build_bronze_relative_path(cfg, run_date)

@@ -60,6 +60,7 @@ class TestConfigLoading:
         assert loaded_config["silver"]["domain"] == "test_system"
         assert loaded_config["silver"]["entity"] == "test_table"
         assert loaded_config["silver"]["partitioning"]["columns"] == []
+        assert loaded_config["silver"]["require_checksum"] is False
         assert loaded_config["source"]["run"]["load_pattern"] == "full"
 
     def test_missing_config_file(self):
@@ -257,6 +258,50 @@ class TestConfigLoading:
             yaml.dump(config, f)
 
         with pytest.raises(ValueError, match="load pattern"):
+            load_config(str(config_file))
+
+    def test_silver_require_checksum_toggle(self, tmp_path):
+        config = {
+            "platform": {
+                "bronze": {"s3_bucket": "test", "s3_prefix": "bronze"},
+                "s3_connection": {},
+            },
+            "silver": {"require_checksum": True},
+            "source": {
+                "type": "file",
+                "system": "demo",
+                "table": "orders",
+                "file": {"path": "./data/orders.csv", "format": "csv"},
+                "run": {"load_pattern": "full"},
+            },
+        }
+        config_file = tmp_path / "silver_toggle.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config, f)
+
+        loaded_config = load_config(str(config_file))
+        assert loaded_config["silver"]["require_checksum"] is True
+
+    def test_silver_require_checksum_must_be_boolean(self, tmp_path):
+        config = {
+            "platform": {
+                "bronze": {"s3_bucket": "test", "s3_prefix": "bronze"},
+                "s3_connection": {},
+            },
+            "silver": {"require_checksum": "yes"},
+            "source": {
+                "type": "file",
+                "system": "demo",
+                "table": "orders",
+                "file": {"path": "./data/orders.csv", "format": "csv"},
+                "run": {"load_pattern": "full"},
+            },
+        }
+        config_file = tmp_path / "silver_toggle_bad.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config, f)
+
+        with pytest.raises(ValueError, match="silver\\.require_checksum"):
             load_config(str(config_file))
 
 

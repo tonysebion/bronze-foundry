@@ -190,3 +190,52 @@ The framework does not interpret `source.salesforce` directly; it is available f
 
 - Changes to the **`platform`** section should be coordinated and reviewed by the platform team.
 - Changes in the **`source`** section are expected and are where domain teams declare their data product responsibilities.
+
+## `silver` section (optional)
+
+When you plan to promote Bronze data to Silver with `silver_extract.py`, you can include a `silver` section in the shared config file. This section keeps Silver settings aligned with the Bronze declaration so both CLIs can work from the same artifact.
+
+```yaml
+silver:
+  output_dir: "./silver_output"
+  domain: "claims"
+  entity: "claim_header"
+  version: 1
+  load_partition_name: "load_date"
+  include_pattern_folder: false
+  write_parquet: true
+  write_csv: false
+  parquet_compression: "snappy"
+  require_checksum: false
+  primary_keys: ["claim_id"]
+  order_column: "updated_at"
+  partitioning:
+    columns: ["status"]
+  schema:
+    rename_map:
+      ClaimID: claim_id
+    column_order:
+      - claim_id
+      - policy_id
+      - updated_at
+  normalization:
+    trim_strings: true
+    empty_strings_as_null: true
+  error_handling:
+    enabled: true
+    max_bad_records: 100
+    max_bad_percent: 5.0
+```
+
+- `output_dir` �?" base folder for Silver medallion layout (default `./silver_output`).
+- `domain`, `entity`, `version` �?" govern the medallion hierarchy: `domain=<domain>/entity=<entity>/v<version>/`.
+- `load_partition_name` and `include_pattern_folder` �?" control the partition folder names (`load_date=YYYY-MM-DD` plus optional `pattern=<full|cdc|current_history>`).
+- `write_parquet` / `write_csv` / `parquet_compression` �?" output format controls that mirror Bronze defaults but scoped to Silver.
+- `primary_keys` and `order_column` �?" required when `source.run.load_pattern` is `current_history` to derive current vs history tables.
+- `partitioning.columns` �?" split Silver outputs into subdirectories (e.g., `status=new/is_current=1`).
+- `schema.rename_map` and `schema.column_order` �?" declarative schema normalization (rename or reorder columns without business logic).
+- `normalization.trim_strings` / `empty_strings_as_null` �?" safe string clean-up routines for Silver.
+- `error_handling` �?" optionally route invalid records to `_errors/<artifact>.csv` before failing hard.
+- `require_checksum` �?" when `true`, `silver_extract` enforces the checksum manifest that Bronze writes to `_checksums.json`. You can also pass `--require-checksum` on the CLI; Silver aborts if the manifest is missing, mismatched, or reports a different load pattern. This keeps Bronze and Silver in lockstep before promoting data.
+
+If the `silver` section is omitted, `silver_extract` falls back to sensible defaults and you can override individual settings with CLI switches.

@@ -6,6 +6,7 @@ from pathlib import Path
 import csv
 import json
 import sys
+import hashlib
 
 import pandas as pd
 
@@ -166,7 +167,6 @@ def write_checksum_manifest(
     Write a checksum manifest containing hashes of produced files.
     """
     import json
-    import hashlib
     from datetime import datetime
 
     manifest = {
@@ -199,3 +199,75 @@ def write_checksum_manifest(
 
     logger.info(f"Wrote checksum manifest to {manifest_path}")
     return manifest_path
+
+
+def verify_checksum_manifest(
+    bronze_dir: Path,
+    manifest_name: str = "_checksums.json",
+    expected_pattern: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Validate that the files in a Bronze partition match the recorded checksums.
+
+    Args:
+        bronze_dir: The Bronze partition directory to verify.
+        manifest_name: Name of the manifest file (defaults to '_checksums.json').
+        expected_pattern: Optional load pattern that must match the manifest.
+
+    Returns:
+        Parsed manifest dictionary if verification succeeds.
+
+    Raises:
+        FileNotFoundError: If the manifest is missing.
+        ValueError: If the manifest is malformed or verification fails.
+    """
+    manifest_path = bronze_dir / manifest_name
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Checksum manifest not found at {manifest_path}")
+
+    with manifest_path.open("r", encoding="utf-8") as handle:
+        manifest = json.load(handle)
+
+    if expected_pattern and manifest.get("load_pattern") != expected_pattern:
+        raise ValueError(
+            f"Manifest load_pattern {manifest.get('load_pattern')} does not match expected {expected_pattern}"
+        )
+
+    files = manifest.get("files")
+    if not isinstance(files, list) or not files:
+        raise ValueError(f"Checksum manifest at {manifest_path} does not list any files to validate")
+
+    missing_files = []
+    mismatched_files = []
+
+    for entry in files:
+        rel_name = entry.get("path")
+        if not rel_name:
+            raise ValueError(f"Malformed entry in checksum manifest: {entry}")
+        target = bronze_dir / rel_name
+        if not target.exists():
+            missing_files.append(rel_name)
+            continue
+
+        expected_size = entry.get("size_bytes")
+        expected_hash = entry.get("sha256")
+
+        actual_size = target.stat().st_size
+        hasher = hashlib.sha256()
+        with target.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                hasher.update(chunk)
+        actual_hash = hasher.hexdigest()
+
+        if actual_size != expected_size or actual_hash != expected_hash:
+            mismatched_files.append(rel_name)
+
+    if missing_files or mismatched_files:
+        issues = []
+        if missing_files:
+            issues.append(f"missing files: {missing_files}")
+        if mismatched_files:
+            issues.append(f"checksum mismatches: {mismatched_files}")
+        raise ValueError(f"Checksum verification failed for {manifest_path}: {', '.join(issues)}")
+
+    return manifest
