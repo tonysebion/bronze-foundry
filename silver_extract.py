@@ -15,10 +15,12 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 
 from core.config import build_relative_path, load_configs
-from core.io import write_batch_metadata, verify_checksum_manifest
+from core.io import write_batch_metadata, verify_checksum_manifest, write_checksum_manifest
 from core.logging_config import setup_logging
 from core.patterns import LoadPattern
 from core.paths import build_silver_partition_path
+from core.catalog import notify_catalog
+from core.hooks import fire_webhooks
 
 logger = logging.getLogger(__name__)
 
@@ -457,8 +459,18 @@ class SilverPromotionService:
         self.args = args
         self.cfg_list = load_configs(args.config) if args.config else None
         self._silver_identity: Optional[Tuple[Any, Any, int, str, bool]] = None
+        self._hook_context: Dict[str, Any] = {"layer": "silver"}
 
     def execute(self) -> int:
+        try:
+            code = self._run()
+        except Exception as exc:
+            self._fire_hooks(success=False, extra={"error": str(exc)})
+            raise
+        self._fire_hooks(success=(code == 0))
+        return code
+
+    def _run(self) -> int:
         if self.args.validate_only:
             self._handle_validate_only()
             return 0
@@ -466,15 +478,23 @@ class SilverPromotionService:
         cfg = self._select_config()
         run_date = self._resolve_run_date()
         bronze_path = self._resolve_bronze_path(cfg, run_date)
+        self._update_hook_context(bronze_path=str(bronze_path), run_date=run_date.isoformat())
         if not bronze_path.exists() or not bronze_path.is_dir():
             raise FileNotFoundError(f"Bronze path '{bronze_path}' does not exist or is not a directory")
 
         load_pattern = self._resolve_load_pattern(cfg, bronze_path)
+        self._update_hook_context(load_pattern=load_pattern.value)
         silver_partition = self._resolve_silver_partition(cfg, bronze_path, load_pattern, run_date)
         logger.info("Bronze partition: %s", bronze_path)
         logger.info("Silver partition: %s", silver_partition)
         logger.info("Load pattern: %s", load_pattern.value)
         context = self._build_context(cfg, bronze_path, silver_partition, load_pattern, run_date)
+        self._update_hook_context(
+            silver_partition=str(silver_partition),
+            config_name=context.cfg["source"].get("config_name") if context.cfg else None,
+            domain=context.domain,
+            entity=context.entity,
+        )
         self._maybe_verify_checksum(context)
 
         if self.args.dry_run:
@@ -715,6 +735,25 @@ class SilverPromotionService:
         )
         logger.info("Wrote Silver checksum manifest to %s", manifest_path)
 
+    def _fire_hooks(self, success: bool, extra: Optional[Dict[str, Any]] = None) -> None:
+        payload: Dict[str, Any] = {
+            **self._hook_context,
+            "status": "success" if success else "failure",
+        }
+        if extra:
+            payload.update(extra)
+
+        urls = self.args.on_success_webhook if success else self.args.on_failure_webhook
+        fire_webhooks(urls, payload)
+
+        event = "silver_promotion_completed" if success else "silver_promotion_failed"
+        notify_catalog(event, payload)
+
+    def _update_hook_context(self, **kwargs: Any) -> None:
+        for key, value in kwargs.items():
+            if value is not None:
+                self._hook_context[key] = value
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -815,6 +854,18 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["human", "json", "simple"],
         default=None,
         help="Log format (default: human)",
+    )
+    parser.add_argument(
+        "--on-success-webhook",
+        action="append",
+        dest="on_success_webhook",
+        help="URL to POST a JSON payload to when the Silver promotion succeeds (can be specified multiple times)",
+    )
+    parser.add_argument(
+        "--on-failure-webhook",
+        action="append",
+        dest="on_failure_webhook",
+        help="URL to POST a JSON payload to when the Silver promotion fails (can be specified multiple times)",
     )
     return parser
 

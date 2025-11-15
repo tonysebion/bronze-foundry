@@ -357,3 +357,9 @@ silver_output/
 
 ## 📖 Documentation
 
+- [OPS_PLAYBOOK.md](docs/OPS_PLAYBOOK.md) – day-two operations, hooks, and monitoring tips.
+- [QUICKSTART.md](QUICKSTART.md) – detailed tutorial with screenshots.
+- [DOCUMENTATION.md](DOCUMENTATION.md) – architecture concepts and FAQs.
+- [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) – advanced configuration & features.
+- [CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) – exhaustive list of config options.
+- [TESTING.md](TESTING.md) – how to run tests and interpret results.

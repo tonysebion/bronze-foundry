@@ -26,6 +26,8 @@ from core.parallel import run_parallel_extracts
 from core.logging_config import setup_logging
 from core.storage import get_storage_backend
 from core.patterns import LoadPattern
+from core.catalog import notify_catalog
+from core.hooks import fire_webhooks
 
 __version__ = "1.0.0"
 
@@ -102,6 +104,18 @@ def main() -> int:
         default=None,
         help="Log format (default: human). Can also set via BRONZE_LOG_FORMAT env var"
     )
+    parser.add_argument(
+        "--on-success-webhook",
+        action="append",
+        dest="on_success_webhook",
+        help="URL to POST a JSON payload to when the Bronze run succeeds (can be specified multiple times)",
+    )
+    parser.add_argument(
+        "--on-failure-webhook",
+        action="append",
+        dest="on_failure_webhook",
+        help="URL to POST a JSON payload to when the Bronze run fails (can be specified multiple times)",
+    )
     
     args = parser.parse_args()
     
@@ -129,8 +143,19 @@ class BronzeOrchestrator:
         self.parser = parser
         self.args = args
         self.config_paths = [p.strip() for p in args.config.split(",")] if args.config else []
+        self._hook_context: Dict[str, Any] = {"layer": "bronze", "config_paths": list(self.config_paths)}
 
     def execute(self) -> int:
+        try:
+            code = self._run()
+        except Exception as exc:
+            self._dispatch_hooks(success=False, extra={"error": str(exc)})
+            raise
+
+        self._dispatch_hooks(success=(code == 0))
+        return code
+
+    def _run(self) -> int:
         self._require_config()
 
         if self.args.validate_only:
@@ -149,15 +174,26 @@ class BronzeOrchestrator:
             return 1
 
         run_date = dt.date.fromisoformat(self.args.date) if self.args.date else dt.date.today()
+        self._update_hook_context(run_date=run_date.isoformat())
         local_output_base = Path(configs[0]["source"]["run"].get("local_output_dir", "./output"))
+        self._update_hook_context(
+            config_names=[cfg["source"].get("config_name") for cfg in configs],
+            tables=[f"{cfg['source']['system']}.{cfg['source']['table']}" for cfg in configs],
+        )
 
         if len(configs) == 1:
             relative_path = build_relative_path(configs[0], run_date)
+            self._update_hook_context(relative_path=relative_path)
             return run_extract(configs[0], run_date, local_output_base, relative_path)
 
         logger.info(f"Running {len(configs)} configs with {self.args.parallel_workers} workers")
         results = run_parallel_extracts(configs, run_date, local_output_base, self.args.parallel_workers)
         failed = sum(1 for _, status, _ in results if status != 0)
+        self._update_hook_context(
+            parallel_results=[
+                {"config_name": name, "status": status} for name, status, _ in results
+            ]
+        )
         return 1 if failed > 0 else 0
 
     def _require_config(self) -> None:
@@ -218,6 +254,25 @@ class BronzeOrchestrator:
         for cfg in cfgs:
             cfg["source"]["run"]["load_pattern"] = normalized
         return cfgs
+
+    def _dispatch_hooks(self, success: bool, extra: Optional[Dict[str, Any]] = None) -> None:
+        payload: Dict[str, Any] = {
+            **self._hook_context,
+            "status": "success" if success else "failure",
+        }
+        if extra:
+            payload.update(extra)
+
+        urls = self.args.on_success_webhook if success else self.args.on_failure_webhook
+        fire_webhooks(urls, payload)
+
+        event = "bronze_run_completed" if success else "bronze_run_failed"
+        notify_catalog(event, payload)
+
+    def _update_hook_context(self, **kwargs: Any) -> None:
+        for key, value in kwargs.items():
+            if value is not None:
+                self._hook_context[key] = value
 
 
 if __name__ == "__main__":
