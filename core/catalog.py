@@ -29,3 +29,20 @@ def report_schema_snapshot(dataset_id: str, schema: Iterable[Mapping[str, Any]])
     For now this simply logs the schema in case operators want to build off it later.
     """
     logger.info("Catalog schema snapshot for %s: %s", dataset_id, list(schema))
+
+
+def report_run_metadata(dataset_id: str, metadata: Mapping[str, Any]) -> None:
+    """Hook to surface run-level metadata such as batch timestamps or record counts."""
+    logger.info("Catalog run metadata for %s: %s", dataset_id, metadata)
+
+
+def report_lineage(source_dataset: str, target_dataset: str, metadata: Mapping[str, Any]) -> None:
+    """Hook to emit lineage between datasets (Bronze -> Silver)."""
+    logger.info(
+        "Catalog lineage: %s -> %s (%s)", source_dataset, target_dataset, metadata
+    )
+
+
+def report_quality_snapshot(dataset_id: str, metrics: Mapping[str, Any]) -> None:
+    """Hook to report data quality metrics (placeholder)."""
+    logger.info("Catalog quality snapshot for %s: %s", dataset_id, metrics)

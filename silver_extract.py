@@ -19,7 +19,13 @@ from core.io import write_batch_metadata, verify_checksum_manifest, write_checks
 from core.logging_config import setup_logging
 from core.patterns import LoadPattern
 from core.paths import build_silver_partition_path
-from core.catalog import notify_catalog, report_schema_snapshot
+from core.catalog import (
+    notify_catalog,
+    report_schema_snapshot,
+    report_quality_snapshot,
+    report_run_metadata,
+    report_lineage,
+)
 from core.hooks import fire_webhooks
 
 logger = logging.getLogger(__name__)
@@ -715,6 +721,7 @@ class SilverPromotionService:
             logger.warning("No Silver artifacts produced; skipping checksum manifest")
             return
 
+        dataset_id = f"silver:{context.domain}.{context.entity}"
         schema_snapshot = [{"name": name, "dtype": str(dtype)} for name, dtype in df.dtypes.items()]
         stats = {
             "record_count": int(len(df)),
@@ -734,7 +741,27 @@ class SilverPromotionService:
             extra_metadata=extra,
         )
         logger.info("Wrote Silver checksum manifest to %s", manifest_path)
-        report_schema_snapshot(f"{context.domain}.{context.entity}", schema_snapshot)
+        report_schema_snapshot(dataset_id, schema_snapshot)
+        report_quality_snapshot(dataset_id, {"record_count": stats["record_count"], "artifact_count": len(files)})
+        run_metadata = {
+            "load_pattern": context.load_pattern.value,
+            "silver_partition": str(context.silver_partition),
+            "artifact_names": list(outputs.keys()),
+            "require_checksum": context.options.require_checksum,
+            "manifest_path": manifest_path.name,
+        }
+        report_run_metadata(dataset_id, run_metadata)
+        bronze_dataset = (
+            f"bronze:{context.cfg['source']['system']}.{context.cfg['source']['table']}"
+            if context.cfg
+            else f"bronze:{context.bronze_path}"
+        )
+        lineage_metadata = {
+            "manifest": manifest_path.name,
+            "files": [p.name for p in files],
+            "load_pattern": context.load_pattern.value,
+        }
+        report_lineage(bronze_dataset, dataset_id, lineage_metadata)
 
     def _fire_hooks(self, success: bool, extra: Optional[Dict[str, Any]] = None) -> None:
         payload: Dict[str, Any] = {

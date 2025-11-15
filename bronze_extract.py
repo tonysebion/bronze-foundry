@@ -26,7 +26,7 @@ from core.parallel import run_parallel_extracts
 from core.logging_config import setup_logging
 from core.storage import get_storage_backend
 from core.patterns import LoadPattern
-from core.catalog import notify_catalog
+from core.catalog import notify_catalog, report_run_metadata, report_lineage, report_quality_snapshot
 from core.hooks import fire_webhooks
 
 __version__ = "1.0.0"
@@ -144,6 +144,7 @@ class BronzeOrchestrator:
         self.args = args
         self.config_paths = [p.strip() for p in args.config.split(",")] if args.config else []
         self._hook_context: Dict[str, Any] = {"layer": "bronze", "config_paths": list(self.config_paths)}
+        self._configs_info: List[Dict[str, Any]] = []
 
     def execute(self) -> int:
         try:
@@ -174,6 +175,7 @@ class BronzeOrchestrator:
             return 1
 
         run_date = dt.date.fromisoformat(self.args.date) if self.args.date else dt.date.today()
+        self._record_configs_info(configs, run_date)
         self._update_hook_context(run_date=run_date.isoformat())
         local_output_base = Path(configs[0]["source"]["run"].get("local_output_dir", "./output"))
         self._update_hook_context(
@@ -184,6 +186,8 @@ class BronzeOrchestrator:
         if len(configs) == 1:
             relative_path = build_relative_path(configs[0], run_date)
             self._update_hook_context(relative_path=relative_path)
+            for info in self._configs_info:
+                info["relative_path"] = relative_path
             return run_extract(configs[0], run_date, local_output_base, relative_path)
 
         logger.info(f"Running {len(configs)} configs with {self.args.parallel_workers} workers")
@@ -268,11 +272,43 @@ class BronzeOrchestrator:
 
         event = "bronze_run_completed" if success else "bronze_run_failed"
         notify_catalog(event, payload)
+        self._report_run_metadata(success, extra or {})
 
     def _update_hook_context(self, **kwargs: Any) -> None:
         for key, value in kwargs.items():
             if value is not None:
                 self._hook_context[key] = value
+
+    def _record_configs_info(self, configs: List[Dict[str, Any]], run_date: dt.date) -> None:
+        self._configs_info = []
+        for cfg in configs:
+            dataset_id = f"bronze:{cfg['source']['system']}.{cfg['source']['table']}"
+            self._configs_info.append(
+                {
+                    "dataset_id": dataset_id,
+                    "config_name": cfg["source"].get("config_name"),
+                    "run_date": run_date.isoformat(),
+                    "system": cfg["source"]["system"],
+                    "table": cfg["source"]["table"],
+                }
+            )
+        self._update_hook_context(datasets=[info["dataset_id"] for info in self._configs_info])
+
+    def _report_run_metadata(self, success: bool, extra: Dict[str, Any]) -> None:
+        if not self._configs_info:
+            return
+        status = "success" if success else "failure"
+        for info in self._configs_info:
+            metadata = {
+                "config_name": info["config_name"],
+                "system": info["system"],
+                "table": info["table"],
+                "run_date": info["run_date"],
+                "relative_path": info.get("relative_path"),
+                "status": status,
+            }
+            metadata.update(extra)
+            report_run_metadata(info["dataset_id"], metadata)
 
 
 if __name__ == "__main__":

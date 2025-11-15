@@ -358,6 +358,7 @@ silver_output/
 ## 📖 Documentation
 
 - [OPS_PLAYBOOK.md](docs/OPS_PLAYBOOK.md) – day-two operations, hooks, and monitoring tips.
+- [GOLD_CONTRACTS.md](docs/GOLD_CONTRACTS.md) – guidance for documenting downstream contracts and expectations.
 - [QUICKSTART.md](QUICKSTART.md) – detailed tutorial with screenshots.
 - [DOCUMENTATION.md](DOCUMENTATION.md) – architecture concepts and FAQs.
 - [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) – advanced configuration & features.
