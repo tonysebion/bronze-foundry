@@ -204,10 +204,11 @@ source:
     write_parquet: false
 ```
 
-### Load Patterns & Silver Promotion
+- ### Load Patterns & Silver Promotion
 - Configure the Bronze CLI with `--load-pattern` (or `source.run.load_pattern`) to label outputs as `full`, `cdc`, or `current_history`
 - Bronze partition paths now include the load pattern (`system=foo/table=bar/pattern=current_history/...`) so downstream jobs can select data easily
 - Use the new `silver_extract.py` helper to pull Bronze chunks into curated Silver tables; it mirrors the partition layout and writes metadata for later stages
+- When Bronze partitions are large, run `silver_extract.py --stream` to process chunks one-by-one without building the entire DataFrame in memory.
 - Example:
 
 ```bash
@@ -353,7 +354,7 @@ silver_output/
 - ✅ S3 upload with retries
 - ✅ File chunking for large datasets
 - ✅ Test suite with pytest
-- ✅ Extensible architecture (see [Azure Storage example](docs/examples/AZURE_STORAGE_EXTENSION.md))
+- ✅ Extensible architecture
 
 ## 📖 Documentation
 

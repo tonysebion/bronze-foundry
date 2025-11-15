@@ -243,3 +243,7 @@ If the `silver` section is omitted, `silver_extract` falls back to sensible defa
 ### Developer notes: typed Silver schema
 
 If you need to enforce new validations or defaults, edit the dataclasses in `core/config_models.py`. The `SilverConfig` model (and its child classes such as `SilverSchema`, `SilverNormalization`, etc.) backs `_normalize_silver_config` in `core/config.py`, so every CLI automatically inherits the same behavior. This keeps docs and implementation aligned—update the dataclass once, add a test, and both Bronze and Silver parsing flows receive the new rules.
+
+### Streaming Silver
+
+- Use `silver_extract.py --stream` to process Bronze chunks sequentially when partitions exceed available memory. The streaming mode respects all existing `silver` settings (schema, normalization, partitioning, error handling, checksum) while writing files chunk-by-chunk and updating metadata/lineage in place.

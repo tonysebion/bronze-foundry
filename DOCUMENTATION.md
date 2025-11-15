@@ -681,7 +681,6 @@ platform:
 ```
 
 **Want to add a custom storage backend?** See the complete implementation example:
-- **[Azure Storage Extension](docs/examples/AZURE_STORAGE_EXTENSION.md)** - Full example showing how to implement StorageBackend interface
 
 The StorageBackend abstract base class provides a clean interface:
 - `upload_file()` - Upload to remote storage

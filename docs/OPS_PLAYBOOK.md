@@ -34,4 +34,5 @@ This guide captures the day-two questions platform/ops teams usually ask when on
 - **Catalog integration** – Implement `core/catalog.notify_catalog` to create/update datasets, lineage, or run records in OpenMetadata.
 - **Custom hooks** – Webhooks post JSON bodies; build lightweight relay services if your alerting system needs auth or retries.
 - **Data quality** – Silver configs support declarative normalization and PK enforcement. Leverage OpenMetadata or a dedicated expectation engine for richer checks, and add fail-open/fail-close policies via `silver.error_handling`.
+- **Streaming Silver** – Mention the `--stream` flag in the playbook. When Bronze partitions are too big to fit in memory, use streaming mode so Silver processes one chunk at a time and appends partitions incrementally.
 - **Schema observability stub** – `core/catalog.report_schema_snapshot` currently logs schema snapshots per Silver run. Replace it or extend it later to push to OpenMetadata so lineage/quality alerts can trigger on schema drift.
