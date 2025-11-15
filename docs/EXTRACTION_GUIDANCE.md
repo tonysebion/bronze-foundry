@@ -17,6 +17,7 @@ This guide highlights when to run each Bronze extraction pattern and which Silve
 - **Schema stability**: When columns shift frequently, full snapshots keep Silver simple; CDC/current_history must gracefully handle new columns via Silver schema options.
 - **Run latency**: Streaming chunking, parallel workers, and smaller bronze chunks help keep Bronze runtime bounded.
 - **Failure tolerance**: Bronze already writes `_checksums.json`; Silver can opt into `require_checksum` to skip promotions when Bronze integrity fails.
+- **Edge-case coverage**: The Sample generator (`scripts/generate_sample_data.py`) now emits schema variations, null business keys, and skewed batches so Bronze and Silver tests continually surface new corner cases; regenerate the fixtures before onboarding new extracts.
 
 ## Silver promotion assets (output)
 

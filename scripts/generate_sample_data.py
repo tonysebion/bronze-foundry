@@ -59,10 +59,43 @@ def generate_full_snapshot(seed: int = 42, row_count: int = 500) -> None:
                     "run_date": date_str,
                 }
             )
+        rows.append(
+            {
+                "order_id": None,
+                "customer_id": f"CUST-{rng.randint(1000, 9999)}",
+                "status": "processing",
+                "order_total": round(rng.uniform(25.0, 500.0), 2),
+                "updated_at": (start + timedelta(days=total_rows + 1)).isoformat() + "Z",
+                "run_date": date_str,
+            }
+        )
 
         chunk_path = base_dir / "full-part-0001.csv"
         _write_csv(chunk_path, rows)
-        _write_metadata(base_dir, "full", len(rows), 1)
+        total_records = len(rows)
+        chunk_count = 1
+
+        if day_offset == 1:
+            schema_rows: List[Dict[str, object]] = []
+            for idx in range(30):
+                schema_rows.append(
+                    {
+                        "order_id": f"ORD-SC-{idx:05d}",
+                        "customer_id": f"CUST-{rng.randint(1000, 9999)}",
+                        "status": rng.choice(["high-priority", "standard"]),
+                        "order_total": round(rng.uniform(10.0, 999.0), 2),
+                        "updated_at": (start + timedelta(hours=idx)).isoformat() + "Z",
+                        "run_date": date_str,
+                        "campaign_id": f"CAM-{rng.randint(100, 999)}",
+                        "priority": rng.choice(["high", "normal", "low"]),
+                    }
+                )
+            schema_chunk = base_dir / "full-part-0002.csv"
+            _write_csv(schema_chunk, schema_rows)
+            total_records += len(schema_rows)
+            chunk_count += 1
+
+        _write_metadata(base_dir, "full", total_records, chunk_count)
 
 
 def generate_cdc(seed: int = 99, row_count: int = 400) -> None:
@@ -88,9 +121,45 @@ def generate_cdc(seed: int = 99, row_count: int = 400) -> None:
                 }
             )
 
+        rows.append(
+            {
+                "order_id": None,
+                "customer_id": f"CUST-{rng.randint(1000, 9999)}",
+                "change_type": "insert",
+                "changed_at": (start + timedelta(minutes=total_rows * 3 + 5)).isoformat() + "Z",
+                "status": "processing",
+                "order_total": round(rng.uniform(10.0, 800.0), 2),
+                "run_date": date_str,
+            }
+        )
+
         chunk_path = base_dir / "cdc-part-0001.csv"
         _write_csv(chunk_path, rows)
-        _write_metadata(base_dir, "cdc", len(rows), 1)
+        total_records = len(rows)
+        chunk_count = 1
+
+        if day_offset == 1:
+            schema_rows: List[Dict[str, object]] = []
+            for idx in range(20):
+                note_time = start + timedelta(minutes=(idx + 1) * 2)
+                schema_rows.append(
+                    {
+                        "order_id": f"ORD-{rng.randint(1, 1200):05d}",
+                        "customer_id": f"CUST-{rng.randint(1000, 9999)}",
+                        "change_type": rng.choice(["update", "insert"]),
+                        "changed_at": note_time.isoformat() + "Z",
+                        "status": "delta",
+                        "order_total": round(rng.uniform(5.0, 1200.0), 2),
+                        "run_date": date_str,
+                        "note": f"schema-change-{idx}",
+                    }
+                )
+            schema_chunk = base_dir / "cdc-part-0002.csv"
+            _write_csv(schema_chunk, schema_rows)
+            total_records += len(schema_rows)
+            chunk_count += 1
+
+        _write_metadata(base_dir, "cdc", total_records, chunk_count)
 
 
 def generate_current_history(seed: int = 7, current_rows: int = 200, history_rows: int = 600) -> None:
@@ -147,8 +216,45 @@ def generate_current_history(seed: int = 7, current_rows: int = 200, history_row
 
         history_data = build_history_rows()
         current_data = build_current_rows()
-        _write_csv(base_dir / "current-history-part-0001.csv", history_data + current_data)
-        _write_metadata(base_dir, "current_history", len(history_data) + len(current_data), 1)
+        combined_rows = history_data + current_data
+        combined_rows.append(
+            {
+                "order_id": None,
+                "customer_id": "",
+                "status": "unknown",
+                "effective_start": "",
+                "effective_end": "",
+                "current_flag": "",
+                "updated_at": datetime.fromisoformat(f"{date_str}T00:00:00").isoformat() + "Z",
+                "run_date": date_str,
+            }
+        )
+        total_records = len(combined_rows)
+        chunk_count = 1
+        _write_csv(base_dir / "current-history-part-0001.csv", combined_rows)
+
+        if day_offset == 1:
+            skew_rows: List[Dict[str, object]] = []
+            for idx in range(150):
+                skew_rows.append(
+                    {
+                        "order_id": f"ORD-SK-{idx:05d}",
+                        "customer_id": f"CUST-{rng.randint(2000, 9999)}",
+                        "status": "active",
+                        "effective_start": (datetime.fromisoformat(f"{date_str}T00:00:00") - timedelta(days=idx % 5)).isoformat() + "Z",
+                        "effective_end": "",
+                        "current_flag": 1,
+                        "updated_at": (datetime.fromisoformat(f"{date_str}T12:00:00") + timedelta(minutes=idx)).isoformat() + "Z",
+                        "run_date": date_str,
+                        "revision_notes": f"skewed-{idx % 3}",
+                    }
+                )
+            skew_chunk = base_dir / "current-history-part-0002.csv"
+            _write_csv(skew_chunk, skew_rows)
+            total_records += len(skew_rows)
+            chunk_count += 1
+
+        _write_metadata(base_dir, "current_history", total_records, chunk_count)
 
 
 def main() -> None:

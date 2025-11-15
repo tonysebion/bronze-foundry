@@ -8,6 +8,7 @@ import itertools
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -578,6 +579,8 @@ class SilverPromotionService:
             logger.info("Dry run complete; no files written")
             return 0
 
+        bronze_size_bytes = self._calculate_directory_size(bronze_path)
+        run_start = time.perf_counter()
         run_opts = context.options.run_options
         if self.args.stream_mode:
             outputs, chunk_count, record_count, schema_snapshot = stream_silver_promotion(
@@ -596,19 +599,19 @@ class SilverPromotionService:
             normalized_df = normalize_dataframe(normalized_df, context.options.normalization_cfg)
             logger.info("Loaded %s records from Bronze path %s", len(normalized_df), bronze_path)
             outputs = write_silver_outputs(
-            normalized_df,
-            silver_partition,
-            context.load_pattern,
-            run_opts.primary_keys,
-            run_opts.order_column,
-            run_opts.write_parquet,
-            run_opts.write_csv,
-            run_opts.parquet_compression,
-            run_opts.artifact_names,
-            run_opts.partition_columns,
-            context.options.error_cfg,
-            context.silver_model,
-        )
+                normalized_df,
+                silver_partition,
+                context.load_pattern,
+                run_opts.primary_keys,
+                run_opts.order_column,
+                run_opts.write_parquet,
+                run_opts.write_csv,
+                run_opts.parquet_compression,
+                run_opts.artifact_names,
+                run_opts.partition_columns,
+                context.options.error_cfg,
+                context.silver_model,
+            )
             schema_snapshot = [
                 {"name": col, "dtype": str(dtype)} for col, dtype in normalized_df.dtypes.items()
             ]
@@ -616,7 +619,16 @@ class SilverPromotionService:
             chunk_count = len(outputs)
 
         self._write_metadata(record_count, chunk_count, context, outputs)
-        self._write_checksum_manifest(outputs, context, schema_snapshot, record_count, chunk_count)
+        runtime_seconds = time.perf_counter() - run_start
+        self._write_checksum_manifest(
+            outputs,
+            context,
+            schema_snapshot,
+            record_count,
+            chunk_count,
+            bronze_size_bytes=bronze_size_bytes,
+            runtime_seconds=runtime_seconds,
+        )
 
         for label, paths in outputs.items():
             for path in paths:
@@ -809,6 +821,8 @@ class SilverPromotionService:
         schema_snapshot: List[Dict[str, str]],
         record_count: int,
         chunk_count: int,
+        bronze_size_bytes: int,
+        runtime_seconds: float,
     ) -> None:
         files = [path for paths in outputs.values() for path in paths]
         if not files:
@@ -816,10 +830,13 @@ class SilverPromotionService:
             return
 
         dataset_id = f"silver:{context.domain}.{context.entity}"
+        artifact_size_bytes = sum(path.stat().st_size for path in files)
         stats = {
             "record_count": record_count,
             "chunk_count": chunk_count,
             "primary_key_count": len(context.options.run_options.primary_keys),
+            "bronze_size_bytes": bronze_size_bytes,
+            "artifact_size_bytes": artifact_size_bytes,
         }
 
         extra = {
@@ -827,6 +844,7 @@ class SilverPromotionService:
             "bronze_path": str(context.bronze_path),
             "schema": schema_snapshot,
             "stats": stats,
+            "runtime_seconds": runtime_seconds,
         }
         manifest_path = write_checksum_manifest(
             context.silver_partition,
@@ -880,6 +898,17 @@ class SilverPromotionService:
         for key, value in kwargs.items():
             if value is not None:
                 self._hook_context[key] = value
+
+    def _calculate_directory_size(self, directory: Path) -> int:
+        total = 0
+        for path in directory.rglob("*"):
+            if not path.is_file():
+                continue
+            try:
+                total += path.stat().st_size
+            except OSError:
+                continue
+        return total
 
 
 def build_parser() -> argparse.ArgumentParser:
