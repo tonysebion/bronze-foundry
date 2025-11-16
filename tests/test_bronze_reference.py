@@ -104,7 +104,8 @@ def test_hybrid_samples_cover_delta_sequence() -> None:
             delta_meta = json.loads(delta_meta_path.read_text())
             assert delta_meta["reference_mode"]["role"] == "delta"
             assert delta_meta["reference_mode"]["delta_mode"] == delta_mode
-            assert delta_meta["reference_mode"]["reference_run_date"] in (
-                HYBRID_REFERENCE_INITIAL.isoformat(),
-                HYBRID_REFERENCE_SECOND.isoformat(),
-            )
+            if delta_date > HYBRID_REFERENCE_SECOND:
+                expected_reference = HYBRID_REFERENCE_SECOND.isoformat()
+            else:
+                expected_reference = HYBRID_REFERENCE_INITIAL.isoformat()
+            assert delta_meta["reference_mode"]["reference_run_date"] == expected_reference

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, date, timedelta, timezone
 from pathlib import Path
 from random import Random
 from typing import Iterable, List, Dict
@@ -16,9 +16,9 @@ FULL_DATES = ["2025-11-13", "2025-11-14"]
 CDC_DATES = ["2025-11-13", "2025-11-14"]
 CURRENT_HISTORY_DATES = ["2025-11-13", "2025-11-14"]
 HYBRID_REFERENCE_INITIAL = datetime(2025, 11, 13).date()
-HYBRID_REFERENCE_SECOND = datetime(2025, 11, 21).date()
+HYBRID_REFERENCE_SWITCH_DAY = 9
+HYBRID_REFERENCE_SECOND = HYBRID_REFERENCE_INITIAL + timedelta(days=HYBRID_REFERENCE_SWITCH_DAY)
 HYBRID_DELTA_DAYS = 14
-HYBRID_REFERENCE_SWITCH_DAY = 8
 HYBRID_COMBOS = [
     ("hybrid_cdc_point", "cdc", "point_in_time"),
     ("hybrid_cdc_cumulative", "cdc", "cumulative"),
@@ -129,6 +129,7 @@ def _write_hybrid_reference(
                 "customer_id": f"CUST-{rng.randint(1000, 9999)}",
                 "status": rng.choice(["new", "shipped"]),
                 "order_total": round(rng.uniform(10.0, 250.0), 2),
+                "changed_at": (start + timedelta(hours=order_id)).isoformat() + "Z",
                 "updated_at": (start + timedelta(hours=order_id)).isoformat() + "Z",
                 "run_date": date_str,
             }
@@ -144,10 +145,10 @@ def _write_hybrid_reference(
             "role": "reference",
             "cadence_days": 7,
             "delta_patterns": delta_patterns,
-        "reference_run_date": date_str,
-        "delta_mode": delta_mode,
-    },
-)
+            "reference_run_date": date_str,
+            "delta_mode": delta_mode,
+        },
+    )
 
 
 def _write_hybrid_delta(
@@ -158,7 +159,7 @@ def _write_hybrid_delta(
     role: str,
     rows: List[Dict[str, object]],
     delta_mode: str,
-    reference_run_date: dt.date,
+    reference_run_date: date,
 ) -> None:
     base_dir.mkdir(parents=True, exist_ok=True)
     rng = Random(seed)
@@ -183,11 +184,15 @@ def _build_delta_rows(delta_pattern: str, date_str: str, seed: int) -> List[Dict
     start = datetime.fromisoformat(f"{date_str}T08:00:00")
     rows: List[Dict[str, object]] = []
     for idx in range(1, 51):
+        change_time = start + timedelta(minutes=idx * 5)
         rows.append(
             {
                 "order_id": f"HYB-{idx + 150:05d}",
+                "customer_id": f"CUST-{rng.randint(1000, 9999)}",
+                "status": rng.choice(["processing", "shipped", "cancelled"]),
                 "change_type": rng.choice(["insert", "update"]),
-                "changed_at": (start + timedelta(minutes=idx * 5)).isoformat() + "Z",
+                "changed_at": change_time.isoformat() + "Z",
+                "updated_at": change_time.isoformat() + "Z",
                 "order_total": round(rng.uniform(15.0, 300.0), 2),
                 "delta_tag": f"{delta_pattern}-{date_str}",
                 "run_date": date_str,
@@ -355,24 +360,6 @@ def generate_current_history(seed: int = 7, current_rows: int = 200, history_row
         _write_metadata(base_dir, "current_history", total_records, chunk_count)
 
 
-def _build_delta_rows(delta_pattern: str, date_str: str, seed: int) -> List[Dict[str, object]]:
-    rng = Random(seed)
-    rows: List[Dict[str, object]] = []
-    start = datetime.fromisoformat(f"{date_str}T08:00:00")
-    for idx in range(1, 51):
-        rows.append(
-            {
-                "order_id": f"HYB-{idx + 150:05d}",
-                "change_type": rng.choice(["insert", "update"]),
-                "changed_at": (start + timedelta(minutes=idx * 5)).isoformat() + "Z",
-                "order_total": round(rng.uniform(15.0, 300.0), 2),
-                "delta_tag": f"{delta_pattern}-{date_str}",
-                "run_date": date_str,
-            }
-        )
-    return rows
-
-
 def generate_hybrid_combinations(seed: int = 123) -> None:
     for combo_name, delta_pattern, delta_mode in HYBRID_COMBOS:
         base_pattern_dir = (
@@ -429,9 +416,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-HYBRID_COMBOS = [
-    ("hybrid_cdc_point", "cdc", "point_in_time"),
-    ("hybrid_cdc_cumulative", "cdc", "cumulative"),
-    ("hybrid_incremental_point", "incremental_merge", "point_in_time"),
-    ("hybrid_incremental_cumulative", "incremental_merge", "cumulative"),
-]
