@@ -69,6 +69,7 @@ nav:
     - Config Doctor: CONFIG_DOCTOR.md
     - First Production Run: FIRST_RUN_CHECKLIST.md
     - Error Codes: ERROR_CODES.md
+    - Performance Tuning: PERFORMANCE_TUNING.md
   - Extending:
     - Custom Extractors: EXTENDING_EXTRACTORS.md
     - Storage Backends: STORAGE_BACKEND_ARCHITECTURE.md

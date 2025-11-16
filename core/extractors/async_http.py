@@ -10,6 +10,8 @@ import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
+from core.retry import RetryPolicy, CircuitBreaker, execute_with_retry_async
+
 logger = logging.getLogger(__name__)
 
 # Conditional import - httpx is optional
@@ -23,6 +25,8 @@ except ImportError:
 
 class AsyncApiClient:
     """Async HTTP client with retry and rate limiting support."""
+    
+    _breaker = CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0, half_open_max_calls=1)
     
     def __init__(
         self,
@@ -47,7 +51,7 @@ class AsyncApiClient:
         endpoint: str,
         params: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Make async GET request with concurrency control.
+        """Make async GET request with concurrency control and retry.
         
         Args:
             endpoint: API endpoint path
@@ -57,24 +61,67 @@ class AsyncApiClient:
             JSON response as dict
             
         Raises:
-            httpx.HTTPError: On request failures
+            httpx.HTTPError: On request failures after retries
         """
         url = f"{self.base_url}{endpoint}"
         
-        async with self._semaphore:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                logger.debug(f"Async request to {url} with params {params}")
-                
-                kwargs: Dict[str, Any] = {
-                    "headers": self.headers,
-                    "params": params or {},
-                }
-                if self.auth:
-                    kwargs["auth"] = self.auth
-                
-                response = await client.get(url, **kwargs)
-                response.raise_for_status()
-                return response.json()
+        async def _once() -> Dict[str, Any]:
+            async with self._semaphore:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:  # type: ignore[attr-defined]
+                    logger.debug(f"Async request to {url} with params {params}")
+                    
+                    kwargs: Dict[str, Any] = {
+                        "headers": self.headers,
+                        "params": params or {},
+                    }
+                    if self.auth:
+                        kwargs["auth"] = self.auth
+                    
+                    response = await client.get(url, **kwargs)
+                    response.raise_for_status()
+                    return response.json()
+        
+        def _retry_if(exc: BaseException) -> bool:
+            # Retry timeouts, connection errors, and 5xx/429
+            if "httpx" in str(type(exc).__module__):
+                # httpx.TimeoutException, httpx.ConnectError, etc.
+                if "Timeout" in type(exc).__name__ or "Connect" in type(exc).__name__:
+                    return True
+                # httpx.HTTPStatusError
+                if hasattr(exc, "response"):
+                    status = getattr(exc.response, "status_code", None)  # type: ignore[attr-defined]
+                    if status:
+                        return status == 429 or 500 <= status < 600
+            return False
+        
+        def _delay_from_exc(exc: BaseException, attempt: int, default_delay: float) -> Optional[float]:
+            if hasattr(exc, "response"):
+                resp = getattr(exc, "response", None)
+                if resp and hasattr(resp, "headers"):
+                    retry_after = resp.headers.get("Retry-After")  # type: ignore[attr-defined]
+                    if retry_after:
+                        try:
+                            return float(retry_after)
+                        except Exception:
+                            pass
+            return None
+        
+        policy = RetryPolicy(
+            max_attempts=5,
+            base_delay=0.5,
+            max_delay=8.0,
+            backoff_multiplier=2.0,
+            jitter=0.2,
+            retry_if=_retry_if,
+            delay_from_exception=_delay_from_exc,
+        )
+        
+        return await execute_with_retry_async(
+            _once,
+            policy=policy,
+            breaker=AsyncApiClient._breaker,
+            operation_name="async_api_get",
+        )
     
     async def get_many(
         self,

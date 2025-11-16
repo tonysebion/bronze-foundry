@@ -362,19 +362,47 @@ class ApiExtractor(BaseExtractor):
             max_pages = pagination_cfg.get("max_pages", 0)
             page = 1
             params[page_size_param] = page_size
+            
+            # Prefetch next page while processing current page
+            import asyncio
+            next_page_task = None
+            
             while True:
                 if max_pages > 0 and page > max_pages:
                     logger.info(f"Reached max_pages limit of {max_pages}")
                     break
-                params[page_param] = page
-                data = await _get(params)
+                
+                params_copy = dict(params)
+                params_copy[page_param] = page
+                
+                # If we have a prefetch task running, await it; otherwise fetch current page
+                if next_page_task:
+                    data = await next_page_task
+                else:
+                    data = await _get(params_copy)
+                
+                # Start prefetching next page in parallel while we process current data
+                if max_pages == 0 or page + 1 <= max_pages:
+                    next_params = dict(params)
+                    next_params[page_param] = page + 1
+                    next_page_task = asyncio.create_task(_get(next_params))
+                else:
+                    next_page_task = None
+                
                 records = self._extract_records(data, api_cfg)
                 if not records:
+                    if next_page_task:
+                        next_page_task.cancel()
                     break
+                
                 all_records.extend(records)
                 logger.info(f"Fetched {len(records)} records from page {page} (total: {len(all_records)})")
+                
                 if len(records) < page_size:
+                    if next_page_task:
+                        next_page_task.cancel()
                     break
+                
                 page += 1
 
         elif pagination_type == "cursor":

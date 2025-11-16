@@ -4,12 +4,14 @@ Provides:
 - RetryPolicy: configuration for max attempts, delays, jitter, and predicates
 - CircuitBreaker: open/half-open/closed states with cooldowns and thresholds
 - execute_with_retry: helper to run callables with retry + breaker
+- execute_with_retry_async: async variant for httpx/async paths
 
 This module is self-contained and avoids changing existing behavior; adoption
 is opt-in from extractors/backends.
 """
 from __future__ import annotations
 
+import asyncio
 import random
 import time
 from dataclasses import dataclass, field
@@ -168,3 +170,57 @@ def execute_with_retry(
                 except Exception:
                     pass
             time.sleep(delay)
+
+
+async def execute_with_retry_async(
+    func: Callable[..., Any],
+    *args: Any,
+    policy: Optional[RetryPolicy] = None,
+    breaker: Optional[CircuitBreaker] = None,
+    operation_name: Optional[str] = None,
+    **kwargs: Any,
+) -> Any:
+    """Async variant of execute_with_retry for httpx and async callables.
+
+    - Skips execution if breaker is open (raises RetryExhaustedError)
+    - Exponential backoff with jitter between attempts (async sleep)
+    - Resets breaker on success; increments on failure
+    """
+    policy = policy or RetryPolicy()
+    attempts = 0
+
+    while True:
+        attempts += 1
+        if breaker is not None and not breaker.allow():
+            raise RetryExhaustedError(
+                f"Circuit open; refusing to execute {operation_name or func.__name__}",
+                attempts=attempts - 1,
+                operation=operation_name or func.__name__,
+            )
+
+        try:
+            result = await func(*args, **kwargs)
+            if breaker is not None:
+                breaker.record_success()
+            return result
+        except BaseException as exc:  # noqa: BLE001
+            retryable = policy.should_retry(exc)
+            if not retryable or attempts >= policy.max_attempts:
+                if breaker is not None:
+                    breaker.record_failure()
+                raise RetryExhaustedError(
+                    f"Operation failed after {attempts} attempt(s): {operation_name or func.__name__}",
+                    attempts=attempts,
+                    operation=operation_name or func.__name__,
+                    last_error=exc,
+                ) from exc
+            # allow exception-specific delay override
+            delay = policy.compute_delay(attempts)
+            if policy.delay_from_exception is not None:
+                try:
+                    override = policy.delay_from_exception(exc, attempts, delay)
+                    if override is not None:
+                        delay = max(0.0, float(override))
+                except Exception:
+                    pass
+            await asyncio.sleep(delay)
