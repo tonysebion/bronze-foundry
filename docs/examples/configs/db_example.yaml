@@ -3,7 +3,7 @@
 
 platform:
   bronze:
-    # Storage backend: "s3", "azure", "gcs", or "local"
+    # Storage backend: "s3", "azure", or "local"
     storage_backend: "s3"
     
     s3_bucket: "analytics-bronze"

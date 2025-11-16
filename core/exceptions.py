@@ -125,7 +125,7 @@ class StorageError(BronzeFoundryError):
         
         Args:
             message: Description of storage failure
-            backend_type: Storage backend type (s3, azure, gcs, local)
+        backend_type: Storage backend type (s3, azure, local)
             operation: Operation that failed (upload, download, delete, list)
             file_path: Local file path involved in the operation
             remote_path: Remote path involved in the operation

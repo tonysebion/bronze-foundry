@@ -35,8 +35,51 @@ from core.silver.artifacts import (
     apply_schema_settings,
     build_current_view,
     normalize_dataframe,
-    write_silver_outputs,
+    write_silver_outputs as _artifact_write_silver_outputs,
+    handle_error_rows,
+    partition_dataframe,
+    SilverModelPlanner,
 )
+
+# Backwards-compatible wrapper matching legacy public signature used in tests:
+# write_silver_outputs(df, output_dir, bronze_pattern, primary_keys, order_column, ...)
+def write_silver_outputs(
+    df,
+    output_dir,
+    bronze_pattern,  # preserved for compatibility; not directly used
+    primary_keys,
+    order_column,
+    *,
+    write_parquet=True,
+    write_csv=False,
+    parquet_compression="snappy",
+    artifact_names=None,
+    partition_columns=None,
+    error_cfg=None,
+    silver_model=None,
+):
+    """Wrapper adapting old signature to new artifact writer implementation."""
+    artifact_names = artifact_names or {
+        "full_snapshot": "full_snapshot",
+        "cdc": "cdc_changes",
+        "history": "history",
+        "current": "current",
+    }
+    partition_columns = partition_columns or []
+    error_cfg = error_cfg or {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0}
+    return _artifact_write_silver_outputs(
+        df,
+        primary_keys,
+        order_column,
+        write_parquet,
+        write_csv,
+        parquet_compression,
+        artifact_names,
+        partition_columns,
+        error_cfg,
+        silver_model,
+        output_dir,
+    )
 from core.silver.models import SilverModel
 
 logger = logging.getLogger(__name__)
@@ -319,7 +362,7 @@ class SilverPromotionService:
             normalized_df = apply_schema_settings(df, context.options.schema_cfg)
             normalized_df = normalize_dataframe(normalized_df, context.options.normalization_cfg)
             logger.info("Loaded %s records from Bronze path %s", len(normalized_df), bronze_path)
-            outputs = write_silver_outputs(
+            outputs = _artifact_write_silver_outputs(
                 normalized_df,
                 run_opts.primary_keys,
                 run_opts.order_column,

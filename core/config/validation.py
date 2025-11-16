@@ -40,7 +40,7 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("'platform.bronze' must be a dictionary")
 
     storage_backend = bronze.get("storage_backend", "s3")
-    valid_backends = ["s3", "azure", "gcs", "local"]
+    valid_backends = ["s3", "azure", "local"]
     if storage_backend not in valid_backends:
         raise ValueError(f"platform.bronze.storage_backend must be one of {valid_backends}")
 
@@ -55,11 +55,6 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
             raise ValueError("Missing platform.azure_connection section (required for Azure backend)")
         if "azure_container" not in bronze:
             raise ValueError("Azure backend requires platform.bronze.azure_container")
-    elif storage_backend == "gcs":
-        if "gcs_connection" not in platform:
-            raise ValueError("Missing platform.gcs_connection section (required for GCS backend)")
-        if "gcs_bucket" not in bronze or "gcs_prefix" not in bronze:
-            raise ValueError("GCS backend requires platform.bronze.gcs_bucket and gcs_prefix")
     elif storage_backend == "local":
         if "local_path" not in bronze:
             raise ValueError("Local backend requires platform.bronze.local_path")

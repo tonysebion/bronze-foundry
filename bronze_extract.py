@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 def list_storage_backends() -> List[str]:
     """Return list of available storage backends."""
-    return ["s3", "azure", "gcs", "local"]
+    return ["s3", "azure", "local"]
 
 
 def main() -> int:
@@ -141,7 +141,7 @@ def main() -> int:
         print("Available storage backends:")
         for backend in backends:
             print(f"  - {backend}")
-        print("\nNote: Azure, GCS require additional dependencies. See INSTALLATION.md")
+        print("\nNote: Azure requires additional dependencies. See INSTALLATION.md")
         return 0
     
     # Configure logging based on flags

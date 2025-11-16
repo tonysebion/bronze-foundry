@@ -16,7 +16,7 @@ from core.extractors.db_extractor import DbExtractor
 from core.extractors.file_extractor import FileExtractor
 from core.io import chunk_records
 from core.patterns import LoadPattern
-from core.runner.chunks import ChunkProcessor
+from core.runner.chunks import ChunkProcessor, ChunkWriter
 from core.storage import get_storage_backend
 
 logger = logging.getLogger(__name__)
@@ -124,7 +124,8 @@ class ExtractJob:
         )
 
         parallel_workers = int(run_cfg.get("parallel_workers", 1))
-        processor = ChunkProcessor(writer_config, parallel_workers)
+        writer = ChunkWriter(writer_config)
+        processor = ChunkProcessor(writer, parallel_workers)
         chunk_files = processor.process(chunks)
         return len(chunks), chunk_files
 

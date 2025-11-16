@@ -354,7 +354,7 @@ See [EXTENDING_EXTRACTORS.md](docs/EXTENDING_EXTRACTORS.md) for details.
 
 To add a new storage backend (e.g., `GoogleCloudStorage`):
 
-1. Create implementation in `docs/examples/extensions/gcs_storage/`
+1. Create implementation in `docs/examples/extensions/<storage_name>/`
 2. Implement `StorageBackend` interface
 3. Add example configuration
 4. Add README with setup instructions

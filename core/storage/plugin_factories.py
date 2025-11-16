@@ -17,12 +17,6 @@ def _s3_factory(config: Dict[str, Any]):
     return S3Storage(config)
 
 
-@register_backend("gcs")
-def _gcs_factory(config: Dict[str, Any]):
-    from core.gcs_storage import GCSStorage
-
-    return GCSStorage(config)
-
 
 @register_backend("local")
 def _local_factory(config: Dict[str, Any]):

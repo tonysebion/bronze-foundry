@@ -30,7 +30,7 @@ def run_parallel_extracts(
     if max_workers <= 0:
         max_workers = 1
     
-    logger.info(f"Starting parallel extraction with {max_workers} workers for {len(configs)} configs")
+    logger.info(f"Starting parallel extraction with {max_workers} workers for {len(contexts)} configs")
     
     results = []
     
@@ -81,5 +81,5 @@ def _safe_run_extract(context: RunContext) -> Tuple[int, Optional[Exception]]:
         status = run_extract(context)
         return (status, None)
     except Exception as e:
-        logger.error(f"Extraction failed for {config_name}: {e}", exc_info=True)
+        logger.error(f"Extraction failed for {context.config_name}: {e}", exc_info=True)
         return (-1, e)

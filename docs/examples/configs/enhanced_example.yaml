@@ -7,7 +7,7 @@
 
 platform:
   bronze:
-    # Storage backend: "s3" (AWS/MinIO), "azure" (Blob/ADLS), "gcs" (Google Cloud), "local"
+    # Storage backend: "s3" (AWS/MinIO), "azure" (Blob/ADLS), or "local"
     storage_backend: "s3"
     
     s3_bucket: "analytics-bronze"

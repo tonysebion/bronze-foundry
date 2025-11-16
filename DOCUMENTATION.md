@@ -1,6 +1,6 @@
 # medallion-foundry Documentation
 
-Complete documentation for medallion-foundry - a production-ready, config-driven Python framework for landing data from APIs, databases, or custom sources into Bronze layer with pluggable storage backends (S3, Azure, GCS, local filesystem).
+Complete documentation for medallion-foundry - a production-ready, config-driven Python framework for landing data from APIs, databases, or custom sources into Bronze layer with pluggable storage backends (S3, Azure, local filesystem).
 
 > **📚 Documentation Navigation:**
 > - **README.md** - Project overview and key features
@@ -669,14 +669,13 @@ The framework provides a pluggable storage backend architecture supporting multi
 **Supported Backends**:
 - **S3** - AWS S3, MinIO, and any S3-compatible storage (default)
 - **Azure** - Azure Blob Storage and ADLS Gen2 
-- **GCS** - Google Cloud Storage
 - **Local** - Local filesystem for development/testing
 
 **Configuration**:
 ```yaml
 platform:
   bronze:
-    storage_backend: "s3"  # or "azure", "gcs", "local"
+    storage_backend: "s3"  # or "azure", "local"
     # Backend-specific configuration follows...
 ```
 

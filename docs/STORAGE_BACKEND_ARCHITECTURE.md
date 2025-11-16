@@ -7,7 +7,6 @@ This document describes the pluggable storage backend architecture implemented i
 Bronze-foundry now supports multiple storage backends through a clean abstraction layer. This allows you to:
 - Use **S3** (AWS, MinIO, or any S3-compatible storage) - default
 - Use **Azure** (Blob Storage or ADLS Gen2)
-- Use **Google Cloud Storage** (GCS)
 - Use **local filesystem** for development/testing
 - Implement **custom storage backends** for other systems
 
@@ -107,22 +106,6 @@ platform:
 
 **See**: [Azure Storage Extension Example](examples/AZURE_STORAGE_EXTENSION.md) for complete implementation
 
-### Google Cloud Storage
-
-**Implementation**: Not included in core, requires custom implementation
-
-**Configuration**:
-```yaml
-platform:
-  bronze:
-    storage_backend: "gcs"
-    gcs_bucket: "analytics-bronze"
-    gcs_prefix: "bronze"
-  
-  gcs_connection:
-    credentials_json_env: "GOOGLE_APPLICATION_CREDENTIALS"
-```
-
 ### Local Filesystem
 
 **Implementation**: Not included in core, requires custom implementation
@@ -143,7 +126,6 @@ platform:
 |---------|------------------------|----------------------------|
 | S3 | `s3_bucket`, `s3_prefix` | `s3_connection` |
 | Azure | `azure_storage_account`, `azure_container` | `azure_connection` |
-| GCS | `gcs_bucket`, `gcs_prefix` | `gcs_connection` |
 | Local | `local_path` | None |
 
 ### Backward Compatibility
@@ -208,7 +190,7 @@ def get_storage_backend(config: Dict[str, Any]) -> StorageBackend:
 3. **Update config validation** (`core/config.py`):
 
 ```python
-valid_backends = ["s3", "azure", "gcs", "local", "my_storage"]
+valid_backends = ["s3", "azure", "local", "my_storage"]
 ```
 
 4. **Document configuration requirements**

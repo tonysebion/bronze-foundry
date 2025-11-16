@@ -9,8 +9,6 @@ VALID_PROVIDER_TYPES = {
     "s3_cloud",
     "azure_blob",
     "azure_adls",
-    "gcs_cloud",
-    "gcs_onprem",
     "local_generic",
 }
 VALID_CLOUD_PROVIDERS = {None, "", "azure", "aws", "gcp"}
