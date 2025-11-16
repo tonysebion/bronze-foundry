@@ -88,7 +88,7 @@ def partition_dataframe(
     if not partition_columns:
         return [([], df)]
 
-    partitions = [([], df)]
+    partitions: List[Tuple[List[str], pd.DataFrame]] = [([], df)]
     for column in partition_columns:
         if column not in df.columns:
             logger.warning(

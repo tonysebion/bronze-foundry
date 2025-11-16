@@ -39,8 +39,10 @@ from core.deprecation import emit_deprecation, DeprecationSpec
 from core.silver.artifacts import (
     apply_schema_settings,
     normalize_dataframe,
+    write_silver_outputs as _artifact_write_silver_outputs,
 )
 from core.silver.writer import get_silver_writer
+from core.silver.models import SilverModel
 
 
 # Backwards-compatible wrapper matching legacy public signature used in tests:
@@ -104,8 +106,6 @@ def write_silver_outputs(
         output_dir,
     )
 
-
-from core.silver.models import SilverModel
 
 logger = logging.getLogger(__name__)
 

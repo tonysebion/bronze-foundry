@@ -13,7 +13,7 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
-def estimate_record_size(record: Dict[str, Any]) -> int:
+def estimate_record_size(record: Any) -> int:
     """Estimate the memory size of a single record in bytes."""
     if record is None:
         return 0
@@ -65,7 +65,7 @@ def chunk_records(
     # Size-aware chunking
     max_size_bytes = max_size_mb * 1024 * 1024
     chunks = []
-    current_chunk = []
+    current_chunk: List[Dict[str, Any]] = []
     current_size = 0
 
     for record in records:
@@ -194,7 +194,7 @@ def write_checksum_manifest(
     import json
     from datetime import datetime
 
-    manifest = {
+    manifest: Dict[str, Any] = {
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "load_pattern": load_pattern,
         "files": [],

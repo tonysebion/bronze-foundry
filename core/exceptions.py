@@ -231,7 +231,7 @@ class PaginationError(ExtractionError):
             page: Current page number
             cursor: Current cursor value
         """
-        details = {}
+        details: Dict[str, Any] = {}
         if pagination_type:
             details["pagination_type"] = pagination_type
         if page is not None:
@@ -315,7 +315,7 @@ class DataQualityError(BronzeFoundryError):
             actual: Actual value found
             failed_records: Number of records that failed validation
         """
-        details = {}
+        details: Dict[str, Any] = {}
         if check_type:
             details["check_type"] = check_type
         if expected is not None:
@@ -355,7 +355,7 @@ class RetryExhaustedError(BronzeFoundryError):
             operation: Operation that was retried
             last_error: Last exception before giving up
         """
-        details = {}
+        details: Dict[str, Any] = {}
         if attempts is not None:
             details["attempts"] = attempts
         if operation:

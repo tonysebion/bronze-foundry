@@ -122,7 +122,7 @@ def stream_silver_promotion(
                 df = normalize_dataframe(df, normalization_cfg)
                 return df
 
-            pickled = chunk.to_pickle(None)  # type: ignore[arg-type]
+            pickled = chunk.to_pickle(None)
             with mp.Pool(processes=run_opts.transform_processes) as pool:
                 # Map single element list; could be extended for batch of chunks
                 normalized_list = pool.map(_transform, [pickled])

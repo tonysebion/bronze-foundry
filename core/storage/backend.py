@@ -5,6 +5,8 @@ import logging
 
 from core.storage.plugin_manager import get_backend_factory, resolve_backend_type
 
+import core.storage.plugin_factories  # noqa: F401 register built-in backends
+
 logger = logging.getLogger(__name__)
 
 
@@ -48,6 +50,3 @@ def get_storage_backend(
     if use_cache:
         _STORAGE_BACKEND_CACHE[cache_key] = backend
     return backend
-
-
-import core.storage.plugin_factories  # noqa: F401 register built-in backends

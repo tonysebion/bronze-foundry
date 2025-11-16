@@ -16,7 +16,6 @@ Usage:
 import sys
 import subprocess
 import argparse
-from pathlib import Path
 
 
 def run_command(cmd: list, description: str) -> bool:
@@ -66,7 +65,6 @@ def main():
     args = parser.parse_args()
 
     results = []
-    project_root = Path(__file__).parent
 
     # Determine what to run
     run_tests = True

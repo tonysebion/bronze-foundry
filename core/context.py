@@ -48,12 +48,11 @@ def build_run_context(
         cfg.get("__typed_model__")
         if isinstance(cfg, dict)
         else (cfg if isinstance(cfg, RootConfig) else None)
-    )  # type: ignore[assignment]
+    )
     if typed:
         run_cfg = typed.source.run.model_dump()  # dict for compatibility
     else:
-        platform_cfg = cfg["platform"]  # type: ignore[index]
-        run_cfg = cfg["source"].get("run", {})  # type: ignore[index]
+        run_cfg = cfg["source"].get("run", {})
 
     local_output_dir = Path(
         local_output_override or run_cfg.get("local_output_dir", "./output")
@@ -69,8 +68,8 @@ def build_run_context(
         source_system = typed.source.system
         source_table = typed.source.table
     else:
-        source_system = cfg["source"]["system"]  # type: ignore[index]
-        source_table = cfg["source"]["table"]  # type: ignore[index]
+        source_system = cfg["source"]["system"]
+        source_table = cfg["source"]["table"]
     dataset_id = f"{source_system}.{source_table}"
     if typed:
         config_name = (
@@ -79,7 +78,7 @@ def build_run_context(
             else dataset_id
         )
     else:
-        config_name = cfg["source"].get("config_name", dataset_id)  # type: ignore[index]
+        config_name = cfg["source"].get("config_name", dataset_id)
 
     pattern_value = load_pattern_override or run_cfg.get("load_pattern")
     load_pattern = (

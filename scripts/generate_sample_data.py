@@ -180,7 +180,6 @@ def _write_hybrid_delta(
     reference_run_date: date,
 ) -> None:
     base_dir.mkdir(parents=True, exist_ok=True)
-    rng = Random(seed)
     chunk_path = base_dir / "delta-part-0001.csv"
     _write_csv(chunk_path, rows)
     _write_metadata(

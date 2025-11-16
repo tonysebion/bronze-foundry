@@ -243,7 +243,7 @@ class TestStorageBackendFailures:
         # This will fail because env vars don't exist and storage backend is optional
         # Just test the function can be imported
         try:
-            backend = get_storage_backend(platform_cfg)
+            get_storage_backend(platform_cfg)
         except Exception:
             # Expected - env vars not set
             pass

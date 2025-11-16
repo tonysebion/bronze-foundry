@@ -5,11 +5,11 @@ import os
 from typing import Any, Iterator
 
 try:  # optional dependency
-    from opentelemetry import trace as otel_trace  # type: ignore
+    from opentelemetry import trace as otel_trace
 
     _OTEL_AVAILABLE = True
 except Exception:  # pragma: no cover - optional
-    otel_trace = None  # type: ignore
+    otel_trace = None
     _OTEL_AVAILABLE = False
 
 

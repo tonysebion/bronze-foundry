@@ -31,7 +31,7 @@ def substitute_env_vars(value: Any) -> Any:
     """
     if isinstance(value, str):
 
-        def replacer(match: re.Match) -> str:
+        def replacer(match: re.Match[str]) -> str:
             var_name = match.group(1)
             default_value = match.group(2)
 
@@ -39,7 +39,7 @@ def substitute_env_vars(value: Any) -> Any:
             if env_value is not None:
                 return env_value
             if default_value is not None:
-                return default_value
+                return str(default_value)
             raise ValueError(
                 f"Environment variable '{var_name}' is not set and no default provided"
             )
