@@ -15,6 +15,8 @@ BASE_DIR = Path(__file__).resolve().parents[1] / "docs" / "examples" / "data" / 
 FULL_DATES = ["2025-11-13", "2025-11-14"]
 CDC_DATES = ["2025-11-13", "2025-11-14"]
 CURRENT_HISTORY_DATES = ["2025-11-13", "2025-11-14"]
+HYBRID_REFERENCE_DATE = datetime(2025, 11, 13).date()
+HYBRID_DELTA_DAYS = 14
 
 
 def _write_csv(path: Path, rows: Iterable[Dict[str, object]]) -> None:
@@ -106,7 +108,7 @@ def generate_full_snapshot(seed: int = 42, row_count: int = 500) -> None:
         _write_metadata(base_dir, "full", total_records, chunk_count)
 
 
-def _write_hybrid_reference(base_dir: Path, date_str: str, seed: int, role: str, delta_patterns: List[str]) -> None:
+def _write_hybrid_reference(base_dir: Path, date_str: str, seed: int, delta_patterns: List[str]) -> None:
     rng = Random(seed)
     rows: List[Dict[str, object]] = []
     start = datetime.fromisoformat(f"{date_str}T00:00:00")
@@ -128,7 +130,12 @@ def _write_hybrid_reference(base_dir: Path, date_str: str, seed: int, role: str,
         "full",
         len(rows),
         1,
-        reference_mode={"role": "reference", "cadence_days": 7, "delta_patterns": delta_patterns},
+        reference_mode={
+            "role": "reference",
+            "cadence_days": 7,
+            "delta_patterns": delta_patterns,
+            "reference_run_date": date_str,
+        },
     )
 
 
@@ -153,7 +160,11 @@ def _write_hybrid_delta(base_dir: Path, date_str: str, delta_pattern: str, seed:
         delta_pattern,
         len(rows),
         1,
-        reference_mode={"role": role, "delta_patterns": [delta_pattern]},
+        reference_mode={
+            "role": role,
+            "delta_patterns": [delta_pattern],
+            "reference_run_date": HYBRID_REFERENCE_DATE.isoformat(),
+        },
     )
 
 
@@ -322,31 +333,31 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
         ("hybrid_incremental", "incremental_merge"),
     ]
     for combo_name, delta_pattern in combos:
-        for day_offset, date_str in enumerate(FULL_DATES):
-            base_dir = (
+        reference_dir = (
+            BASE_DIR
+            / combo_name
+            / "system=retail_demo"
+            / "table=orders"
+            / f"pattern={combo_name}"
+            / f"dt={HYBRID_REFERENCE_DATE.isoformat()}"
+        )
+        _write_hybrid_reference(reference_dir / "reference", HYBRID_REFERENCE_DATE.isoformat(), seed, [delta_pattern])
+        for offset in range(1, HYBRID_DELTA_DAYS + 1):
+            delta_date = HYBRID_REFERENCE_DATE + timedelta(days=offset)
+            delta_dir = (
                 BASE_DIR
                 / combo_name
                 / "system=retail_demo"
                 / "table=orders"
                 / f"pattern={combo_name}"
-                / f"dt={date_str}"
+                / f"dt={delta_date.isoformat()}"
+                / "delta"
             )
-            reference_dir = base_dir / "reference"
-            delta_dir = base_dir / "delta"
-
-            _write_hybrid_reference(
-                reference_dir,
-                date_str,
-                seed + day_offset,
-                "reference",
-                [delta_pattern],
-            )
-
             _write_hybrid_delta(
                 delta_dir,
-                date_str,
+                delta_date.isoformat(),
                 delta_pattern,
-                seed + day_offset + 500,
+                seed + offset * 10,
                 "delta",
             )
 
