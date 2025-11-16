@@ -50,5 +50,6 @@ The Silver stage works with the Bronze artifacts and lets you select **five cura
         delta_mode: cumulative  # or point_in_time
   ```
   The Bronze run annotates `_metadata.json` with the reference snapshot path + cadence so Silver jobs can automatically pick up the most recent baseline before merging the deltas.
+- When a delta file arrives on the same day as a new reference snapshot, stay on that delta for the current ingestion run so you see the latest changes; the next delta (day+1) is the first one that can move to the newly landed reference. Our metadata (`reference_mode.run_date`, `reference_mode.reference_run_date`) makes it unambiguous whether a Silver join should favor the delta over the fresh full for the same calendar day.
 - **Error handling**: Tune `silver.error_handling` (enabled/max_bad_records/max_bad_percent) when data has nullable keys or occasional corrupt rows to avoid electing total job failure.
 - **Partitioning differences**: Bronze typically partitions by `dt`/`pattern`; Silver can add business-level partitions (e.g., `status`, `region`) even when Bronze stays coarse.

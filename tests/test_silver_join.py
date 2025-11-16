@@ -164,12 +164,23 @@ def test_datetime_alignment_preserves_timezone(tmp_path: Path) -> None:
 
 def test_order_inputs_by_reference() -> None:
     base_df = pd.DataFrame({"key": [1]})
-    reference_entry = ({"path": "ref"}, base_df, {"reference_mode": {"role": "reference"}}, "ref_path")
-    delta_entry = ({"path": "delta"}, base_df, {"reference_mode": {"role": "delta"}}, "delta_path")
-    auto_entry = ({"path": "auto"}, base_df, {"reference_mode": {"role": "auto"}}, "auto_path")
-    ordered = _order_inputs_by_reference([delta_entry, auto_entry, reference_entry])
-    assert ordered[0][3] == "ref_path"
-    assert ordered[-1][3] == "delta_path"
+    reference_entry = (
+        {"path": "ref"},
+        base_df,
+        {"reference_mode": {"role": "reference"}, "run_date": "2025-11-14"},
+        "ref_path",
+    )
+    delta_entry = (
+        {"path": "delta"},
+        base_df,
+        {"reference_mode": {"role": "delta"}, "run_date": "2025-11-14"},
+        "delta_path",
+    )
+    auto_entry = ({"path": "auto"}, base_df, {"reference_mode": None, "run_date": "2025-11-13"}, "auto_path")
+    ordered = _order_inputs_by_reference([reference_entry, delta_entry, auto_entry])
+    assert ordered[0][3] == "auto_path"
+    assert ordered[1][3] == "delta_path"
+    assert ordered[-1][3] == "ref_path"
 
 
 def test_run_quality_guards_success() -> None:
@@ -275,3 +286,26 @@ def test_reference_metadata_in_join_output(tmp_path: Path) -> None:
     metadata_json = json.loads((metadata_out / "_metadata.json").read_text(encoding="utf-8"))
     inputs = metadata_json.get("inputs", [])
     assert any(input_meta.get("reference_mode") for input_meta in inputs)
+
+
+def test_delta_preferred_same_day_reference() -> None:
+    base_meta = {
+        "silver_path": "slot",
+        "silver_model": "scd_type_1",
+        "record_count": 2,
+        "chunk_count": 1,
+        "run_date": "2025-11-14",
+    }
+    ref_meta = dict(base_meta)
+    ref_meta["reference_mode"] = {"role": "reference", "reference_run_date": "2025-11-14"}
+    delta_meta = dict(base_meta)
+    delta_meta["reference_mode"] = {"role": "delta", "reference_run_date": "2025-11-14"}
+    left = pd.DataFrame({"key": [1], "value": ["a"]})
+    right = pd.DataFrame({"key": [1], "value": ["b"]})
+    entries = [
+        ({"path": "left"}, left, ref_meta, "left"),
+        ({"path": "right"}, right, delta_meta, "right"),
+    ]
+    ordered = _order_inputs_by_reference(entries)
+    assert ordered[0][3] == "right"
+    assert ordered[1][3] == "left"

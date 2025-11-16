@@ -584,10 +584,19 @@ def _normalize_join_strategy(raw: str | None) -> str:
 def _order_inputs_by_reference(
     inputs: List[Tuple[Dict[str, Any], pd.DataFrame, Dict[str, Any], str]]
 ) -> List[Tuple[Dict[str, Any], pd.DataFrame, Dict[str, Any], str]]:
+    delta_run_dates = {
+        meta.get("run_date")
+        for _, _, meta, _ in inputs
+        if (meta.get("reference_mode") or {}).get("role") == "delta"
+    }
+
     def score(entry: Tuple[Any, Any, Dict[str, Any], Any]) -> int:
         meta = entry[2]
         reference = (meta.get("reference_mode") or {}).get("role")
         if reference == "reference":
+            run_date = meta.get("run_date")
+            if run_date in delta_run_dates:
+                return 3
             return 0
         if reference == "delta":
             return 2
