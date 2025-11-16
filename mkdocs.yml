@@ -66,6 +66,7 @@ nav:
     - Architecture: ARCHITECTURE.md
     - Configuration Reference: CONFIG_REFERENCE.md
     - Enhanced Features: ENHANCED_FEATURES.md
+    - Config Doctor: CONFIG_DOCTOR.md
     - First Production Run: FIRST_RUN_CHECKLIST.md
   - Extending:
     - Custom Extractors: EXTENDING_EXTRACTORS.md

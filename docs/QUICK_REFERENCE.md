@@ -82,6 +82,57 @@ bronze-extract \
 
 ## 💡 Common Patterns
 
+### Silver Streaming Controls
+
+```bash
+# Default writer, file-at-a-time
+silver-extract \
+  --config configs/my.yaml \
+  --stream \
+  --streaming-chunk-size 0 \
+  --artifact-writer default
+
+# Chunked CSV reading with prefetch and transactional writer
+silver-extract \
+  --config configs/my.yaml \
+  --stream \
+  --streaming-chunk-size 200000 \
+  --streaming-prefetch 2 \
+  --artifact-writer transactional
+
+# Enable multiprocessing for per-chunk transforms
+silver-extract \
+  --config configs/my.yaml \
+  --stream \
+  --transform-processes 2
+```
+
+Defaults:
+- `--artifact-writer`: `default`
+- `--streaming-chunk-size`: `0` (whole-file per chunk)
+- `--streaming-prefetch`: `0` (no prefetch)
+- `--transform-processes`: `0` (disabled)
+
+### Silver Streaming Controls
+```bash
+# Default writer
+python silver_extract.py --config config.yaml --stream \
+  --artifact-writer default \
+  --streaming-chunk-size 200000 \
+  --streaming-prefetch 2 \
+  --transform-processes 0
+
+# Transactional writer (staged publish)
+python silver_extract.py --config config.yaml --stream \
+  --artifact-writer transactional
+```
+
+Defaults:
+- `--artifact-writer`: `default`
+- `--streaming-chunk-size`: `0` (whole file)
+- `--streaming-prefetch`: `0`
+- `--transform-processes`: `0` (disabled)
+
 ### Pattern 1: High-Performance Analytics
 ```yaml
 platform:

@@ -108,6 +108,31 @@ def main() -> int:
         default=None,
         help="Log format (default: human). Can also set via BRONZE_LOG_FORMAT env var"
     )
+    # Silver pipeline tuning (forwarded via RunOptions / RunContext for downstream use)
+    parser.add_argument(
+        "--artifact-writer",
+        choices=["default", "transactional"],
+        default="default",
+        help="Select artifact writer implementation for downstream Silver (default|transactional)",
+    )
+    parser.add_argument(
+        "--streaming-chunk-size",
+        type=int,
+        default=0,
+        help="CSV chunk size for streaming promotions (0 = file at a time)",
+    )
+    parser.add_argument(
+        "--streaming-prefetch",
+        type=int,
+        default=0,
+        help="Prefetch buffer size (number of chunks) for streaming promotions",
+    )
+    parser.add_argument(
+        "--transform-processes",
+        type=int,
+        default=0,
+        help="Number of worker processes for chunk transforms in streaming promotions (0 = disable)",
+    )
     parser.add_argument(
         "--storage-scope",
         choices=["any", "onprem"],
@@ -345,6 +370,10 @@ class BronzeOrchestrator:
                 },
                 on_success_webhooks=self.args.on_success_webhook or [],
                 on_failure_webhooks=self.args.on_failure_webhook or [],
+                artifact_writer_kind=getattr(self.args, "artifact_writer", "default"),
+                streaming_chunk_size=getattr(self.args, "streaming_chunk_size", 0),
+                streaming_prefetch=getattr(self.args, "streaming_prefetch", 0),
+                transform_processes=getattr(self.args, "transform_processes", 0),
             )
 
         # Fallback to dict-based extraction if typed model missing.
@@ -370,6 +399,10 @@ class BronzeOrchestrator:
             artifact_names=RunOptions.default_artifacts(),
             on_success_webhooks=self.args.on_success_webhook or [],
             on_failure_webhooks=self.args.on_failure_webhook or [],
+            artifact_writer_kind=getattr(self.args, "artifact_writer", "default"),
+            streaming_chunk_size=getattr(self.args, "streaming_chunk_size", 0),
+            streaming_prefetch=getattr(self.args, "streaming_prefetch", 0),
+            transform_processes=getattr(self.args, "transform_processes", 0),
         )
 
     def _record_configs_info(self, configs: List[Dict[str, Any]], run_date: dt.date) -> None:

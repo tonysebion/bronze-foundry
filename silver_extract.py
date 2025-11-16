@@ -256,6 +256,10 @@ class PromotionOptions:
             artifact_names=artifact_names,
             on_success_webhooks=args.on_success_webhook or [],
             on_failure_webhooks=args.on_failure_webhook or [],
+            artifact_writer_kind=getattr(args, "artifact_writer", "default"),
+            streaming_chunk_size=getattr(args, "streaming_chunk_size", 0),
+            streaming_prefetch=getattr(args, "streaming_prefetch", 0),
+            transform_processes=getattr(args, "transform_processes", 0),
         )
 
         model_override = args.silver_model or silver_cfg.get("model")
@@ -777,6 +781,30 @@ def build_parser() -> argparse.ArgumentParser:
         dest="stream_mode",
         action="store_true",
         help="Use the streaming writer that processes Bronze chunks incrementally",
+    )
+    parser.add_argument(
+        "--artifact-writer",
+        choices=["default", "transactional"],
+        default="default",
+        help="Select artifact writer implementation (default|transactional)",
+    )
+    parser.add_argument(
+        "--streaming-chunk-size",
+        type=int,
+        default=0,
+        help="CSV chunk size for streaming mode (0 = file at a time)",
+    )
+    parser.add_argument(
+        "--streaming-prefetch",
+        type=int,
+        default=0,
+        help="Prefetch buffer size (number of chunks) for streaming mode",
+    )
+    parser.add_argument(
+        "--transform-processes",
+        type=int,
+        default=0,
+        help="Number of worker processes for chunk transforms (0 = disable)",
     )
     parser.add_argument("--full-output-name", help="Base name for full snapshot files")
     parser.add_argument("--current-output-name", help="Base name for current view files")

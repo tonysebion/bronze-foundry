@@ -38,6 +38,8 @@ setup(
     entry_points={
         "console_scripts": [
             "bronze-extract=bronze_extract:main",
+            "silver-extract=silver_extract:main",
+            "bronze-config-doctor=scripts.bronze_config_doctor:main",
         ],
     },
     classifiers=[
