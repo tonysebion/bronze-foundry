@@ -90,21 +90,28 @@ class DbExtractor(BaseExtractor):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type(pyodbc.Error),
-        reraise=True
+        retry=retry_if_exception_type(Exception),
+        reraise=True,
     )
-    def _execute_query(self, conn_str: str, query: str, params: Optional[Tuple] = None) -> pyodbc.Cursor:
-        """Execute database query with retry logic."""
-        logger.debug(f"Executing query with params: {params}")
-        conn = pyodbc.connect(conn_str)
-        cur = conn.cursor()
-        
-        if params:
-            cur.execute(query, params)
+    def _execute_query(self, driver: str, conn_str: str, query: str, params: Optional[Tuple] = None):
+        """Execute database query with retry logic for the selected driver."""
+        logger.debug("Executing query with driver=%s params=%s", driver, params)
+
+        if driver == "pyodbc":
+            conn = pyodbc.connect(conn_str)
+            cur = conn.cursor()
+            if params:
+                cur.execute(query, params)
+            else:
+                cur.execute(query)
+            return cur
+        elif driver == "pymssql":
+            raise NotImplementedError(
+                "Driver 'pymssql' selected but not implemented in runtime. "
+                "Use 'pyodbc' or open an issue if you need first-class pymssql support."
+            )
         else:
-            cur.execute(query)
-        
-        return cur
+            raise ValueError(f"Unsupported db.driver '{driver}'. Use 'pyodbc' (default) or 'pymssql'.")
 
     def fetch_records(
         self,
@@ -114,6 +121,9 @@ class DbExtractor(BaseExtractor):
         """Fetch records from database with incremental cursor support."""
         source_cfg = cfg["source"]
         db_cfg = source_cfg["db"]
+
+        # Driver selection (default: pyodbc)
+        driver = (db_cfg.get("driver") or "pyodbc").lower()
 
         # Get connection string from environment
         conn_env = db_cfg.get("conn_str_env")
@@ -151,9 +161,9 @@ class DbExtractor(BaseExtractor):
         
         try:
             if last_cursor:
-                cur = self._execute_query(conn_str, query, (last_cursor,))
+                cur = self._execute_query(driver, conn_str, query, (last_cursor,))
             else:
-                cur = self._execute_query(conn_str, query)
+                cur = self._execute_query(driver, conn_str, query)
             
             conn = cur.connection
             columns = [col[0] for col in cur.description]
@@ -184,7 +194,7 @@ class DbExtractor(BaseExtractor):
             
             logger.info(f"Successfully extracted {len(records)} records from database")
             
-        except pyodbc.Error as e:
+        except Exception as e:
             logger.error(f"Database query failed: {e}")
             raise
         finally:

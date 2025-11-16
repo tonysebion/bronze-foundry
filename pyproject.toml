@@ -61,17 +61,19 @@ db = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/medallion-foundry/medallion-foundry"
-Documentation = "https://github.com/medallion-foundry/medallion-foundry/blob/main/README.md"
-Repository = "https://github.com/medallion-foundry/medallion-foundry"
-"Bug Reports" = "https://github.com/medallion-foundry/medallion-foundry/issues"
-Changelog = "https://github.com/medallion-foundry/medallion-foundry/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/tonysebion/medallion-foundry"
+Documentation = "https://github.com/tonysebion/medallion-foundry/blob/main/README.md"
+Repository = "https://github.com/tonysebion/medallion-foundry"
+"Bug Reports" = "https://github.com/tonysebion/medallion-foundry/issues"
+Changelog = "https://github.com/tonysebion/medallion-foundry/blob/main/CHANGELOG.md"
 
 [project.scripts]
 bronze-extract = "bronze_extract:main"
+silver-extract = "silver_extract:main"
 
 [tool.setuptools]
 packages = ["core", "extractors"]
+py-modules = ["bronze_extract", "silver_extract"]
 
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.yml"]

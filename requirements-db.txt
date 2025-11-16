@@ -4,8 +4,10 @@
 # Include base requirements
 -r requirements.txt
 
-# MSSQL Server driver (for Windows, Linux, macOS)
-pymssql>=2.2.0
+# MSSQL Server drivers
+# Note: The framework uses ODBC by default via `pyodbc` (already included in requirements.txt).
+# If you prefer the native TDS driver, uncomment pymssql below.
+# pymssql>=2.2.0
 
 # Additional database drivers (optional - uncomment as needed)
 # PostgreSQL

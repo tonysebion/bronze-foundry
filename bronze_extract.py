@@ -20,13 +20,14 @@ import datetime as dt
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from core.config import load_configs, build_relative_path
+from core.config import load_configs
 from core.runner import run_extract
 from core.parallel import run_parallel_extracts
 from core.logging_config import setup_logging
 from core.storage import get_storage_backend
 from core.patterns import LoadPattern
 from core.catalog import notify_catalog, report_lineage, report_quality_snapshot, report_run_metadata
+from core.context import build_run_context, RunContext
 from core.hooks import fire_webhooks
 from core.run_options import RunOptions
 from core.storage.policy import enforce_storage_scope
@@ -203,15 +204,30 @@ class BronzeOrchestrator:
             tables=[f"{cfg['source']['system']}.{cfg['source']['table']}" for cfg in configs],
         )
 
-        if len(configs) == 1:
-            relative_path = build_relative_path(configs[0], run_date)
+        contexts = [
+            build_run_context(
+                cfg,
+                run_date,
+                local_output_base,
+                load_pattern_override=self.args.load_pattern,
+            )
+            for cfg in configs
+        ]
+
+        self._update_hook_context(
+            config_names=[ctx.config_name for ctx in contexts],
+            tables=[ctx.dataset_id for ctx in contexts],
+        )
+
+        if len(contexts) == 1:
+            relative_path = contexts[0].relative_path
             self._update_hook_context(relative_path=relative_path)
             for info in self._configs_info:
                 info["relative_path"] = relative_path
-            return run_extract(configs[0], run_date, local_output_base, relative_path)
+            return run_extract(contexts[0])
 
-        logger.info(f"Running {len(configs)} configs with {self.args.parallel_workers} workers")
-        results = run_parallel_extracts(configs, run_date, local_output_base, self.args.parallel_workers)
+        logger.info(f"Running {len(contexts)} configs with {self.args.parallel_workers} workers")
+        results = run_parallel_extracts(contexts, self.args.parallel_workers)
         failed = sum(1 for _, status, _ in results if status != 0)
         self._update_hook_context(
             parallel_results=[

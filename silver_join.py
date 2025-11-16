@@ -17,7 +17,8 @@ import yaml
 
 from pandas.api.types import is_datetime64_any_dtype
 
-from core.io import write_batch_metadata
+from core.bronze.io import write_batch_metadata
+from core.context import RunContext, load_run_context
 from core.patterns import LoadPattern
 from core.run_options import RunOptions
 from core.silver.models import SilverModel, resolve_profile
@@ -839,12 +840,11 @@ def write_output(
     column_lineage: List[Dict[str, Any]],
     quality_guards: List[Dict[str, Any]],
     join_metrics: List[Dict[str, Any]],
+    run_context: RunContext | None = None,
 ) -> None:
     base_dir.mkdir(parents=True, exist_ok=True)
     outputs = write_silver_outputs(
         df,
-        base_dir,
-        LoadPattern.FULL,
         run_opts.primary_keys,
         run_opts.order_column,
         run_opts.write_parquet,
@@ -854,6 +854,7 @@ def write_output(
         run_opts.partition_columns,
         {},
         model,
+        base_dir,
     )
     chunk_count = sum(len(paths) for paths in outputs.values())
     metadata = {
@@ -879,6 +880,15 @@ def write_output(
         "quality_guards": quality_guards,
         "join_metrics": join_metrics,
     }
+    if run_context:
+        metadata.update(
+            {
+                "dataset_id": run_context.dataset_id,
+                "config_name": run_context.config_name,
+                "run_date": run_context.run_date.isoformat(),
+                "relative_path": run_context.relative_path,
+            }
+        )
     write_batch_metadata(
         base_dir,
         record_count=len(df),
@@ -889,7 +899,11 @@ def write_output(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Join two Silver assets into a curated third asset")
-    parser.add_argument("--config", required=True, help="Silver join configuration YAML")
+    parser.add_argument("--config", help="Silver join configuration YAML")
+    parser.add_argument(
+        "--run-context",
+        help="Path to a RunContext JSON payload describing the join output dataset",
+    )
     parser.add_argument(
         "--storage-scope",
         choices=["any", "onprem"],
@@ -904,8 +918,17 @@ def main() -> int:
         help="Alias for `--storage-scope onprem`",
     )
     args = parser.parse_args()
+    if not args.config and not args.run_context:
+        parser.error("Either --config or --run-context must be provided")
 
-    full_config, join_config = parse_config(Path(args.config))
+    ctx_override: RunContext | None = load_run_context(args.run_context) if args.run_context else None
+    if ctx_override:
+        full_config = ctx_override.cfg
+        if "silver_join" not in full_config:
+            raise ValueError("RunContext cfg must include a 'silver_join' section")
+        join_config = full_config["silver_join"]
+    else:
+        full_config, join_config = parse_config(Path(args.config))
     platform_cfg = full_config.get("platform", {})
     validate_storage_metadata(platform_cfg)
     enforce_storage_scope(platform_cfg, args.storage_scope)
@@ -976,6 +999,7 @@ def main() -> int:
         column_lineage,
         guard_results,
         join_metrics,
+        run_context=ctx_override,
     )
     logger.info("Joined silver asset written to %s (model=%s)", output_cfg["path"], model.value)
     return 0

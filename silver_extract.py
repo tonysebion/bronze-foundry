@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 
 from core.config import build_relative_path, load_configs
+from core.context import RunContext, build_run_context, load_run_context
 from core.io import write_batch_metadata, verify_checksum_manifest, write_checksum_manifest
 from core.logging_config import setup_logging
 from core.patterns import LoadPattern
@@ -218,9 +219,7 @@ class PromotionOptions:
 
 @dataclass
 class PromotionContext:
-    cfg: Optional[Dict[str, Any]]
-    run_date: dt.date
-    bronze_path: Path
+    run_context: RunContext
     silver_partition: Path
     load_pattern: LoadPattern
     options: PromotionOptions
@@ -238,7 +237,11 @@ class SilverPromotionService:
     def __init__(self, parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
         self.parser = parser
         self.args = args
-        self.cfg_list = load_configs(args.config) if args.config else None
+        self._provided_run_context: Optional[RunContext] = load_run_context(args.run_context) if args.run_context else None
+        if self._provided_run_context:
+            self.cfg_list = [self._provided_run_context.cfg]
+        else:
+            self.cfg_list = load_configs(args.config) if args.config else None
         self._silver_identity: Optional[Tuple[Any, Any, int, str, bool]] = None
         self._hook_context: Dict[str, Any] = {"layer": "silver"}
         self._run_options: Optional[RunOptions] = None
@@ -257,24 +260,35 @@ class SilverPromotionService:
             self._handle_validate_only()
             return 0
 
-        cfg = self._select_config()
-        enforce_storage_scope(cfg["platform"], self.args.storage_scope)
-        run_date = self._resolve_run_date()
-        bronze_path = self._resolve_bronze_path(cfg, run_date)
-        self._update_hook_context(bronze_path=str(bronze_path), run_date=run_date.isoformat())
+        if not self._provided_run_context and not self.cfg_list:
+            self.parser.error("Either --config or --run-context must be provided")
+
+        if self._provided_run_context:
+            run_context = self._provided_run_context
+            cfg = run_context.cfg
+            enforce_storage_scope(cfg["platform"], self.args.storage_scope)
+            run_date = run_context.run_date
+        else:
+            cfg = self._select_config()
+            enforce_storage_scope(cfg["platform"], self.args.storage_scope)
+            run_date = self._resolve_run_date()
+            run_context = self._build_run_context(cfg, run_date)
+        bronze_path = run_context.bronze_path
+        self._update_hook_context(bronze_path=str(bronze_path), run_date=run_context.run_date.isoformat())
         if not bronze_path.exists() or not bronze_path.is_dir():
             raise FileNotFoundError(f"Bronze path '{bronze_path}' does not exist or is not a directory")
 
         load_pattern = self._resolve_load_pattern(cfg, bronze_path)
+        run_context.load_pattern = load_pattern
         self._update_hook_context(load_pattern=load_pattern.value)
         silver_partition = self._resolve_silver_partition(cfg, bronze_path, load_pattern, run_date)
         logger.info("Bronze partition: %s", bronze_path)
         logger.info("Silver partition: %s", silver_partition)
         logger.info("Load pattern: %s", load_pattern.value)
-        context = self._build_context(cfg, bronze_path, silver_partition, load_pattern, run_date)
+        context = self._build_context(run_context, silver_partition, load_pattern)
         self._update_hook_context(
             silver_partition=str(silver_partition),
-            config_name=context.cfg["source"].get("config_name") if context.cfg else None,
+            config_name=context.run_context.config_name,
             domain=context.domain,
             entity=context.entity,
             silver_model=context.silver_model.value,
@@ -344,6 +358,8 @@ class SilverPromotionService:
         return 0
 
     def _handle_validate_only(self) -> None:
+        if self._provided_run_context:
+            self.parser.error("--validate-only cannot be used with --run-context")
         if not self.cfg_list:
             self.parser.error("--config is required when using --validate-only")
         if self.args.source_name:
@@ -364,12 +380,22 @@ class SilverPromotionService:
     def _resolve_run_date(self) -> dt.date:
         return dt.date.fromisoformat(self.args.date) if self.args.date else dt.date.today()
 
-    def _resolve_bronze_path(self, cfg: Optional[Dict[str, Any]], run_date: dt.date) -> Path:
+    def _build_run_context(self, cfg: Dict[str, Any], run_date: dt.date) -> RunContext:
+        relative_path = build_relative_path(cfg, run_date)
+        local_output_dir = Path(cfg["source"]["run"].get("local_output_dir", "./output"))
         if self.args.bronze_path:
-            return Path(self.args.bronze_path).resolve()
-        if not cfg:
-            self.parser.error("Either --bronze-path or --config must be supplied")
-        return _derive_bronze_path_from_config(cfg, run_date)
+            bronze_path = Path(self.args.bronze_path).resolve()
+        else:
+            bronze_path = (local_output_dir / relative_path).resolve()
+        load_pattern_override = None if (self.args.pattern in (None, "auto")) else self.args.pattern
+        return build_run_context(
+            cfg,
+            run_date,
+            local_output_override=local_output_dir,
+            relative_override=relative_path,
+            load_pattern_override=load_pattern_override,
+            bronze_path_override=bronze_path,
+        )
 
     def _resolve_load_pattern(self, cfg: Optional[Dict[str, Any]], bronze_path: Path) -> LoadPattern:
         metadata_pattern = discover_load_pattern(bronze_path) if self.args.pattern == "auto" else None
@@ -439,13 +465,11 @@ class SilverPromotionService:
 
     def _build_context(
         self,
-        cfg: Optional[Dict[str, Any]],
-        bronze_path: Path,
+        run_context: RunContext,
         silver_partition: Path,
         load_pattern: LoadPattern,
-        run_date: dt.date,
     ) -> PromotionContext:
-        silver_cfg = cfg["silver"] if cfg else _default_silver_cfg()
+        silver_cfg = run_context.cfg.get("silver", _default_silver_cfg())
         try:
             options = PromotionOptions.from_inputs(silver_cfg, self.args, load_pattern)
         except ValueError as exc:
@@ -454,15 +478,13 @@ class SilverPromotionService:
         domain, entity, version, load_partition_name, include_pattern_folder = (
             self._silver_identity
             if self._silver_identity
-            else self._extract_identity(cfg, silver_cfg)
+            else self._extract_identity(run_context.cfg, silver_cfg)
         )
 
         silver_partition.mkdir(parents=True, exist_ok=True)
 
         return PromotionContext(
-            cfg=cfg,
-            run_date=run_date,
-            bronze_path=bronze_path,
+            run_context=run_context,
             silver_partition=silver_partition,
             load_pattern=load_pattern,
             options=options,
@@ -477,8 +499,9 @@ class SilverPromotionService:
     def _maybe_verify_checksum(self, context: PromotionContext) -> None:
         if not context.options.run_options.require_checksum:
             return
-        manifest = verify_checksum_manifest(context.bronze_path, expected_pattern=context.load_pattern.value)
-        manifest_path = context.bronze_path / "_checksums.json"
+        bronze_path = context.run_context.bronze_path
+        manifest = verify_checksum_manifest(bronze_path, expected_pattern=context.load_pattern.value)
+        manifest_path = bronze_path / "_checksums.json"
         logger.info(
             "Verified %s checksum entries from %s",
             len(manifest.get("files", [])),
@@ -498,7 +521,7 @@ class SilverPromotionService:
             chunk_count=chunk_count,
             extra_metadata={
                 "load_pattern": context.load_pattern.value,
-                "bronze_path": str(context.bronze_path),
+                "bronze_path": str(context.run_context.bronze_path),
                 "primary_keys": context.options.run_options.primary_keys,
                 "order_column": context.options.run_options.order_column,
                 "domain": context.domain,
@@ -545,9 +568,10 @@ class SilverPromotionService:
             "artifact_size_bytes": artifact_size_bytes,
         }
 
+        rc = context.run_context
         extra = {
             "load_pattern": context.load_pattern.value,
-            "bronze_path": str(context.bronze_path),
+            "bronze_path": str(rc.bronze_path),
             "schema": schema_snapshot,
             "stats": stats,
             "runtime_seconds": runtime_seconds,
@@ -569,11 +593,7 @@ class SilverPromotionService:
             "manifest_path": manifest_path.name,
         }
         report_run_metadata(dataset_id, run_metadata)
-        bronze_dataset = (
-            f"bronze:{context.cfg['source']['system']}.{context.cfg['source']['table']}"
-            if context.cfg
-            else f"bronze:{context.bronze_path}"
-        )
+        bronze_dataset = f"bronze:{rc.source_system}.{rc.source_table}"
         lineage_metadata = {
             "manifest": manifest_path.name,
             "files": [p.name for p in files],
@@ -622,6 +642,10 @@ def build_parser() -> argparse.ArgumentParser:
         description="Promote Bronze data to Silver layer with configurable load patterns",
     )
     parser.add_argument("--config", help="Shared YAML config (same as bronze_extract)")
+    parser.add_argument(
+        "--run-context",
+        help="Path to a RunContext JSON payload emitted by bronze_extract/parallel runner",
+    )
     parser.add_argument(
         "--bronze-path",
         help="Path to the Bronze partition containing chunk files (overrides --config derived path)",

@@ -1,27 +1,23 @@
-﻿"""Core runner that wires config, extractor, IO, and storage together."""
+"""Core runner that wires config, extractor, IO, and storage together."""
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
 from pathlib import Path
-from datetime import date, datetime
+from typing import Any, Dict, List, Optional
 
-from core.extractors.base import BaseExtractor
+from core.bronze.base import emit_bronze_metadata, infer_schema
+from core.bronze.plan import build_chunk_writer_config, compute_output_formats, resolve_load_pattern
+from core.catalog import report_quality_snapshot, report_run_metadata, report_schema_snapshot
+from core.context import RunContext
 from core.extractors.api_extractor import ApiExtractor
+from core.extractors.base import BaseExtractor
 from core.extractors.db_extractor import DbExtractor
 from core.extractors.file_extractor import FileExtractor
 from core.io import chunk_records
-from core.storage import get_storage_backend
 from core.patterns import LoadPattern
-from core.catalog import report_schema_snapshot, report_quality_snapshot, report_run_metadata
 from core.runner.chunks import ChunkProcessor
-from core.bronze.base import emit_bronze_metadata, infer_schema
-from core.bronze.plan import (
-    build_chunk_writer_config,
-    compute_output_formats,
-    resolve_load_pattern,
-)
+from core.storage import get_storage_backend
 
 logger = logging.getLogger(__name__)
 
@@ -51,15 +47,16 @@ def build_extractor(cfg: Dict[str, Any]) -> BaseExtractor:
 
 
 class ExtractJob:
-    def __init__(self, cfg: Dict[str, Any], run_date: date, local_output_base: Path, relative_path: str) -> None:
-        self.cfg = cfg
-        self.run_date = run_date
-        self.relative_path = relative_path
-        self._out_dir = local_output_base / relative_path
+    def __init__(self, context: RunContext) -> None:
+        self.ctx = context
+        self.cfg = context.cfg
+        self.run_date = context.run_date
+        self.relative_path = context.relative_path
+        self._out_dir = context.bronze_path
         self.created_files: List[Path] = []
-        self.load_pattern: Optional[LoadPattern] = None
+        self.load_pattern: Optional[LoadPattern] = context.load_pattern
         self.output_formats: Dict[str, bool] = {}
-        self.storage_plan: Optional[StoragePlan] = None
+        self.storage_plan = None
         self.schema_snapshot: List[Dict[str, str]] = []
 
     @property
@@ -76,10 +73,13 @@ class ExtractJob:
     def _run(self) -> int:
         extractor = build_extractor(self.cfg)
         logger.info(
-            f"Starting extract for {self.source_cfg['system']}.{self.source_cfg['table']} on {self.run_date}"
+            "Starting extract for %s.%s on %s",
+            self.source_cfg["system"],
+            self.source_cfg["table"],
+            self.run_date,
         )
         records, new_cursor = extractor.fetch_records(self.cfg, self.run_date)
-        logger.info(f"Retrieved {len(records)} records from extractor")
+        logger.info("Retrieved %s records from extractor", len(records))
         if not records:
             logger.warning("No records returned from extractor")
             return 0
@@ -95,8 +95,8 @@ class ExtractJob:
 
     def _process_chunks(self, records: List[Dict[str, Any]]) -> tuple[int, List[Path]]:
         run_cfg = self.source_cfg["run"]
-        self.load_pattern = resolve_load_pattern(run_cfg)
-        logger.info(f"Load pattern: {self.load_pattern.value} ({self.load_pattern.describe()})")
+        self.load_pattern = self.load_pattern or resolve_load_pattern(run_cfg)
+        logger.info("Load pattern: %s (%s)", self.load_pattern.value, self.load_pattern.describe())
 
         max_rows_per_file = int(run_cfg.get("max_rows_per_file", 0))
         max_file_size_mb = run_cfg.get("max_file_size_mb")
@@ -105,14 +105,11 @@ class ExtractJob:
         platform_cfg = self.cfg["platform"]
         bronze_output = platform_cfg["bronze"]["output_defaults"]
         self.output_formats = compute_output_formats(run_cfg, bronze_output)
-        parquet_compression = run_cfg.get(
-            "parquet_compression", bronze_output.get("default_parquet_compression", "snappy")
-        )
 
         storage_enabled = run_cfg.get("storage_enabled", run_cfg.get("s3_enabled", False))
         storage_backend = get_storage_backend(platform_cfg) if storage_enabled else None
         if storage_backend:
-            logger.info(f"Initialized {storage_backend.get_backend_type()} storage backend")
+            logger.info("Initialized %s storage backend", storage_backend.get_backend_type())
 
         self._out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -162,7 +159,7 @@ class ExtractJob:
             dataset_id,
             {
                 "run_date": self.run_date.isoformat(),
-                "load_pattern": self.load_pattern.value if self.load_pattern else LoadPattern.FULL.value,
+                "load_pattern": self.load_pattern.value,
                 "chunk_count": chunk_count,
                 "record_count": record_count,
                 "relative_path": self.relative_path,
@@ -176,25 +173,20 @@ class ExtractJob:
         if not (cleanup_on_failure and self.created_files):
             return
 
-        logger.info(f"Cleaning up {len(self.created_files)} files due to failure")
+        logger.info("Cleaning up %s files due to failure", len(self.created_files))
         for file_path in self.created_files:
             try:
                 if file_path.exists():
                     file_path.unlink()
-                    logger.debug(f"Deleted {file_path}")
-            except Exception as cleanup_error:
-                logger.warning(f"Failed to cleanup {file_path}: {cleanup_error}")
+                    logger.debug("Deleted %s", file_path)
+            except Exception as cleanup_error:  # pragma: no cover - best effort
+                logger.warning("Failed to cleanup %s: %s", file_path, cleanup_error)
 
 
-def run_extract(
-    cfg: Dict[str, Any],
-    run_date: date,
-    local_output_base: Path,
-    relative_path: str,
-) -> int:
-    job = ExtractJob(cfg, run_date, local_output_base, relative_path)
+def run_extract(context: RunContext) -> int:
+    job = ExtractJob(context)
     try:
         return job.run()
     except Exception as exc:
-        logger.error(f"Extract failed: {exc}", exc_info=True)
+        logger.error("Extract failed: %s", exc, exc_info=True)
         raise
