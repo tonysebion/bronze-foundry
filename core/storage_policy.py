@@ -4,17 +4,11 @@ from __future__ import annotations
 
 from typing import Dict, Any
 
-VALID_BOUNDARIES = {"onprem", "cloud"}
-VALID_PROVIDER_TYPES = {
-    "s3_local",
-    "s3_cloud",
-    "azure_blob",
-    "azure_adls",
-    "gcs_cloud",
-    "gcs_onprem",
-    "local_generic",
-}
-VALID_CLOUD_PROVIDERS = {None, "", "azure", "aws", "gcp"}
+from core.storage_metadata import (
+    VALID_BOUNDARIES,
+    VALID_PROVIDER_TYPES,
+    VALID_CLOUD_PROVIDERS,
+)
 
 
 def validate_storage_metadata(platform_cfg: Dict[str, Any]) -> None:
