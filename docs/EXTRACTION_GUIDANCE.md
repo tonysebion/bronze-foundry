@@ -15,7 +15,7 @@ This guide highlights when to run each Bronze extraction pattern and which Silve
 - **Data volume**: Full snapshots scale linearly—choose CDC when throughput or file counts become unwieldy.
 - **Change rate**: If only a few rows change between runs, incremental/CDC drastically reduces storage and processing time.
 - **Schema stability**: When columns shift frequently, full snapshots keep Silver simple; CDC/current_history must gracefully handle new columns via Silver schema options.
-- **Run latency**: Streaming chunking, parallel workers, and smaller bronze chunks help keep Bronze runtime bounded.
+- **Run latency**: Streaming chunking, parallel workers, and smaller bronze chunks help keep Bronze runtime bounded. For high-throughput APIs, enable async HTTP extraction with prefetch pagination.
 - **Failure tolerance**: Bronze already writes `_checksums.json`; Silver can opt into `require_checksum` to skip promotions when Bronze integrity fails.
 - **Edge-case coverage**: The Sample generator (`scripts/generate_sample_data.py`) now emits schema variations, null business keys, and skewed batches so Bronze and Silver tests continually surface new corner cases; regenerate the fixtures before onboarding new extracts.
 - **Sample nav**: Each pattern/model directory under `docs/examples/data/silver_samples/` now includes a `README.md` describing the behavior and linking back to the config/docs so users can quickly find the right artifact without digging through filenames.
@@ -36,7 +36,7 @@ The Silver stage works with the Bronze artifacts and lets you select **five cura
 
 - **Data size**: Writing full snapshots of large Bronze partitions can be heavy; consider `scd_type_2` or `incremental_merge` to keep downstream materializations tight and partitioned.
 - **Change footprint**: For small changes over huge bases (e.g., customer tables), `scd_type_1`/`scd_type_2` with inference via `order_column` prevents reprocessing everything.
-- **Consumption latency**: Streaming mode (via `--stream`) and chunked writes keep memory bounded when Silver needs to keep up with very large Bronze partitions.
+- **Consumption latency**: Streaming mode (via `--stream`) and chunked writes keep memory bounded when Silver needs to keep up with very large Bronze partitions. Use `--resume` to safely restart interrupted streaming jobs via checkpoints.
 - **Output formats**: Choose Parquet for analytics; enable CSV when errors must be human-readable or Silver artifacts feed legacy tooling. The new `scripts/generate_silver_samples.py --formats both` helps you exercise both writers.
 - **Hybrid/reference mode**: For large data sets combine a periodic `reference` full snapshot with incremental/CDC runs. Set `source.run.reference_mode`:
   ```yaml

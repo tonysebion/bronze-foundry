@@ -21,7 +21,7 @@ Complete documentation for medallion-foundry - a production-ready, config-driven
 4. [Configuration Reference](#configuration-reference)
 5. [Features](#features)
 6. [Extending medallion-foundry](#extending-medallion-foundry)
-   - [Custom Extractors](#custom-extractors)
+   - [Extending medallion-foundry](#extending-medallion-foundry)
    - [Storage Backends](#extending-storage-backends)
 7. [Examples](#examples)
 8. [Best Practices](#best-practices)

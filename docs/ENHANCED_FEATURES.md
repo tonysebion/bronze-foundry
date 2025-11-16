@@ -5,10 +5,10 @@ This guide covers the advanced features added to medallion-foundry for productio
 ## Table of Contents
 
 1. [File Size Control](#file-size-control)
-2. [Multiple Daily Loads & Partitioning](#multiple-daily-loads--partitioning)
+2. [Multiple Daily Loads & Partitioning](#multiple-daily-loads-partitioning)
 3. [Parallel Extraction](#parallel-extraction)
 4. [Batch Metadata](#batch-metadata)
-5. [Checksum Manifests & Silver Gating](#checksum-manifests--silver-gating)
+5. [Checksum Manifests & Silver Gating](#checksum-manifests-silver-gating)
 
 ---
 
@@ -451,6 +451,123 @@ python silver_extract.py \
 ```
 
 Use this gate when you promote Bronze data to shared environments or when multiple tables must align exactly before Silver transforms begin.
+
+---
+
+## Resilience & Async Extraction
+
+Modern extractions require stability under rate limits, intermittent failures, and bursty traffic. medallion-foundry bakes in:
+
+### Retry + Circuit Breaker
+
+Unified exponential backoff with transient error predicates (HTTP 429/5xx) and a circuit breaker preventing hot looping when a downstream repeatedly fails.
+
+**Configuration**: No config needed for defaults; automatic across all extractors and storage operations.
+
+**Benefits**:
+- Handles transient network issues
+- Prevents cascading failures
+- Reduces load on failing services
+
+### Async HTTP Path
+
+Enable with `api.async: true` (or environment `BRONZE_ASYNC_HTTP=1`). Uses `httpx` + task prefetch pagination for higher throughput under moderate latency, with cooperative backpressure.
+
+**Configuration**:
+```yaml
+source:
+  api:
+    async: true  # Enable async extraction
+    rate_limit:
+      rps: 5.0   # Requests per second (token bucket)
+```
+
+**Benefits**:
+- Higher throughput for paginated APIs
+- Prefetch reduces latency impact
+- Backpressure prevents memory bloat
+
+**Example**:
+```bash
+# Force async globally
+export BRONZE_ASYNC_HTTP=1
+python bronze_extract.py --config configs/api_async.yaml
+```
+
+### Rate Limiting
+
+Fine-grained token bucket for API calls.
+
+**Configuration**:
+```yaml
+api:
+  rate_limit:
+    rps: 5.0          # requests per second
+run:
+  rate_limit_rps: 4.0 # fallback if api.rate_limit.rps absent
+```
+
+**Priority order**: `api.rate_limit.rps` → `run.rate_limit_rps` → env `BRONZE_API_RPS`. Fractional RPS supported.
+
+**Benefits**:
+- Respects API limits
+- Prevents throttling
+- Smooths burst traffic
+
+### Tracing
+
+Optional OpenTelemetry spans around retries, chunk writes, and Silver streaming promotion.
+
+**Configuration**:
+```bash
+export BRONZE_TRACING=1  # Enable tracing
+```
+
+**Benefits**:
+- Observability into extraction performance
+- Debug slow operations
+- Monitor distributed systems
+
+### Streaming Resume (Silver)
+
+Use `silver_extract.py --stream --resume` to resume a partially processed promotion safely; checkpoints track completed chunks.
+
+**Configuration**: Automatic when using `--resume`; checkpoints stored alongside output.
+
+**Benefits**:
+- Safe restart after failures
+- No duplicate processing
+- Long-running job resilience
+
+**Example**:
+```bash
+# Resume streaming promotion
+python silver_extract.py --config configs/large_table.yaml --stream --resume
+```
+
+### Benchmark Harness & Performance Guidance
+
+Included script `scripts/benchmark.py` plus tuning strategies in [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md).
+
+**Usage**:
+```bash
+# Run performance scenarios
+python scripts/benchmark.py --scenario sync_vs_async
+```
+
+**Benefits**:
+- Measure sync vs async pagination
+- Assess rate limiting overhead
+- Profile streaming throughput
+
+### Operational Error Codes
+
+Standardized categories documented in [ERROR_CODES.md](ERROR_CODES.md) for alert routing and triage.
+
+**Benefits**:
+- Consistent error classification
+- Automated alert routing
+- Faster incident response
 
 ---
 

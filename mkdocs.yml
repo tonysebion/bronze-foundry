@@ -57,6 +57,7 @@ plugins:
 
 nav:
   - Home: index.md
+  - README: ../README.md
   - Getting Started:
     - Quick Start: QUICKSTART.md
     - Installation: INSTALLATION.md
@@ -66,14 +67,20 @@ nav:
     - Architecture: ARCHITECTURE.md
     - Configuration Reference: CONFIG_REFERENCE.md
     - Enhanced Features: ENHANCED_FEATURES.md
+    - Extraction Guidance: EXTRACTION_GUIDANCE.md
     - Config Doctor: CONFIG_DOCTOR.md
     - First Production Run: FIRST_RUN_CHECKLIST.md
     - Error Codes: ERROR_CODES.md
     - Performance Tuning: PERFORMANCE_TUNING.md
+    - Operations: OPERATIONS.md
+    - Ops Playbook: OPS_PLAYBOOK.md
+    - Gold Contracts: GOLD_CONTRACTS.md
+    - Silver Join: SILVER_JOIN.md
   - Extending:
     - Custom Extractors: EXTENDING_EXTRACTORS.md
     - Storage Backends: STORAGE_BACKEND_ARCHITECTURE.md
     - Examples: examples/README.md
+    - Real World Examples: examples/REAL_WORLD_EXAMPLES.md
   - Development:
     - Contributing: CONTRIBUTING.md
     - Testing: TESTING.md

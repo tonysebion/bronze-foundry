@@ -127,6 +127,17 @@ def test_async_client_handles_rate_limit():
             assert result["ok"] == "after-rate"
             assert mock_get.count == 2
 
+            mock_get.count = 0
+            sleep_calls = []
+
+            async def fake_sleep(delay):
+                sleep_calls.append(delay)
+
+            with patch("core.extractors.async_http.asyncio.sleep", side_effect=fake_sleep):
+                await client.get("/rate")
+
+            assert any(call >= 0.01 for call in sleep_calls)
+
     asyncio.run(_inner())
 
 

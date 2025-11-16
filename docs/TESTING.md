@@ -20,8 +20,11 @@ python run_tests.py --all-checks
 Tests are marked with categories for selective execution:
 
 - **unit**: Fast unit tests with no external dependencies
-- **integration**: Tests that may require external services (mocked)
+- **integration**: Tests that may require external services (mocked or emulated)
 - **slow**: Long-running tests
+- **async**: Tests for async HTTP extraction features
+- **resume**: Tests for streaming resume functionality
+- **benchmark**: Performance benchmarking tests
 
 ### Running Specific Test Categories
 
@@ -32,9 +35,75 @@ python run_tests.py --unit
 # Run only integration tests
 python run_tests.py --integration
 
-# Run tests with pytest directly and filter by marker
-pytest -m unit
-pytest -m "not slow"
+# Run async-specific tests
+pytest -m async
+
+# Run resume tests
+pytest -m resume
+
+# Run benchmark tests (may be slow)
+pytest -m benchmark
+```
+
+### Integration Tests with Emulators
+
+For storage integration tests, use emulators to avoid cloud dependencies:
+
+```bash
+# Run Azure Azurite integration tests
+export RUN_INTEGRATION=1
+pytest tests/test_azure_integration.py -m integration
+
+# Run S3 LocalStack integration tests
+export RUN_INTEGRATION=1
+pytest tests/test_s3_integration.py -m integration
+
+# Skip integration tests (default)
+unset RUN_INTEGRATION
+pytest tests/ -m "not integration"
+```
+
+### Async HTTP Tests
+
+Test async extraction features:
+
+```bash
+# Run async HTTP tests
+pytest tests/test_async_http.py -m async
+
+# Test with httpx enabled
+export BRONZE_ASYNC_HTTP=1
+pytest tests/test_async_http.py::test_async_extraction_enabled
+
+# Test rate limiting
+pytest tests/test_async_http.py -k rate_limit
+```
+
+### Streaming Resume Tests
+
+Test checkpoint-based resume for Silver streaming:
+
+```bash
+# Run resume tests
+pytest tests/test_streaming_resume.py -m resume
+
+# Test checkpoint creation and clearing
+pytest tests/test_streaming_resume.py::test_checkpoint_manager
+```
+
+### Benchmark Tests
+
+Run performance benchmarks:
+
+```bash
+# Run benchmark harness
+python scripts/benchmark.py --scenario sync_vs_async
+
+# Run benchmark tests
+pytest -m benchmark
+
+# Profile specific scenarios
+python scripts/benchmark.py --scenario rate_limit_impact
 ```
 
 ## Coverage Reports

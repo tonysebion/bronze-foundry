@@ -85,6 +85,8 @@ platform:
 - Automatic retries with exponential backoff
 - Environment-based credentials
 - Optional endpoint URL for non-AWS S3
+- Integrated with unified retry + circuit breaker for resilience
+- Rate limiting support via external configuration
 
 ### Azure Storage
 
@@ -104,7 +106,7 @@ platform:
     # Or use SAS token, service principal, etc.
 ```
 
-**See**: [Azure Storage Extension Example](examples/AZURE_STORAGE_EXTENSION.md) for complete implementation
+**See**: [Azure Storage Extension Example](examples/extensions/azure_storage/README.md) for complete implementation
 
 ### Local Filesystem
 
@@ -322,6 +324,4 @@ Potential future additions:
 ---
 
 For implementation examples, see:
-- [Azure Storage Extension](examples/AZURE_STORAGE_EXTENSION.md)
-- [S3 Storage Implementation](../core/s3.py)
-- [Storage Base Class](../core/storage.py)
+- [Azure Storage Extension](examples/extensions/azure_storage/README.md)
