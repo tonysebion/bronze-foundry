@@ -14,14 +14,16 @@ from .loader import load_config, load_configs
 def _migrate_single(cfg: Dict[str, Any], target_version: int = 1) -> Dict[str, Any]:
     out = copy.deepcopy(cfg)
     # Ensure config_version
-    out.setdefault("config_version", target_version)
+    out["config_version"] = target_version
 
     # platform.bronze: local_path -> output_dir
     platform = out.get("platform") or {}
     bronze = platform.get("bronze") or {}
     if "output_dir" not in bronze and "local_path" in bronze:
         bronze["output_dir"] = bronze["local_path"]
-    # Do not remove local_path automatically; leave for visibility
+    # For v2, remove deprecated local_path to avoid ambiguity
+    if target_version >= 2 and "local_path" in bronze:
+        bronze.pop("local_path", None)
     if platform:
         platform["bronze"] = bronze
         out["platform"] = platform
@@ -31,11 +33,29 @@ def _migrate_single(cfg: Dict[str, Any], target_version: int = 1) -> Dict[str, A
     api = source.get("api") or {}
     if "url" in api and "base_url" not in api:
         api["base_url"] = api["url"]
-        del api["url"]
+    if target_version >= 2 and "url" in api:
+        api.pop("url", None)
     api.setdefault("endpoint", "/")
     if source:
         source["api"] = api if api else source.get("api")
         out["source"] = source
+
+    # Silver model explicit in v2
+    silver = out.get("silver") or {}
+    if target_version >= 2:
+        # Ensure model is present when derivable; otherwise preserve if already set
+        if "model" not in silver:
+            # no inference here; leave unset if not specified to avoid surprises
+            pass
+        out["silver"] = silver or out.get("silver")
+
+    # Partition settings:
+    # v2 keeps bronze partitioning under platform.bronze and silver partitioning under silver.partitioning
+    # but ensures shapes and defaults exist
+    if target_version >= 2:
+        silver.setdefault("partitioning", {})
+        silver["partitioning"].setdefault("columns", silver.get("partitioning", {}).get("columns", []))
+        out["silver"] = silver
 
     return out
 
