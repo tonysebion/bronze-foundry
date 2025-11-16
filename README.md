@@ -1,4 +1,4 @@
-# medallion-foundry
+ï»¿# medallion-foundry
 
 `medallion-foundry` is a **production-ready**, config-driven Python framework for landing data from **APIs**, **databases**, or **custom sources** into a **Bronze layer** with **pluggable storage backends** (S3, Azure, GCS, local filesystem), using conventions that support future analytics platforms and medallion-style architectures.
 
@@ -55,7 +55,7 @@ This framework is intentionally lightweight and orchestration-neutral: you can r
 - **Formats and file splitting**  
   - CSV for human-readable debugging (optional)
   - Parquet (with Snappy) for analytics
-  - Configurable `max_rows_per_file` to split large extracts into part files (e.g., `part-0001`, `part-0002`, …).
+  - Configurable `max_rows_per_file` to split large extracts into part files (e.g., `part-0001`, `part-0002`, ï¿½).
 
 - **Orchestration friendly**  
   - CLI takes `--config` and optional `--date`
@@ -94,7 +94,7 @@ python bronze_extract.py --config config/test.yaml
 
 ### ?? Offline Local Quick Test
 
-Need proof the tooling works but don’t have API credentials yet? Use the bundled sample data.
+Need proof the tooling works but donï¿½t have API credentials yet? Use the bundled sample data.
 
 ```bash
 # 0. (Once) prepare the sandbox data
@@ -295,13 +295,13 @@ python silver_extract.py --config docs/examples/configs/file_example.yaml --date
 - `silver.normalization`: toggle `trim_strings` / `empty_strings_as_null` to keep formatting consistent across datasets.
 - `silver.error_handling`: set `enabled`, `max_bad_records`, and `max_bad_percent` to quarantine bad rows into `_errors/` files instead of failing immediately (exceeds threshold ? fail).
 - `silver.partitioning`: add a secondary partition column (e.g., status, region) for Silver outputs while still mirroring the Bronze folder layout.
-- `silver.domain` / `entity` / `version` / `load_partition_name`: describe the medallion layout so outputs land under `domain=<domain>/entity=<entity>/v<version>/<load partition>=YYYY-MM-DD/…`. Optional `include_pattern_folder: true` inserts `pattern=<load_pattern>` before the load partition.
+- `silver.domain` / `entity` / `version` / `load_partition_name`: describe the medallion layout so outputs land under `domain=<domain>/entity=<entity>/v<version>/<load partition>=YYYY-MM-DD/ï¿½`. Optional `include_pattern_folder: true` inserts `pattern=<load_pattern>` before the load partition.
 - `silver.model`: choose the Silver asset type to emit. Available options now mirror the requested asset catalogue:
-  - `scd_type_1` – deduplicated current view (SCD Type 1).
-  - `scd_type_2` – current + full history split with an `is_current` flag (SCD Type 2).
-  - `incremental_merge` – incremental change set from the Bronze data (CDC/timestamp).
-  - `full_merge_dedupe` – full snapshot deduplicated by the configured keys/order column, ready for full merges.
-  - `periodic_snapshot` – exact Bronze snapshot for periodic refreshes.
+  - `scd_type_1` ï¿½ deduplicated current view (SCD Type 1).
+  - `scd_type_2` ï¿½ current + full history split with an `is_current` flag (SCD Type 2).
+  - `incremental_merge` ï¿½ incremental change set from the Bronze data (CDC/timestamp).
+  - `full_merge_dedupe` ï¿½ full snapshot deduplicated by the configured keys/order column, ready for full merges.
+  - `periodic_snapshot` ï¿½ exact Bronze snapshot for periodic refreshes.
 
 Example Silver section:
 
@@ -352,9 +352,9 @@ silver_output/
 
 ### What Silver Will *Not* Do
 
-- ? Business logic or row-level filtering—Silver only standardizes structure.
+- ? Business logic or row-level filteringï¿½Silver only standardizes structure.
 - ? Custom transformations per dataset beyond the declarative `schema`/`normalization` options.
-- ? Silent drops of bad data—use `silver.error_handling` to quarantine and alert.
+- ? Silent drops of bad dataï¿½use `silver.error_handling` to quarantine and alert.
 
 ### Core Features
 - ? Proper Python package structure
@@ -369,10 +369,10 @@ silver_output/
 
 ## ?? Documentation
 
-- [OPS_PLAYBOOK.md](docs/OPS_PLAYBOOK.md) – day-two operations, hooks, and monitoring tips.
-- [GOLD_CONTRACTS.md](docs/GOLD_CONTRACTS.md) – guidance for documenting downstream contracts and expectations.
-- [QUICKSTART.md](QUICKSTART.md) – detailed tutorial with screenshots.
-- [DOCUMENTATION.md](DOCUMENTATION.md) – architecture concepts and FAQs.
-- [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) – advanced configuration & features.
-- [CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) – exhaustive list of config options.
-- [TESTING.md](TESTING.md) – how to run tests and interpret results.
+- [OPS_PLAYBOOK.md](docs/OPS_PLAYBOOK.md) ï¿½ day-two operations, hooks, and monitoring tips.
+- [GOLD_CONTRACTS.md](docs/GOLD_CONTRACTS.md) ï¿½ guidance for documenting downstream contracts and expectations.
+- [QUICKSTART.md](QUICKSTART.md) ï¿½ detailed tutorial with screenshots.
+- [DOCUMENTATION.md](DOCUMENTATION.md) ï¿½ architecture concepts and FAQs.
+- [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) ï¿½ advanced configuration & features.
+- [CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) ï¿½ exhaustive list of config options.
+- [TESTING.md](TESTING.md) ï¿½ how to run tests and interpret results.
