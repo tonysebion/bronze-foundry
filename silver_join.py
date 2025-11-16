@@ -6,8 +6,10 @@ import argparse
 import json
 import logging
 import tempfile
+from dataclasses import dataclass
+from itertools import islice
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import pandas as pd
 import yaml
@@ -30,6 +32,7 @@ MODEL_FALLBACK_ORDER = [
     SilverModel.PERIODIC_SNAPSHOT,
     SilverModel.INCREMENTAL_MERGE,
 ]
+DEFAULT_SUFFIXES = ("_x", "_y")
 
 
 def parse_config(path: Path) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -126,7 +129,7 @@ def chunk_dataframe(df: pd.DataFrame, chunk_size: int) -> List[pd.DataFrame]:
 
 
 def normalize_join_keys(raw_keys: Any) -> List[str]:
-    if raw_keys is None:
+    if not raw_keys:
         return []
     if isinstance(raw_keys, (list, tuple)):
         keys = list(raw_keys)
@@ -135,37 +138,167 @@ def normalize_join_keys(raw_keys: Any) -> List[str]:
     return [str(key) for key in keys if key]
 
 
-def perform_join(left: pd.DataFrame, right: pd.DataFrame, output_cfg: Dict[str, Any]) -> pd.DataFrame:
-    join_type = output_cfg.get("join_type", "inner").strip().lower()
-    if join_type not in VALID_JOIN_TYPES:
-        raise ValueError(f"join_type must be one of {', '.join(VALID_JOIN_TYPES)}")
+def _extract_join_key_set(df: pd.DataFrame, join_keys: List[str]) -> Set[Any]:
+    if df.empty or not join_keys:
+        return set()
+    if len(join_keys) == 1:
+        return set(df[join_keys[0]].tolist())
+    return {tuple(row) for row in df[join_keys].itertuples(index=False, name=None)}
 
-    join_keys = normalize_join_keys(output_cfg.get("join_keys"))
-    if not join_keys:
-        raise ValueError("silver_join.output.join_keys must list at least one key")
 
-    missing = [key for key in join_keys if key not in left.columns or key not in right.columns]
-    if missing:
-        raise ValueError(f"Join keys missing from inputs: {missing}")
+class RightPartitionCache:
+    """Partition the right-hand table by join keys for streaming access."""
 
-    chunk_size = max(int(output_cfg.get("chunk_size") or 0), 0)
-    if chunk_size > 0:
-        merged_parts: List[pd.DataFrame] = []
-        for chunk in chunk_dataframe(left, chunk_size):
-            merged_parts.append(pd.merge(chunk, right, how=join_type, on=join_keys))
-        joined = pd.concat(merged_parts, ignore_index=True)
-    else:
-        joined = pd.merge(left, right, how=join_type, on=join_keys)
+    def __init__(self, df: pd.DataFrame, join_keys: List[str]) -> None:
+        if not join_keys:
+            raise ValueError("Join keys must be configured to partition the right-hand asset.")
+        self.df = df
+        self.join_keys = join_keys
+        self._cache: Dict[Any, pd.DataFrame] = {}
+        self._grouped = df.groupby(join_keys, sort=False, dropna=False)
+        self._all_keys = set(self._grouped.groups.keys())
 
-    projection = output_cfg.get("select_columns") or output_cfg.get("projection")
-    if projection:
-        projected = [str(col) for col in projection]
-        missing_projection = [col for col in projected if col not in joined.columns]
-        if missing_projection:
-            raise ValueError(f"Projection references unknown columns: {missing_projection}")
-        joined = joined[projected]
+    def batch_for_keys(self, keys: Iterable[Any]) -> pd.DataFrame:
+        frames: List[pd.DataFrame] = []
+        for key in keys:
+            frames.append(self._get_group(key))
+        if frames:
+            return pd.concat(frames, ignore_index=True)
+        return self.df.iloc[0:0]
 
-    return joined
+    def _get_group(self, key: Any) -> pd.DataFrame:
+        if key in self._cache:
+            return self._cache[key]
+        try:
+            frame = self._grouped.get_group(key)
+        except KeyError:
+            frame = self.df.iloc[0:0]
+        self._cache[key] = frame
+        return frame
+
+    def all_keys(self) -> Set[Any]:
+        return set(self._all_keys)
+
+
+@dataclass
+class JoinRunStats:
+    chunk_count: int
+    matched_right_keys: int
+    unmatched_right_keys: int
+    right_only_rows: int
+
+
+class JoinProgressTracker:
+    """Persist chunk progress so retries can resume from the latest checkpoint."""
+
+    MAX_RECENT = 6
+
+    def __init__(self, checkpoint_dir: Optional[Path]) -> None:
+        self.checkpoint_dir = checkpoint_dir.resolve() if checkpoint_dir else None
+        self.progress_file = self.checkpoint_dir / "progress.json" if self.checkpoint_dir else None
+        self.chunks_processed = 0
+        self.total_records = 0
+        self.recent_chunks: List[Dict[str, Any]] = []
+
+    def record_chunk(self, chunk_index: int, record_count: int, sample_keys: Iterable[Any]) -> None:
+        self.chunks_processed = chunk_index
+        self.total_records += record_count
+        entry = {
+            "chunk_index": chunk_index,
+            "record_count": record_count,
+            "sample_keys": [self._format_key(key) for key in islice(sample_keys, self.MAX_RECENT)],
+        }
+        self.recent_chunks.append(entry)
+        if len(self.recent_chunks) > self.MAX_RECENT:
+            self.recent_chunks.pop(0)
+        self._write_state(entry)
+
+    def finalize(self) -> None:
+        if self.progress_file is None:
+            return
+        last_chunk = self.recent_chunks[-1] if self.recent_chunks else None
+        self._write_state(last_chunk)
+
+    def summary(self) -> Dict[str, Any]:
+        return {
+            "chunks_processed": self.chunks_processed,
+            "total_records": self.total_records,
+            "recent_chunks": list(self.recent_chunks),
+            "checkpoint_file": str(self.progress_file) if self.progress_file else None,
+        }
+
+    def _write_state(self, last_chunk: Optional[Dict[str, Any]]) -> None:
+        if self.progress_file is None:
+            return
+        self.progress_file.parent.mkdir(parents=True, exist_ok=True)
+        state: Dict[str, Any] = {
+            "chunks_processed": self.chunks_processed,
+            "total_records": self.total_records,
+            "recent_chunks": list(self.recent_chunks),
+        }
+        if last_chunk:
+            state["last_chunk"] = last_chunk
+        self.progress_file.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+    def _format_key(self, key: Any) -> Any:
+        if isinstance(key, tuple):
+            return [self._format_value(value) for value in key]
+        return self._format_value(key)
+
+    @staticmethod
+    def _format_value(value: Any) -> Any:
+        if pd.isna(value):
+            return None
+        return value
+
+
+def _safe_load_json(path: Path) -> Optional[Dict[str, Any]]:
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.debug("Failed to read JSON from %s: %s", path, exc)
+        return None
+
+
+def build_input_audit(meta: Dict[str, Any]) -> Dict[str, Any]:
+    audit: Dict[str, Any] = {
+        "silver_path": meta.get("silver_path"),
+        "silver_model": meta.get("silver_model"),
+        "record_count": meta.get("record_count"),
+        "chunk_count": meta.get("chunk_count"),
+    }
+    for key in (
+        "load_pattern",
+        "load_partition_name",
+        "partition_columns",
+        "primary_keys",
+        "order_column",
+        "domain",
+        "entity",
+        "version",
+    ):
+        value = meta.get(key)
+        if value is not None:
+            audit[key] = value
+
+    bronze_path = meta.get("bronze_path")
+    if bronze_path:
+        bronze_dir = Path(bronze_path)
+        audit["bronze_path"] = bronze_path
+        bronze_meta = _safe_load_json(bronze_dir / "_metadata.json")
+        if bronze_meta:
+            audit["bronze_metadata"] = bronze_meta
+        manifest_path = bronze_dir / "_checksums.json"
+        manifest_payload = _safe_load_json(manifest_path)
+        if isinstance(manifest_payload, dict):
+            audit["bronze_checksum_manifest"] = {
+                "path": str(manifest_path),
+                "file_count": len(manifest_payload.get("files", [])),
+                "sample_files": [entry.get("path") for entry in manifest_payload.get("files", [])[:3]],
+            }
+    return audit
 
 
 def determine_model(requested: str | None, metadata: Dict[str, Any]) -> SilverModel:
@@ -212,6 +345,7 @@ def build_run_options(output_cfg: Dict[str, Any], metadata_list: List[Dict[str, 
 
     primary_keys = metadata_list[0].get("primary_keys") or output_cfg.get("primary_keys") or []
     order_column = metadata_list[0].get("order_column") or output_cfg.get("order_column")
+
     return RunOptions(
         load_pattern=LoadPattern.FULL,
         require_checksum=False,
@@ -225,8 +359,63 @@ def build_run_options(output_cfg: Dict[str, Any], metadata_list: List[Dict[str, 
     )
 
 
-def build_schema_snapshot(df: pd.DataFrame) -> Dict[str, str]:
-    return {col: str(df[col].dtype) for col in df.columns}
+def perform_join(
+    left: pd.DataFrame,
+    right: pd.DataFrame,
+    output_cfg: Dict[str, Any],
+    progress_tracker: Optional[JoinProgressTracker] = None,
+) -> Tuple[pd.DataFrame, JoinRunStats]:
+    join_type = output_cfg.get("join_type", "inner").strip().lower()
+    if join_type not in VALID_JOIN_TYPES:
+        raise ValueError(f"join_type must be one of {', '.join(VALID_JOIN_TYPES)}")
+
+    join_keys = normalize_join_keys(output_cfg.get("join_keys"))
+    if not join_keys:
+        raise ValueError("silver_join.output.join_keys must list at least one key")
+
+    chunk_size = max(int(output_cfg.get("chunk_size") or 0), 0)
+    cache = RightPartitionCache(right, join_keys)
+    matched_right_keys: Set[Any] = set()
+    chunk_frames: List[pd.DataFrame] = []
+    chunk_count = 0
+
+    for chunk in chunk_dataframe(left, chunk_size):
+        if chunk.empty:
+            continue
+        chunk_count += 1
+        key_set = _extract_join_key_set(chunk, join_keys)
+        right_subset = cache.batch_for_keys(key_set)
+        merged_chunk = pd.merge(chunk, right_subset, how=join_type, on=join_keys, suffixes=DEFAULT_SUFFIXES)
+        chunk_frames.append(merged_chunk)
+        matched_right_keys.update(_extract_join_key_set(right_subset, join_keys))
+        if progress_tracker:
+            progress_tracker.record_chunk(chunk_count, len(merged_chunk), key_set)
+
+    all_right_keys = cache.all_keys()
+    unmatched_keys = all_right_keys - matched_right_keys
+    right_only_rows = 0
+    if join_type in {"right", "outer"} and unmatched_keys:
+        right_only_df = cache.batch_for_keys(unmatched_keys)
+        left_template = pd.DataFrame(columns=left.columns)
+        right_only = pd.merge(left_template, right_only_df, how="right", on=join_keys, suffixes=DEFAULT_SUFFIXES)
+        chunk_frames.append(right_only)
+        right_only_rows = len(right_only)
+
+    if progress_tracker:
+        progress_tracker.finalize()
+
+    if not chunk_frames:
+        merged = pd.merge(left, right, how=join_type, on=join_keys, suffixes=DEFAULT_SUFFIXES)
+    else:
+        merged = pd.concat(chunk_frames, ignore_index=True)
+
+    stats = JoinRunStats(
+        chunk_count=chunk_count,
+        matched_right_keys=len(matched_right_keys),
+        unmatched_right_keys=len(unmatched_keys),
+        right_only_rows=right_only_rows,
+    )
+    return merged, stats
 
 
 def write_output(
@@ -237,6 +426,9 @@ def write_output(
     metadata_list: List[Dict[str, Any]],
     output_cfg: Dict[str, Any],
     source_paths: List[str],
+    source_audits: List[Dict[str, Any]],
+    progress_summary: Dict[str, Any],
+    join_stats: JoinRunStats,
 ) -> None:
     base_dir.mkdir(parents=True, exist_ok=True)
     outputs = write_silver_outputs(
@@ -254,18 +446,24 @@ def write_output(
         model,
     )
     chunk_count = sum(len(paths) for paths in outputs.values())
-    join_keys = normalize_join_keys(output_cfg.get("join_keys"))
     metadata = {
+        "joined_sources": source_paths,
         "silver_model": model.value,
         "requested_model": output_cfg.get("model"),
         "formats": {"parquet": run_opts.write_parquet, "csv": run_opts.write_csv},
         "join_type": output_cfg.get("join_type"),
-        "join_keys": join_keys,
+        "join_keys": normalize_join_keys(output_cfg.get("join_keys")),
         "chunk_size": output_cfg.get("chunk_size"),
         "projection": output_cfg.get("select_columns") or output_cfg.get("projection"),
         "lineage": [meta.get("silver_path") or "<missing>" for meta in metadata_list],
-        "joined_sources": source_paths,
-        "schema": build_schema_snapshot(df),
+        "inputs": source_audits,
+        "progress": progress_summary,
+        "join_stats": {
+            "chunk_count": join_stats.chunk_count,
+            "matched_right_keys": join_stats.matched_right_keys,
+            "unmatched_right_keys": join_stats.unmatched_right_keys,
+            "right_only_rows": join_stats.right_only_rows,
+        },
     }
     write_batch_metadata(
         base_dir,
@@ -298,33 +496,44 @@ def main() -> int:
     validate_storage_metadata(platform_cfg)
     enforce_storage_scope(platform_cfg, args.storage_scope)
 
-    left_config = join_config["left"]
-    right_config = join_config["right"]
     output_cfg = join_config.get("output")
     if output_cfg is None:
         raise ValueError("silver_join.output must be configured")
 
+    checkpoint_dir = output_cfg.get("checkpoint_dir") or Path(output_cfg["path"]) / ".join_progress"
+    progress_tracker = JoinProgressTracker(Path(checkpoint_dir))
+
     metadata_list: List[Dict[str, Any]] = []
-    source_paths: List[str] = [left_config["path"], right_config["path"]]
-    joined_df: pd.DataFrame | None = None
+    source_paths: List[str] = [join_config["left"]["path"], join_config["right"]["path"]]
+
     with tempfile.TemporaryDirectory(prefix="silver_join_") as workspace_dir:
         workspace = Path(workspace_dir)
-        left_path = fetch_asset_local(left_config, workspace, platform_cfg, args.storage_scope)
-        right_path = fetch_asset_local(right_config, workspace, platform_cfg, args.storage_scope)
+        left_path = fetch_asset_local(join_config["left"], workspace, platform_cfg, args.storage_scope)
+        right_path = fetch_asset_local(join_config["right"], workspace, platform_cfg, args.storage_scope)
         left_meta = read_metadata(left_path)
         right_meta = read_metadata(right_path)
         metadata_list = [left_meta, right_meta]
         left_df = read_silver_data(left_path)
         right_df = read_silver_data(right_path)
-        joined_df = perform_join(left_df, right_df, output_cfg)
+        joined_df, join_stats = perform_join(left_df, right_df, output_cfg, progress_tracker)
 
-    if not metadata_list or joined_df is None:
-        raise RuntimeError("Join could not be executed due to missing inputs")
-
+    source_audits = [build_input_audit(meta) for meta in metadata_list]
     requested_model = output_cfg.get("model") or SilverModel.default_for_load_pattern(LoadPattern.FULL).value
     model = select_model(requested_model, metadata_list)
     run_opts = build_run_options(output_cfg, metadata_list)
-    write_output(joined_df, Path(output_cfg["path"]), model, run_opts, metadata_list, output_cfg, source_paths)
+    progress_summary = progress_tracker.summary()
+    write_output(
+        joined_df,
+        Path(output_cfg["path"]),
+        model,
+        run_opts,
+        metadata_list,
+        output_cfg,
+        source_paths,
+        source_audits,
+        progress_summary,
+        join_stats,
+    )
     logger.info("Joined silver asset written to %s (model=%s)", output_cfg["path"], model.value)
     return 0
 

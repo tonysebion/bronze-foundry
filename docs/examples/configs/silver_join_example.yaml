@@ -19,3 +19,4 @@ silver_join:
     formats:
       - parquet
       - csv
+    checkpoint_dir: ./output/silver_joined/.join_progress

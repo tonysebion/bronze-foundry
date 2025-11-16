@@ -35,6 +35,7 @@ silver_join:
       - order_id
       - status
       - total_amount
+    checkpoint_dir: "./output/silver_joined/.join_progress"
 
 Each source entry can include a `platform` block that mirrors the Bronze configuration (`platform.bronze.storage_backend`, credentials, `storage_metadata`, the optional `azure_connection` block, etc.). If a source points to remote storage, `silver_join` downloads the files to a temporary workspace before joining. The top-level `platform` block is reused for storage policy enforcement so you can still pass `--storage-scope onprem` or `--onprem-only` to guard Azure or cloud-backed paths at runtime.
 ```
@@ -48,6 +49,7 @@ The `output` block controls the join semantics:
 - `join_keys`: the business keys that appear in both inputs; at least one key is required.
 - `chunk_size`: optionally break the left-hand input into chunks to mitigate memory pressure before merging; set to `0` or omit to join in a single operation.
 - `select_columns`/`projection`: trim the output to a specific column order after the join so downstream Silver writers stay predictable.
+- `checkpoint_dir`: override where `progress.json` is written (defaults to `<output path>/.join_progress`). The tracker records the chunk index, row counts, and sample join keys so retries can pick up where the last successful chunk ended.
 
 You can still point each asset at cloud storage by reusing `platform.bronze.storage_backend`, supply the right credentials (`s3`, Azure, etc.), and add the same `storage_metadata` fields you use for Bronze. `silver_join` enforces the same storage policy, so running with `--storage-scope onprem` (or `--onprem-only`) rejects any cloud backend that does not advertise `storage_metadata.boundary=onprem` while logging which assets contributed to the new lineage.
 
@@ -58,3 +60,18 @@ python silver_join.py --config docs/examples/configs/silver_join_example.yaml --
 ```
 
 The CLI respects the same storage metadata policy as Bronze/Silver, so if you enable `--storage-scope onprem`, only on-prem targets (non-cloud provider types) are allowed. For remote sources you can add `platform.bronze.storage_backend: "azure"` or `"s3"` plus the relevant connection settings just like you would in Bronze configs.
+
+## Chunking & progress
+
+`silver_join` now partitions the right-hand asset on the join keys so each chunk only touches the minimal set of rows that match the current left-hand slice. That partition-aware execution both limits duplicated scans of the right asset and makes the join safe for very large Silver sources. Each chunk writes a checkpoint (`progress.json` under the configured `checkpoint_dir`) that captures the chunk index, record count, and a sample of the join keys processed, making restarts more predictable and easier to debug.
+
+## Metadata & lineage
+
+The resulting `_metadata.json` now includes several helper sections so auditors can trace every column back to its Bronze origin:
+
+- `inputs`: metadata about each source Silver asset plus the Bronze metadata it was derived from (`bronze_path`, `bronze_metadata`, and checksum manifest references when available).
+- `progress`: the latest checkpoint summary (chunks processed, rows emitted, and the stored checkpoint path).
+- `join_stats`: chunk counts, how many right-hand partitions were matched, and how many right-only rows were appended.
+- `joined_sources`: the paths you supplied via the config so the run record shows what produced the data.
+
+This richer metadata makes it easier to understand when the join had to fall back to a more permissive Silver model, which chunks contributed rows, and how each Silver input maps back to its Bronze extraction.
