@@ -29,7 +29,7 @@ from core.catalog import (
 from core.hooks import fire_webhooks
 from core.run_options import RunOptions
 from core.storage.policy import enforce_storage_scope
-from silver_stream import stream_silver_promotion
+from core.silver.stream import stream_silver_promotion
 from core.silver.artifacts import (
     apply_schema_settings,
     build_current_view,

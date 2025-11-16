@@ -5,6 +5,7 @@ from .artifacts import (
     write_silver_outputs,
 )
 from .models import MODEL_PROFILES, SilverModel, resolve_profile
+from .stream import stream_silver_promotion
 
 __all__ = [
     "apply_schema_settings",
@@ -14,4 +15,5 @@ __all__ = [
     "MODEL_PROFILES",
     "SilverModel",
     "resolve_profile",
+    "stream_silver_promotion",
 ]

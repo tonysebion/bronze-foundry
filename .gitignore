@@ -1,6 +1,3 @@
-#config blocked for this particular project to ensure no configuration info gets added to repo
-config
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
