@@ -1,4 +1,4 @@
-from core.bronze.io import (
+from .io import (
     chunk_records,
     estimate_record_size,
     write_batch_metadata,
