@@ -91,9 +91,20 @@ def test_hybrid_samples_cover_delta_sequence() -> None:
                 base
                 / f"dt={delta_date.isoformat()}"
                 / "delta"
+                / "point"
                 / "_metadata.json"
             )
             assert delta_meta_path.exists()
             delta_meta = json.loads(delta_meta_path.read_text())
             assert delta_meta["reference_mode"]["reference_run_date"] == HYBRID_REFERENCE_DATE.isoformat()
             assert delta_meta["reference_mode"]["role"] == "delta"
+            cumulative_meta_path = (
+                base
+                / f"dt={delta_date.isoformat()}"
+                / "delta"
+                / "cumulative"
+                / "_metadata.json"
+            )
+            assert cumulative_meta_path.exists()
+            cumulative_meta = json.loads(cumulative_meta_path.read_text())
+            assert cumulative_meta["reference_mode"]["delta_mode"] == "cumulative"

@@ -139,20 +139,17 @@ def _write_hybrid_reference(base_dir: Path, date_str: str, seed: int, delta_patt
     )
 
 
-def _write_hybrid_delta(base_dir: Path, date_str: str, delta_pattern: str, seed: int, role: str) -> None:
+def _write_hybrid_delta(
+    base_dir: Path,
+    date_str: str,
+    delta_pattern: str,
+    seed: int,
+    role: str,
+    rows: List[Dict[str, object]],
+    delta_mode: str,
+) -> None:
+    base_dir.mkdir(parents=True, exist_ok=True)
     rng = Random(seed)
-    rows: List[Dict[str, object]] = []
-    start = datetime.fromisoformat(f"{date_str}T08:00:00")
-    for idx in range(1, 51):
-        rows.append(
-            {
-                "order_id": f"HYB-{idx + 150:05d}",
-                "change_type": rng.choice(["insert", "update"]),
-                "changed_at": (start + timedelta(minutes=idx * 5)).isoformat() + "Z",
-                "order_total": round(rng.uniform(15.0, 300.0), 2),
-                "run_date": date_str,
-            }
-        )
     chunk_path = base_dir / "delta-part-0001.csv"
     _write_csv(chunk_path, rows)
     _write_metadata(
@@ -164,6 +161,7 @@ def _write_hybrid_delta(base_dir: Path, date_str: str, delta_pattern: str, seed:
             "role": role,
             "delta_patterns": [delta_pattern],
             "reference_run_date": HYBRID_REFERENCE_DATE.isoformat(),
+            "delta_mode": delta_mode,
         },
     )
 
@@ -327,6 +325,24 @@ def generate_current_history(seed: int = 7, current_rows: int = 200, history_row
         _write_metadata(base_dir, "current_history", total_records, chunk_count)
 
 
+def _build_delta_rows(delta_pattern: str, date_str: str, seed: int) -> List[Dict[str, object]]:
+    rng = Random(seed)
+    rows: List[Dict[str, object]] = []
+    start = datetime.fromisoformat(f"{date_str}T08:00:00")
+    for idx in range(1, 51):
+        rows.append(
+            {
+                "order_id": f"HYB-{idx + 150:05d}",
+                "change_type": rng.choice(["insert", "update"]),
+                "changed_at": (start + timedelta(minutes=idx * 5)).isoformat() + "Z",
+                "order_total": round(rng.uniform(15.0, 300.0), 2),
+                "delta_tag": f"{delta_pattern}-{date_str}",
+                "run_date": date_str,
+            }
+        )
+    return rows
+
+
 def generate_hybrid_combinations(seed: int = 123) -> None:
     combos = [
         ("hybrid_cdc", "cdc"),
@@ -342,9 +358,12 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
             / f"dt={HYBRID_REFERENCE_DATE.isoformat()}"
         )
         _write_hybrid_reference(reference_dir / "reference", HYBRID_REFERENCE_DATE.isoformat(), seed, [delta_pattern])
+        cumulative_rows: List[Dict[str, object]] = []
         for offset in range(1, HYBRID_DELTA_DAYS + 1):
             delta_date = HYBRID_REFERENCE_DATE + timedelta(days=offset)
-            delta_dir = (
+            rows = _build_delta_rows(delta_pattern, delta_date.isoformat(), seed + offset * 10)
+            cumulative_rows.extend(rows)
+            point_dir = (
                 BASE_DIR
                 / combo_name
                 / "system=retail_demo"
@@ -352,13 +371,26 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
                 / f"pattern={combo_name}"
                 / f"dt={delta_date.isoformat()}"
                 / "delta"
+                / "point"
             )
+            cumulative_dir = point_dir.parent / "cumulative"
             _write_hybrid_delta(
-                delta_dir,
+                point_dir,
                 delta_date.isoformat(),
                 delta_pattern,
                 seed + offset * 10,
                 "delta",
+                rows,
+                "point_in_time",
+            )
+            _write_hybrid_delta(
+                cumulative_dir,
+                delta_date.isoformat(),
+                delta_pattern,
+                seed + offset * 10,
+                "delta",
+                cumulative_rows.copy(),
+                "cumulative",
             )
 
 
