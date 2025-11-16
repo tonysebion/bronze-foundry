@@ -505,6 +505,7 @@ def build_input_audit(meta: Dict[str, Any]) -> Dict[str, Any]:
         "silver_model": meta.get("silver_model"),
         "record_count": meta.get("record_count"),
         "chunk_count": meta.get("chunk_count"),
+        "reference_mode": meta.get("reference_mode"),
     }
     for key in (
         "load_pattern",

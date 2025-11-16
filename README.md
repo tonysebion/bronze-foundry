@@ -232,7 +232,7 @@ python silver_extract.py \
 - Documentation structure:
   - **Architecture overview**: `docs/ARCHITECTURE.md` sketches Bronze/Silver/storage flows plus the plugin registry and sample references.
   - **Operations & governance**: `docs/OPERATIONS.md` describes validation, sample generation, storage policy, and log/metric practices so different roles know where to look.
-- **Silver Join**: Join two existing Silver assets with `silver_join.py`, including configurable `join_key_pairs`, `join_strategy`, `quality_guards`, spill directories, checkpoints (`progress.json`), and richer metadata (column lineage, chunk metrics) that trace back to the Bronze inputs. See `docs/SILVER_JOIN.md` and `docs/examples/configs/silver_join_example.yaml` for configuration patterns.
+- **Silver Join**: Join two existing Silver assets with `silver_join.py`, including configurable `join_key_pairs`, `join_strategy`, `quality_guards`, spill directories, checkpoints (`progress.json`), and richer metadata (column lineage, chunk metrics) that trace back to the Bronze inputs. Sample outputs in `docs/examples/data/silver_join_samples/v1` exercise every combination of inputs/formats and are generated with `python scripts/generate_silver_join_samples.py --version 1 --formats both`. See `docs/SILVER_JOIN.md` and `docs/examples/configs/silver_join_example.yaml` for configuration patterns.
 - Matching configs: `file_example.yaml` (full), `file_cdc_example.yaml` (cdc), `file_current_history_example.yaml`
 
 ### Sample Configs

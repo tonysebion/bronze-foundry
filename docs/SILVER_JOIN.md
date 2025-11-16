@@ -89,5 +89,6 @@ The resulting `_metadata.json` now includes several helper sections so auditors 
 - `joined_sources`: the paths you supplied via the config so the run record shows what produced the data.
 - `join_metrics`: duration/row counts for each chunk plus right-side statistics so operations can measure performance regressions.
 - `column_lineage`: a list describing every output column (its source table, the original column name, and any alias you applied) so catalog tools can follow renamed fields back to their Bronze/Silver origins.
+- `reference_mode`: when a Bronze run was marked as a reference snapshot or delta, this block describes its role/cadence so you can decide whether to merge that snapshot or rely on the incremental feed instead.
 
 This richer metadata makes it easier to understand when the join had to fall back to a more permissive Silver model, which chunks contributed rows, and how each Silver input maps back to its Bronze extraction.

@@ -66,7 +66,12 @@ def test_build_input_audit_reads_bronze_metadata(tmp_path: Path) -> None:
     checksum_manifest = {"files": [{"path": "chunk-0001.csv", "hash": "abc123"}]}
     (bronze_dir / "_metadata.json").write_text(json.dumps(bronze_metadata), encoding="utf-8")
     (bronze_dir / "_checksums.json").write_text(json.dumps(checksum_manifest), encoding="utf-8")
-    meta = {"silver_path": "silver", "bronze_path": str(bronze_dir), "silver_model": "scd_type_2"}
+    meta = {
+        "silver_path": "silver",
+        "bronze_path": str(bronze_dir),
+        "silver_model": "scd_type_2",
+        "reference_mode": {"role": "reference", "cadence_days": 7},
+    }
 
     audit = build_input_audit(meta)
 

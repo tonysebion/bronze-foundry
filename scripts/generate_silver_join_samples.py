@@ -126,6 +126,11 @@ def parse_args() -> argparse.Namespace:
         default="both",
         help="Which Silver artifacts to materialize (default: both).",
     )
+    parser.add_argument(
+        "--version",
+        default="1",
+        help="Version suffix written into each generated silver_join folder (default: 1).",
+    )
     return parser.parse_args()
 
 
@@ -152,6 +157,7 @@ def main() -> None:
         for format_combination in selected_formats:
             output_dir = (
                 OUTPUT_ROOT
+                / f"v{args.version}"
                 / f"{_label_from_path(left)}__{_label_from_path(right)}"
                 / f"formats-{'_'.join(format_combination)}"
             )

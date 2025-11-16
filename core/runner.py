@@ -249,6 +249,17 @@ class ExtractJob:
         return schema_snapshot
 
     def _emit_metadata(self, record_count: int, chunk_count: int, cursor: Optional[str]) -> None:
+        reference_mode = self.source_cfg["run"].get("reference_mode")
+        reference_info = None
+        if reference_mode and reference_mode.get("enabled"):
+            reference_info = {
+                "role": reference_mode.get("role"),
+                "cadence_days": reference_mode.get("cadence_days"),
+                "delta_patterns": reference_mode.get("delta_patterns"),
+                "reference_path": str(self._out_dir),
+                "reference_type": "reference" if reference_mode.get("role") == "reference" else "delta",
+            }
+
         metadata_path = write_batch_metadata(
             self._out_dir,
             record_count=record_count,
@@ -262,6 +273,7 @@ class ExtractJob:
                 "partition_path": self.relative_path,
                 "file_formats": self.output_formats,
                 "load_pattern": self.load_pattern.value if self.load_pattern else LoadPattern.FULL.value,
+                "reference_mode": reference_info,
             },
         )
         self.created_files.append(metadata_path)

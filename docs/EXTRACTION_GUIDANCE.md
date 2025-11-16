@@ -38,5 +38,16 @@ The Silver stage works with the Bronze artifacts and lets you select **five cura
 - **Change footprint**: For small changes over huge bases (e.g., customer tables), `scd_type_1`/`scd_type_2` with inference via `order_column` prevents reprocessing everything.
 - **Consumption latency**: Streaming mode (via `--stream`) and chunked writes keep memory bounded when Silver needs to keep up with very large Bronze partitions.
 - **Output formats**: Choose Parquet for analytics; enable CSV when errors must be human-readable or Silver artifacts feed legacy tooling. The new `scripts/generate_silver_samples.py --formats both` helps you exercise both writers.
+ - **Hybrid/reference mode**: For large data sets combine a periodic `reference` full snapshot with incremental/CDC runs. Set `source.run.reference_mode`:
+   ```yaml
+   source:
+     run:
+       reference_mode:
+         enabled: true
+         role: reference      # or `delta` when running the smaller delta job
+         cadence_days: 7
+         delta_patterns: ["cdc", "incremental_merge"]
+   ```
+   The Bronze run annotates `_metadata.json` with the reference snapshot path + cadence so Silver jobs can automatically pick up the most recent baseline before merging the deltas.
 - **Error handling**: Tune `silver.error_handling` (enabled/max_bad_records/max_bad_percent) when data has nullable keys or occasional corrupt rows to avoid electing total job failure.
 - **Partitioning differences**: Bronze typically partitions by `dt`/`pattern`; Silver can add business-level partitions (e.g., `status`, `region`) even when Bronze stays coarse.

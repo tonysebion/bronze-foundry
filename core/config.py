@@ -201,6 +201,30 @@ def _validate_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
         if workers > 32:
             logger.warning(f"source.run.parallel_workers={workers} is very high and may cause resource issues")
 
+    reference_mode = run_cfg.get("reference_mode")
+    if reference_mode is not None:
+        if not isinstance(reference_mode, dict):
+            raise ValueError("source.run.reference_mode must be a dictionary")
+        enabled = reference_mode.get("enabled", True)
+        if not isinstance(enabled, bool):
+            raise ValueError("source.run.reference_mode.enabled must be a boolean")
+        role = reference_mode.get("role", "reference")
+        if role not in {"reference", "delta", "auto"}:
+            raise ValueError("source.run.reference_mode.role must be one of 'reference', 'delta', or 'auto'")
+        cadence = reference_mode.get("cadence_days")
+        if cadence is not None:
+            if not isinstance(cadence, int) or cadence <= 0:
+                raise ValueError("source.run.reference_mode.cadence_days must be a positive integer")
+        delta_patterns = reference_mode.get("delta_patterns", [])
+        if delta_patterns and not all(isinstance(p, str) for p in delta_patterns):
+            raise ValueError("source.run.reference_mode.delta_patterns must be a list of strings")
+        run_cfg["reference_mode"] = {
+            "enabled": enabled,
+            "role": role,
+            "cadence_days": cadence,
+            "delta_patterns": delta_patterns,
+        }
+
     # Validate partitioning strategy if provided
     partition_strategy = platform.get("bronze", {}).get("partitioning", {}).get("partition_strategy", "date")
     valid_strategies = ["date", "hourly", "timestamp", "batch_id"]
