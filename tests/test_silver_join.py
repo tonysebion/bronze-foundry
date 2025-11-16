@@ -7,9 +7,13 @@ import pandas as pd
 import pandas.testing as pdt
 import pytest
 
+from core.patterns import LoadPattern
+from core.run_options import RunOptions
+
 from silver_join import (
     JoinProgressTracker,
     QualityGuardError,
+    _order_inputs_by_reference,
     apply_projection,
     build_input_audit,
     perform_join,
@@ -154,6 +158,16 @@ def test_datetime_alignment_preserves_timezone(tmp_path: Path) -> None:
     right_entry = next(entry for entry in lineage if entry["column"] == "event_time_right")
     assert event_entry["source"] == "left"
     assert right_entry["source"] == "right"
+
+
+def test_order_inputs_by_reference() -> None:
+    base_df = pd.DataFrame({"key": [1]})
+    reference_entry = ({"path": "ref"}, base_df, {"reference_mode": {"role": "reference"}}, "ref_path")
+    delta_entry = ({"path": "delta"}, base_df, {"reference_mode": {"role": "delta"}}, "delta_path")
+    auto_entry = ({"path": "auto"}, base_df, {"reference_mode": {"role": "auto"}}, "auto_path")
+    ordered = _order_inputs_by_reference([delta_entry, auto_entry, reference_entry])
+    assert ordered[0][3] == "ref_path"
+    assert ordered[-1][3] == "delta_path"
 
 
 def test_run_quality_guards_success() -> None:

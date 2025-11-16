@@ -581,6 +581,21 @@ def _normalize_join_strategy(raw: str | None) -> str:
     return strategy
 
 
+def _order_inputs_by_reference(
+    inputs: List[Tuple[Dict[str, Any], pd.DataFrame, Dict[str, Any], str]]
+) -> List[Tuple[Dict[str, Any], pd.DataFrame, Dict[str, Any], str]]:
+    def score(entry: Tuple[Any, Any, Dict[str, Any], Any]) -> int:
+        meta = entry[2]
+        reference = (meta.get("reference_mode") or {}).get("role")
+        if reference == "reference":
+            return 0
+        if reference == "delta":
+            return 2
+        return 1
+
+    return sorted(inputs, key=score)
+
+
 def build_run_options(output_cfg: Dict[str, Any], metadata_list: List[Dict[str, Any]]) -> RunOptions:
     formats = {fmt.strip().lower() for fmt in output_cfg.get("formats", ["parquet"])}
     write_parquet = "parquet" in formats
@@ -906,9 +921,17 @@ def main() -> int:
         right_path = fetch_asset_local(join_config["right"], workspace, platform_cfg, args.storage_scope)
         left_meta = read_metadata(left_path)
         right_meta = read_metadata(right_path)
-        metadata_list = [left_meta, right_meta]
         left_df = read_silver_data(left_path)
         right_df = read_silver_data(right_path)
+        entries = [
+            (join_config["left"], left_df, left_meta, join_config["left"]["path"]),
+            (join_config["right"], right_df, right_meta, join_config["right"]["path"]),
+        ]
+        ordered = _order_inputs_by_reference(entries)
+        (left_cfg, left_df, left_meta, left_path_str), (right_cfg, right_df, right_meta, right_path_str) = ordered
+        join_config["left"], join_config["right"] = left_cfg, right_cfg
+        metadata_list = [left_meta, right_meta]
+        source_paths = [left_path_str, right_path_str]
         join_pairs = _resolve_join_pairs(output_cfg, left_df, right_df, metadata_list)
         chunk_size = _resolve_chunk_size(output_cfg, left_df, metadata_list, join_strategy)
         joined_df, join_stats, column_origin, join_metrics = perform_join(
