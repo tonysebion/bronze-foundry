@@ -14,6 +14,8 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 import pandas as pd
 import yaml
 
+from pandas.api.types import is_datetime64_any_dtype
+
 from core.io import write_batch_metadata
 from core.patterns import LoadPattern
 from core.run_options import RunOptions
@@ -205,6 +207,54 @@ def _resolve_chunk_size(
     if estimated <= 5000:
         return 0
     return max(1000, min(40000, estimated // 6))
+
+
+def _align_datetime_columns(left: pd.DataFrame, right: pd.DataFrame) -> None:
+    for col in set(left.columns).intersection(right.columns):
+        if not (is_datetime64_any_dtype(left[col]) and is_datetime64_any_dtype(right[col])):
+            continue
+        left_tz = left[col].dt.tz
+        right_tz = right[col].dt.tz
+        if left_tz and right_tz:
+            if left_tz != right_tz:
+                right[col] = right[col].dt.tz_convert(left_tz)
+            continue
+        if left_tz and not right_tz:
+            right[col] = right[col].dt.tz_localize(left_tz)
+            continue
+        if right_tz and not left_tz:
+            left[col] = left[col].dt.tz_localize(right_tz)
+
+
+def _build_column_origin(
+    merged_columns: Iterable[str],
+    left_cols: Iterable[str],
+    right_cols: Iterable[str],
+    canonical_keys: Iterable[str],
+) -> Dict[str, str]:
+    left_set = set(left_cols)
+    right_set = set(right_cols)
+    canonical_set = set(canonical_keys)
+    suffix = "_right"
+    origin: Dict[str, str] = {}
+    for col in merged_columns:
+        if col in canonical_set:
+            origin[col] = "both"
+            continue
+        if col.endswith(suffix) and col[: -len(suffix)] in right_set:
+            origin[col] = "right"
+            continue
+        if col in left_set:
+            origin[col] = "left"
+            continue
+        base = col
+        if col.endswith(suffix):
+            base = col[: -len(suffix)]
+        if base in right_set:
+            origin[col] = "right"
+            continue
+        origin[col] = "unknown"
+    return origin
 
 
 def normalize_join_keys(raw_keys: Any) -> List[str]:
@@ -446,6 +496,7 @@ def perform_join(
     output_cfg: Dict[str, Any],
     progress_tracker: Optional[JoinProgressTracker] = None,
 ) -> Tuple[pd.DataFrame, JoinRunStats]:
+    _align_datetime_columns(left, right)
     join_type = output_cfg.get("join_type", "inner").strip().lower()
     if join_type not in VALID_JOIN_TYPES:
         raise ValueError(f"join_type must be one of {', '.join(VALID_JOIN_TYPES)}")
@@ -498,13 +549,17 @@ def perform_join(
     else:
         merged = pd.concat(chunk_frames, ignore_index=True)
 
+    column_origin = _build_column_origin(
+        merged.columns, left_aligned.columns, right_aligned.columns, canonical_keys
+    )
+
     stats = JoinRunStats(
         chunk_count=chunk_count,
         matched_right_keys=len(matched_right_keys),
         unmatched_right_keys=len(unmatched_keys),
         right_only_rows=right_only_rows,
     )
-    return merged, stats
+    return merged, stats, column_origin
 
 
 def _normalize_projection(raw: Any) -> List[Tuple[str, str]]:
@@ -531,30 +586,51 @@ def _normalize_projection(raw: Any) -> List[Tuple[str, str]]:
 
 def _resolve_projection_source(source: str, df: pd.DataFrame) -> str:
     candidate = source
+    qualifier = None
     if "." in source:
-        side, col = source.split(".", 1)
-        side = side.lower()
-        if side in {"right", "target"}:
-            candidate = f"{col}_right"
-        elif side in {"left", "source"}:
-            candidate = col
-        else:
-            raise ValueError(f"Unknown projection side '{side}'")
-    if candidate in df.columns and f"{candidate}_right" not in df.columns:
+        qualifier, candidate = source.split(".", 1)
+        qualifier = qualifier.lower()
+    suffix = "_right"
+
+    def right_name(name: str) -> str:
+        return f"{name}{suffix}"
+
+    if qualifier in {"right", "target"}:
+        name = right_name(candidate)
+        if name in df.columns:
+            return name
+        raise ValueError(f"Column '{source}' not found in joined output")
+    if qualifier in {"left", "source"}:
+        if candidate in df.columns:
+            return candidate
+        raise ValueError(f"Column '{source}' not found in joined output")
+
+    if candidate in df.columns:
         return candidate
-    right_candidate = f"{candidate}_right"
+    right_candidate = right_name(candidate)
     if right_candidate in df.columns:
         return right_candidate
-    if candidate in df.columns and right_candidate in df.columns:
-        raise ValueError(f"Ambiguous column '{candidate}'; use left. or right. qualifier")
     raise ValueError(f"Column '{source}' not found in joined output")
 
 
-def apply_projection(df: pd.DataFrame, output_cfg: Dict[str, Any]) -> pd.DataFrame:
+def apply_projection(
+    df: pd.DataFrame,
+    output_cfg: Dict[str, Any],
+    column_origin: Dict[str, str],
+) -> Tuple[pd.DataFrame, List[Dict[str, Any]]]:
     raw = output_cfg.get("select_columns") or output_cfg.get("projection")
     projection = _normalize_projection(raw)
     if not projection:
-        return df
+        lineage = [
+            {
+                "column": col,
+                "source": column_origin.get(col, "unknown"),
+                "original": col,
+                "alias": None,
+            }
+            for col in df.columns
+        ]
+        return df, lineage
     resolved: List[Tuple[str, str]] = []
     missing: List[str] = []
     for src, alias in projection:
@@ -568,14 +644,24 @@ def apply_projection(df: pd.DataFrame, output_cfg: Dict[str, Any]) -> pd.DataFra
         raise ValueError(f"Projection references missing columns: {missing}")
     rename_map: Dict[str, str] = {}
     selected_columns: List[str] = []
+    lineage: List[Dict[str, Any]] = []
     for src, alias in resolved:
         selected_columns.append(src)
         if alias != src:
             rename_map[src] = alias
+        column_name = alias if alias else src
+        lineage.append(
+            {
+                "column": column_name,
+                "source": column_origin.get(src, "unknown"),
+                "original": src,
+                "alias": alias if alias != src else None,
+            }
+        )
     result = df[selected_columns]
     if rename_map:
         result = result.rename(columns=rename_map)
-    return result
+    return result, lineage
 
 
 def write_output(
@@ -591,6 +677,7 @@ def write_output(
     join_stats: JoinRunStats,
     join_pairs: List[Tuple[str, str]],
     chunk_size: int,
+    column_lineage: List[Dict[str, Any]],
 ) -> None:
     base_dir.mkdir(parents=True, exist_ok=True)
     outputs = write_silver_outputs(
@@ -627,6 +714,7 @@ def write_output(
         "join_key_pairs": [{"left": left_key, "right": right_key} for left_key, right_key in join_pairs],
         "chunk_size": chunk_size,
         "output_columns": list(df.columns),
+        "column_lineage": column_lineage,
     }
     write_batch_metadata(
         base_dir,
@@ -680,7 +768,7 @@ def main() -> int:
         right_df = read_silver_data(right_path)
         join_pairs = _resolve_join_pairs(output_cfg, left_df, right_df, metadata_list)
         chunk_size = _resolve_chunk_size(output_cfg, left_df, metadata_list)
-        joined_df, join_stats = perform_join(
+        joined_df, join_stats, column_origin = perform_join(
             left_df,
             right_df,
             join_pairs,
@@ -688,7 +776,7 @@ def main() -> int:
             output_cfg,
             progress_tracker,
         )
-        joined_df = apply_projection(joined_df, output_cfg)
+        joined_df, column_lineage = apply_projection(joined_df, output_cfg, column_origin)
 
     source_audits = [build_input_audit(meta) for meta in metadata_list]
     requested_model = output_cfg.get("model") or SilverModel.default_for_load_pattern(LoadPattern.FULL).value
@@ -708,6 +796,7 @@ def main() -> int:
         join_stats,
         join_pairs,
         chunk_size,
+        column_lineage,
     )
     logger.info("Joined silver asset written to %s (model=%s)", output_cfg["path"], model.value)
     return 0

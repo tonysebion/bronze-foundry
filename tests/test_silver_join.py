@@ -30,7 +30,7 @@ def test_perform_join_streaming_with_progress(tmp_path: Path) -> None:
 
     join_pairs = [("id", "id")]
     chunk_size = 2
-    joined, stats = perform_join(left, right, join_pairs, chunk_size, output_cfg, tracker)
+    joined, stats, column_origin = perform_join(left, right, join_pairs, chunk_size, output_cfg, tracker)
 
     expected = pd.merge(
         left,
@@ -82,17 +82,20 @@ def test_projection_limits_columns(tmp_path: Path) -> None:
     join_pairs = [("key", "key")]
     tracker = JoinProgressTracker(tmp_path / "progress")
 
-    joined, stats = perform_join(left, right, join_pairs, 1, output_cfg, tracker)
-    projected = apply_projection(joined, output_cfg)
+    joined, stats, column_origin = perform_join(left, right, join_pairs, 1, output_cfg, tracker)
+    projected, lineage = apply_projection(joined, output_cfg, column_origin)
     assert list(projected.columns) == ["key", "currency"]
     assert stats.chunk_count == 1
+    assert lineage[1]["column"] == "currency"
+    assert lineage[1]["alias"] == "currency"
+    assert lineage[1]["source"] == "right"
 
 
 def test_projection_missing_fields_raises() -> None:
     df = pd.DataFrame({"key": [1], "value": [100]})
     output_cfg = {"select_columns": ["key", "missing_field"]}
     with pytest.raises(ValueError, match="Projection references missing columns"):
-        apply_projection(df, output_cfg)
+        apply_projection(df, output_cfg, {})
 
 
 def test_projection_dict_with_alias(tmp_path: Path) -> None:
@@ -106,7 +109,35 @@ def test_projection_dict_with_alias(tmp_path: Path) -> None:
     join_pairs = [("key", "key")]
     tracker = JoinProgressTracker(tmp_path / "progress")
 
-    joined, stats = perform_join(left, right, join_pairs, 1, output_cfg, tracker)
-    projected = apply_projection(joined, output_cfg)
+    joined, stats, column_origin = perform_join(left, right, join_pairs, 1, output_cfg, tracker)
+    projected, lineage = apply_projection(joined, output_cfg, column_origin)
     assert list(projected.columns) == ["metric", "othervalue"]
     assert stats.chunk_count == 1
+    assert lineage[0]["source"] == "left"
+    assert lineage[1]["source"] == "right"
+
+
+def test_datetime_alignment_preserves_timezone(tmp_path: Path) -> None:
+    left = pd.DataFrame(
+        {
+            "key": [1],
+            "event_time": [pd.to_datetime("2024-01-01T00:00:00").tz_localize("UTC")],
+        }
+    )
+    right = pd.DataFrame(
+        {
+            "key": [1],
+            "event_time": [pd.to_datetime("2024-01-01T00:00:00").tz_localize("US/Eastern")],
+        }
+    )
+    output_cfg = {"join_type": "inner", "chunk_size": 1}
+    join_pairs = [("key", "key")]
+    tracker = JoinProgressTracker(tmp_path / "progress")
+
+    joined, stats, column_origin = perform_join(left, right, join_pairs, 1, output_cfg, tracker)
+    projected, lineage = apply_projection(joined, output_cfg, column_origin)
+    assert projected["event_time"].dt.tz == left["event_time"].dt.tz
+    event_entry = next(entry for entry in lineage if entry["column"] == "event_time")
+    right_entry = next(entry for entry in lineage if entry["column"] == "event_time_right")
+    assert event_entry["source"] == "left"
+    assert right_entry["source"] == "right"

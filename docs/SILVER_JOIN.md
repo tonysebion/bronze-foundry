@@ -72,6 +72,8 @@ The CLI respects the same storage metadata policy as Bronze/Silver, so if you en
 
 `silver_join` now partitions the right-hand asset on the join keys so each chunk only touches the minimal set of rows that match the current left-hand slice. That partition-aware execution both limits duplicated scans of the right asset and makes the join safe for very large Silver sources. Each chunk writes a checkpoint (`progress.json` under the configured `checkpoint_dir`) that captures the chunk index, record count, and a sample of the join keys processed, making restarts more predictable and easier to debug.
 
+`silver_join` also aligns any shared datetime columns between the two inputs before the join runs. When both sides contain the same column name with timezone metadata, the right-hand values are converted to match the left-hand representation so you don’t need to manually cast or respecify time formats.
+
 ## Metadata & lineage
 
 The resulting `_metadata.json` now includes several helper sections so auditors can trace every column back to its Bronze origin:
@@ -80,5 +82,6 @@ The resulting `_metadata.json` now includes several helper sections so auditors 
 - `progress`: the latest checkpoint summary (chunks processed, rows emitted, and the stored checkpoint path).
 - `join_stats`: chunk counts, how many right-hand partitions were matched, and how many right-only rows were appended.
 - `joined_sources`: the paths you supplied via the config so the run record shows what produced the data.
+- `column_lineage`: a list describing every output column (its source table, the original column name, and any alias you applied) so catalog tools can follow renamed fields back to their Bronze/Silver origins.
 
 This richer metadata makes it easier to understand when the join had to fall back to a more permissive Silver model, which chunks contributed rows, and how each Silver input maps back to its Bronze extraction.
