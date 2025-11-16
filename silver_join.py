@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -13,6 +14,7 @@ import yaml
 
 from core.io import write_batch_metadata
 from core.patterns import LoadPattern
+from core.storage import get_storage_backend
 from core.storage_policy import enforce_storage_scope
 from core.silver_models import SilverModel, resolve_profile
 from core.run_options import RunOptions
@@ -33,6 +35,30 @@ def read_metadata(silver_path: Path) -> Dict[str, Any]:
     if not metadata_path.exists():
         raise FileNotFoundError(f"No metadata found at {metadata_path}")
     return json.loads(metadata_path.read_text(encoding="utf-8"))
+
+
+def fetch_asset_local(entry: Dict[str, Any], tmp_dir: Path) -> Path:
+    path = Path(entry["path"])
+    if path.exists():
+        return path
+
+    platform_cfg = entry.get("platform", {})
+    config = {"platform": {"bronze": platform_cfg}}
+    backend = get_storage_backend(config)
+    prefix = entry["path"].rstrip("/")
+    target_dir = tmp_dir / entry.get("name", prefix.replace("/", "_"))
+    target_dir.mkdir(parents=True, exist_ok=True)
+    files = backend.list_files(prefix)
+    if not files:
+        raise FileNotFoundError(f"No remote files found under {prefix}")
+
+    for remote in files:
+        rel = Path(remote).relative_to(prefix)
+        local_path = target_dir / rel
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        backend.download_file(remote, str(local_path))
+
+    return target_dir
 
 
 def read_silver_data(silver_path: Path) -> pd.DataFrame:
@@ -147,12 +173,16 @@ def main() -> int:
     full_config, config = parse_config(Path(args.config))
     enforce_storage_scope(full_config.get("platform", {}), args.storage_scope)
 
-    left_meta = read_metadata(Path(config["left"]["path"]))
-    right_meta = read_metadata(Path(config["right"]["path"]))
-    metadata_list = [left_meta, right_meta]
-    left_df = read_silver_data(Path(config["left"]["path"]))
-    right_df = read_silver_data(Path(config["right"]["path"]))
-    combined = pd.concat([left_df, right_df], ignore_index=True)
+    with tempfile.TemporaryDirectory(prefix="silver_join_") as workspace_dir:
+        workspace = Path(workspace_dir)
+        left_path = fetch_asset_local(config["left"], workspace)
+        right_path = fetch_asset_local(config["right"], workspace)
+        left_meta = read_metadata(left_path)
+        right_meta = read_metadata(right_path)
+        metadata_list = [left_meta, right_meta]
+        left_df = read_silver_data(left_path)
+        right_df = read_silver_data(right_path)
+        combined = pd.concat([left_df, right_df], ignore_index=True)
 
     model = select_model(config["output"]["model"], metadata_list)
     run_opts = build_run_options(config["output"], metadata_list)
