@@ -12,6 +12,7 @@ from azure.storage.blob import BlobServiceClient, ContainerClient
 
 from core.storage.backend import StorageBackend
 from core.storage.registry import register_backend
+from core.retry import RetryPolicy, execute_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -71,39 +72,107 @@ class AzureStorage(StorageBackend):
 
     def upload_file(self, local_path: str, remote_path: str) -> bool:
         blob_path = self._remote_path(remote_path)
+        def _retry_if(exc: BaseException) -> bool:  # type: ignore[name-defined]
+            if isinstance(exc, ResourceNotFoundError):
+                return False
+            return isinstance(exc, AzureError)
+
+        policy = RetryPolicy(
+            max_attempts=5,
+            base_delay=0.5,
+            max_delay=8.0,
+            backoff_multiplier=2.0,
+            jitter=0.2,
+            retry_on_exceptions=(),
+            retry_if=_retry_if,
+        )
+
         try:
-            with open(local_path, "rb") as handle:
-                self.container.upload_blob(blob_path, handle, overwrite=True)
-            return True
+            def _once() -> bool:
+                with open(local_path, "rb") as handle:
+                    self.container.upload_blob(blob_path, handle, overwrite=True)
+                return True
+
+            return execute_with_retry(_once, policy=policy, operation_name="azure_upload")
         except AzureError as exc:
             logger.error("Azure upload failed [%s]: %s", blob_path, exc)
             raise
 
     def download_file(self, remote_path: str, local_path: str) -> bool:
         blob_path = self._remote_path(remote_path)
+        def _retry_if(exc: BaseException) -> bool:  # type: ignore[name-defined]
+            if isinstance(exc, ResourceNotFoundError):
+                return False
+            return isinstance(exc, AzureError)
+
+        policy = RetryPolicy(
+            max_attempts=5,
+            base_delay=0.5,
+            max_delay=8.0,
+            backoff_multiplier=2.0,
+            jitter=0.2,
+            retry_on_exceptions=(),
+            retry_if=_retry_if,
+        )
+
         try:
-            blob = self.container.get_blob_client(blob_path)
-            with open(local_path, "wb") as handle:
-                stream = blob.download_blob()
-                stream.readinto(handle)
-            return True
+            def _once() -> bool:
+                blob = self.container.get_blob_client(blob_path)
+                with open(local_path, "wb") as handle:
+                    stream = blob.download_blob()
+                    stream.readinto(handle)
+                return True
+
+            return execute_with_retry(_once, policy=policy, operation_name="azure_download")
         except AzureError as exc:
             logger.error("Azure download failed [%s]: %s", blob_path, exc)
             raise
 
     def list_files(self, prefix: str) -> List[str]:
         blob_prefix = self._remote_path(prefix)
+        def _retry_if(exc: BaseException) -> bool:  # type: ignore[name-defined]
+            return isinstance(exc, AzureError) and not isinstance(exc, ResourceNotFoundError)
+
+        policy = RetryPolicy(
+            max_attempts=5,
+            base_delay=0.5,
+            max_delay=8.0,
+            backoff_multiplier=2.0,
+            jitter=0.2,
+            retry_on_exceptions=(),
+            retry_if=_retry_if,
+        )
+
         try:
-            return [blob.name for blob in self.container.list_blobs(name_starts_with=blob_prefix)]
+            def _once() -> List[str]:
+                return [blob.name for blob in self.container.list_blobs(name_starts_with=blob_prefix)]
+
+            return execute_with_retry(_once, policy=policy, operation_name="azure_list")
         except AzureError as exc:
             logger.error("Azure list failed [%s]: %s", blob_prefix, exc)
             raise
 
     def delete_file(self, remote_path: str) -> bool:
         blob_path = self._remote_path(remote_path)
+        def _retry_if(exc: BaseException) -> bool:  # type: ignore[name-defined]
+            return isinstance(exc, AzureError) and not isinstance(exc, ResourceNotFoundError)
+
+        policy = RetryPolicy(
+            max_attempts=5,
+            base_delay=0.5,
+            max_delay=8.0,
+            backoff_multiplier=2.0,
+            jitter=0.2,
+            retry_on_exceptions=(),
+            retry_if=_retry_if,
+        )
+
         try:
-            self.container.delete_blob(blob_path)
-            return True
+            def _once() -> bool:
+                self.container.delete_blob(blob_path)
+                return True
+
+            return execute_with_retry(_once, policy=policy, operation_name="azure_delete")
         except AzureError as exc:
             logger.error("Azure delete failed [%s]: %s", blob_path, exc)
             raise

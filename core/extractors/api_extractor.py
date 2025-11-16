@@ -6,7 +6,8 @@ from typing import Dict, Any, List, Optional, Tuple
 from datetime import date
 
 import requests
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+from core.retry import RetryPolicy, execute_with_retry
 
 from core.extractors.base import BaseExtractor
 
@@ -67,12 +68,6 @@ class ApiExtractor(BaseExtractor):
         
         return headers
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type((requests.exceptions.RequestException, requests.exceptions.Timeout)),
-        reraise=True
-    )
     def _make_request(
         self,
         session: requests.Session,
@@ -82,11 +77,39 @@ class ApiExtractor(BaseExtractor):
         timeout: int,
         auth: Optional[Tuple[str, str]] = None
     ) -> requests.Response:
-        """Make HTTP request with retry logic."""
+        """Make HTTP request with retry logic (exponential backoff + jitter)."""
         logger.debug(f"Making request to {url} with params {params}")
-        resp = session.get(url, headers=headers, params=params, timeout=timeout, auth=auth)
-        resp.raise_for_status()
-        return resp
+
+        def _once() -> requests.Response:
+            resp = session.get(url, headers=headers, params=params, timeout=timeout, auth=auth)
+            # Only retry on 5xx; 4xx should raise immediately
+            try:
+                resp.raise_for_status()
+            except requests.exceptions.HTTPError as http_err:  # decide retryability via predicate
+                raise http_err
+            return resp
+
+        def _retry_if(exc: BaseException) -> bool:  # type: ignore[name-defined]
+            # Retry for timeouts/connection errors
+            if isinstance(exc, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)):
+                return True
+            # Retry 5xx HTTP errors
+            if isinstance(exc, requests.exceptions.HTTPError):
+                status = getattr(getattr(exc, "response", None), "status_code", None)
+                return bool(status) and 500 <= int(status) < 600
+            return False
+
+        policy = RetryPolicy(
+            max_attempts=5,
+            base_delay=0.5,
+            max_delay=8.0,
+            backoff_multiplier=2.0,
+            jitter=0.2,
+            retry_on_exceptions=(),  # use custom predicate
+            retry_if=_retry_if,
+        )
+
+        return execute_with_retry(_once, policy=policy, operation_name="api_get")
 
     def _extract_records(self, data: Any, api_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Extract records from API response data."""
