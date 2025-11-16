@@ -401,9 +401,12 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
             else:
                 rows_to_write = rows
             delta_dir = base_pattern_dir / f"dt={delta_date.isoformat()}" / "delta"
-            reference_run_date = (
-                HYBRID_REFERENCE_INITIAL if offset < HYBRID_REFERENCE_SWITCH_DAY else HYBRID_REFERENCE_SECOND
-            )
+            if delta_date == HYBRID_REFERENCE_SECOND:
+                reference_run_date = HYBRID_REFERENCE_INITIAL
+            elif delta_date > HYBRID_REFERENCE_SECOND:
+                reference_run_date = HYBRID_REFERENCE_SECOND
+            else:
+                reference_run_date = HYBRID_REFERENCE_INITIAL
             _write_hybrid_delta(
                 delta_dir,
                 delta_date.isoformat(),
