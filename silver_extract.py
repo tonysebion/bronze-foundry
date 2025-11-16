@@ -29,6 +29,7 @@ from core.catalog import (
 )
 from core.hooks import fire_webhooks
 from core.run_options import RunOptions
+from core.storage_policy import enforce_storage_scope
 from silver_stream import stream_silver_promotion
 from core.silver_models import SilverModel
 
@@ -552,6 +553,7 @@ class SilverPromotionService:
             return 0
 
         cfg = self._select_config()
+        enforce_storage_scope(cfg["platform"], self.args.storage_scope)
         run_date = self._resolve_run_date()
         bronze_path = self._resolve_bronze_path(cfg, run_date)
         self._update_hook_context(bronze_path=str(bronze_path), run_date=run_date.isoformat())
@@ -1021,6 +1023,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["human", "json", "simple"],
         default=None,
         help="Log format (default: human)",
+    )
+    parser.add_argument(
+        "--storage-scope",
+        choices=["any", "onprem"],
+        default="any",
+        help="Enforce storage classification policy (onprem rejects cloud storage endpoints).",
     )
     parser.add_argument(
         "--on-success-webhook",

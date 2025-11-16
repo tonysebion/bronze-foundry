@@ -44,6 +44,16 @@ platform:
   - `allow_csv` – globally allow CSV creation.
   - `allow_parquet` – globally allow Parquet creation.
   - `parquet_compression` – default compression for Parquet (e.g., `snappy`, `gzip`, `brotli`, `lz4`, `zstd`).
+- `storage_metadata` – classification metadata for the target:
+  - `boundary` (required when `--storage-scope onprem` is used): `onprem` or `cloud`.
+  - `provider_type`: e.g., `s3_local`, `s3_cloud`, `azure_blob`, `azure_adls`, `gcs_cloud`, `gcs_onprem`, `local_generic`.
+  - `cloud_provider`: `azure`, `aws`, `gcp`, or `null`.
+
+  Use this metadata when you need to distinguish storage targets in governance policies (on-prem vs. cloud).
+
+### Storage policy enforcement
+
+- `--storage-scope`/`--onprem-only` flags (Available on both Bronze/Silver CLIs) enforce the metadata above. When set to `onprem`, all storage targets must declare `boundary: onprem` and Azure/backed cloud providers are rejected up front.
 
 ### `platform.s3_connection`
 

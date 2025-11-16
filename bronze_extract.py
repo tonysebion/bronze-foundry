@@ -29,6 +29,7 @@ from core.patterns import LoadPattern
 from core.catalog import notify_catalog, report_lineage, report_quality_snapshot, report_run_metadata
 from core.hooks import fire_webhooks
 from core.run_options import RunOptions
+from core.storage_policy import enforce_storage_scope
 
 __version__ = "1.0.0"
 
@@ -106,6 +107,12 @@ def main() -> int:
         help="Log format (default: human). Can also set via BRONZE_LOG_FORMAT env var"
     )
     parser.add_argument(
+        "--storage-scope",
+        choices=["any", "onprem"],
+        default="any",
+        help="Enforce storage classification policy (onprem rejects cloud backends).",
+    )
+    parser.add_argument(
         "--on-success-webhook",
         action="append",
         dest="on_success_webhook",
@@ -176,6 +183,8 @@ class BronzeOrchestrator:
         if not configs:
             logger.error("No valid configs loaded")
             return 1
+        for cfg in configs:
+            enforce_storage_scope(cfg["platform"], self.args.storage_scope)
 
         run_date = dt.date.fromisoformat(self.args.date) if self.args.date else dt.date.today()
         self._record_configs_info(configs, run_date)

@@ -156,6 +156,8 @@ venv.bak/
 
 # mkdocs documentation
 /site
+# allow example data README files
+!/docs/examples/data/README.md
 
 # mypy
 .mypy_cache/

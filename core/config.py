@@ -9,6 +9,7 @@ import yaml
 from core.patterns import LoadPattern
 from core.config_models import SilverConfig
 from core.paths import build_bronze_relative_path
+from core.storage_policy import validate_storage_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +106,8 @@ def _validate_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
             raise ValueError("Local backend requires platform.bronze.local_path")
 
     logger.debug(f"Validated storage backend: {storage_backend}")
+
+    validate_storage_metadata(cfg["platform"])
 
     # Validate source section
     source = cfg["source"]
