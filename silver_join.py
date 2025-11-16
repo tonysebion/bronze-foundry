@@ -24,7 +24,7 @@ from core.run_options import RunOptions
 from core.silver.models import SilverModel, resolve_profile
 from core.storage import get_storage_backend
 from core.storage.policy import enforce_storage_scope, validate_storage_metadata
-from core.silver.artifacts import write_silver_outputs as _artifact_write_silver_outputs
+from core.silver.writer import get_silver_writer
 
 logger = logging.getLogger(__name__)
 
@@ -852,18 +852,19 @@ def write_output(
         except Exception:  # pragma: no cover - defensive
             pass
 
-    outputs = _artifact_write_silver_outputs(
+    writer = get_silver_writer(run_opts.artifact_writer_kind)
+    outputs = writer.write(
         df,
-        run_opts.primary_keys,
-        run_opts.order_column,
-        run_opts.write_parquet,
-        run_opts.write_csv,
-        run_opts.parquet_compression,
-        run_opts.artifact_names,
-        run_opts.partition_columns,
-        {},  # error handling config
-        model,
-        base_dir,
+        primary_keys=run_opts.primary_keys,
+        order_column=run_opts.order_column,
+        write_parquet=run_opts.write_parquet,
+        write_csv=run_opts.write_csv,
+        parquet_compression=run_opts.parquet_compression,
+        artifact_names=run_opts.artifact_names,
+        partition_columns=run_opts.partition_columns,
+        error_cfg={},  # error handling config
+        silver_model=model,
+        output_dir=base_dir,
     )
     chunk_count = sum(len(paths) for paths in outputs.values())
     metadata = {

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from core.config import build_relative_path
+from core.config.typed_models import RootConfig
 from core.patterns import LoadPattern
 
 logger = logging.getLogger(__name__)
@@ -36,16 +37,19 @@ class RunContext:
 
 
 def build_run_context(
-    cfg: Dict[str, Any],
+    cfg: Dict[str, Any | RootConfig],
     run_date: date,
     local_output_override: Path | None = None,
     relative_override: str | None = None,
     load_pattern_override: str | None = None,
     bronze_path_override: Path | None = None,
 ) -> RunContext:
-    platform_cfg = cfg["platform"]
-    run_cfg = cfg["source"].get("run", {})
-    bronze_cfg = platform_cfg["bronze"]
+    typed: RootConfig | None = cfg.get("__typed_model__") if isinstance(cfg, dict) else (cfg if isinstance(cfg, RootConfig) else None)  # type: ignore[assignment]
+    if typed:
+        run_cfg = typed.source.run.model_dump()  # dict for compatibility
+    else:
+        platform_cfg = cfg["platform"]  # type: ignore[index]
+        run_cfg = cfg["source"].get("run", {})  # type: ignore[index]
 
     local_output_dir = Path(local_output_override or run_cfg.get("local_output_dir", "./output")).resolve()
     relative_path = relative_override or build_relative_path(cfg, run_date)
@@ -53,10 +57,17 @@ def build_run_context(
         Path(bronze_path_override).resolve() if bronze_path_override else (local_output_dir / relative_path).resolve()
     )
 
-    source_system = cfg["source"]["system"]
-    source_table = cfg["source"]["table"]
+    if typed:
+        source_system = typed.source.system
+        source_table = typed.source.table
+    else:
+        source_system = cfg["source"]["system"]  # type: ignore[index]
+        source_table = cfg["source"]["table"]  # type: ignore[index]
     dataset_id = f"{source_system}.{source_table}"
-    config_name = cfg["source"].get("config_name", dataset_id)
+    if typed:
+        config_name = cfg["source"].get("config_name", dataset_id) if isinstance(cfg, dict) else dataset_id
+    else:
+        config_name = cfg["source"].get("config_name", dataset_id)  # type: ignore[index]
 
     pattern_value = load_pattern_override or run_cfg.get("load_pattern")
     load_pattern = LoadPattern.normalize(pattern_value) if pattern_value else LoadPattern.FULL

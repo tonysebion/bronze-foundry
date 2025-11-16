@@ -56,10 +56,59 @@ class DefaultSilverArtifactWriter:
         )
         return outputs
 
-def get_silver_writer(kind: str | None = None) -> SilverArtifactWriter:
-    """Factory for selecting a silver artifact writer.
+class TransactionalSilverArtifactWriter:
+    """Write artifacts atomically via temp staging directory then rename.
 
-    Currently only returns the default implementation; `kind` reserved
-    for future extensions (e.g., transactional writers).
+    Ensures readers never see partial files (best-effort on local fs).
     """
+    def write(
+        self,
+        df: pd.DataFrame,
+        *,
+        primary_keys: List[str],
+        order_column: str | None,
+        write_parquet: bool,
+        write_csv: bool,
+        parquet_compression: str,
+        artifact_names: Dict[str, str],
+        partition_columns: List[str],
+        error_cfg: Dict[str, Any],
+        silver_model: Any,
+        output_dir,
+    ) -> Mapping[str, List[Path]]:
+        staging = Path(output_dir) / "_staging"
+        staging.mkdir(parents=True, exist_ok=True)
+        outputs = _artifact_write_silver_outputs(
+            df,
+            primary_keys,
+            order_column,
+            write_parquet,
+            write_csv,
+            parquet_compression,
+            artifact_names,
+            partition_columns,
+            error_cfg,
+            silver_model,
+            staging,
+        )
+        final_outputs: Dict[str, List[Path]] = {}
+        for label, paths in outputs.items():
+            moved: List[Path] = []
+            for p in paths:
+                target = Path(output_dir) / p.name
+                p.replace(target)
+                moved.append(target)
+            final_outputs[label] = moved
+        try:
+            # Best-effort cleanup
+            for leftover in staging.iterdir():
+                pass
+            staging.rmdir()
+        except Exception:
+            pass
+        return final_outputs
+
+def get_silver_writer(kind: str | None = None) -> SilverArtifactWriter:
+    if kind == "transactional":
+        return TransactionalSilverArtifactWriter()
     return DefaultSilverArtifactWriter()

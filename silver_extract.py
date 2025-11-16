@@ -37,11 +37,11 @@ from core.silver.artifacts import (
     apply_schema_settings,
     build_current_view,
     normalize_dataframe,
-    write_silver_outputs as _artifact_write_silver_outputs,
     handle_error_rows,
     partition_dataframe,
     SilverModelPlanner,
 )
+from core.silver.writer import get_silver_writer
 
 # Backwards-compatible wrapper matching legacy public signature used in tests:
 # write_silver_outputs(df, output_dir, bronze_pattern, primary_keys, order_column, ...)
@@ -381,18 +381,19 @@ class SilverPromotionService:
             normalized_df = apply_schema_settings(df, context.options.schema_cfg)
             normalized_df = normalize_dataframe(normalized_df, context.options.normalization_cfg)
             logger.info("Loaded %s records from Bronze path %s", len(normalized_df), bronze_path)
-            outputs = _artifact_write_silver_outputs(
+            writer = get_silver_writer(run_opts.artifact_writer_kind)
+            outputs = writer.write(
                 normalized_df,
-                run_opts.primary_keys,
-                run_opts.order_column,
-                run_opts.write_parquet,
-                run_opts.write_csv,
-                run_opts.parquet_compression,
-                run_opts.artifact_names,
-                run_opts.partition_columns,
-                context.options.error_cfg,
-                context.silver_model,
-                silver_partition,
+                primary_keys=run_opts.primary_keys,
+                order_column=run_opts.order_column,
+                write_parquet=run_opts.write_parquet,
+                write_csv=run_opts.write_csv,
+                parquet_compression=run_opts.parquet_compression,
+                artifact_names=run_opts.artifact_names,
+                partition_columns=run_opts.partition_columns,
+                error_cfg=context.options.error_cfg,
+                silver_model=context.silver_model,
+                output_dir=silver_partition,
             )
             schema_snapshot = [
                 {"name": col, "dtype": str(dtype)} for col, dtype in normalized_df.dtypes.items()

@@ -35,7 +35,7 @@ def _read_yaml(path: str) -> Dict[str, Any]:
     return cfg
 
 
-def load_config(path: str) -> Dict[str, Any | RootConfig]:
+def load_config(path: str, *, strict: bool = False) -> Dict[str, Any | RootConfig]:
     """Load a single config file and return both dict and typed model.
 
     For backward compatibility we still return a validated dict, but attach
@@ -48,6 +48,8 @@ def load_config(path: str) -> Dict[str, Any | RootConfig]:
     try:
         typed = parse_root_config(validated)
         if "config_version" not in validated:
+            if strict:
+                raise ValueError("Missing required config_version in strict mode")
             emit_compat("Config missing config_version; defaulting to 1", code="CFG004")
         validated["__typed_model__"] = typed
     except Exception as exc:  # pragma: no cover - defensive
@@ -55,7 +57,7 @@ def load_config(path: str) -> Dict[str, Any | RootConfig]:
     return validated
 
 
-def load_configs(path: str) -> List[Dict[str, Any | RootConfig]]:
+def load_configs(path: str, *, strict: bool = False) -> List[Dict[str, Any | RootConfig]]:
     raw = _read_yaml(path)
     if "sources" not in raw:
         return [validate_config_dict(raw)]
@@ -96,6 +98,8 @@ def load_configs(path: str) -> List[Dict[str, Any | RootConfig]]:
         try:
             typed = parse_root_config(validated)
             if "config_version" not in validated:
+                if strict:
+                    raise ValueError("Missing required config_version in strict mode (multi-config load)")
                 emit_compat("Config missing config_version; defaulting to 1", code="CFG004")
             validated["__typed_model__"] = typed
         except Exception as exc:  # pragma: no cover

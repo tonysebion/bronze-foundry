@@ -32,13 +32,39 @@ def _sanitize_partition_value(value: Any) -> str:
 
 
 
-def _iter_bronze_frames(bronze_path: Path) -> Iterable[pd.DataFrame]:
+def _iter_bronze_frames(bronze_path: Path, chunk_size: int = 0, prefetch: int = 0) -> Iterable[pd.DataFrame]:
+    """Iterate Bronze frames with optional chunking & prefetch.
+
+    chunk_size: if >0, read CSV files in chunks of this many rows.
+    prefetch: if >0, pre-load up to N upcoming chunks into memory (simple buffering).
+    """
     csv_files = sorted(bronze_path.glob("*.csv"))
     parquet_files = sorted(bronze_path.glob("*.parquet"))
-    for csv_path in csv_files:
-        yield pd.read_csv(csv_path)
-    for parquet_path in parquet_files:
-        yield pd.read_parquet(parquet_path)
+
+    def csv_chunk_iter():
+        for csv_path in csv_files:
+            if chunk_size > 0:
+                for chunk in pd.read_csv(csv_path, chunksize=chunk_size):
+                    yield chunk
+            else:
+                yield pd.read_csv(csv_path)
+
+    def parquet_iter():
+        for parquet_path in parquet_files:
+            yield pd.read_parquet(parquet_path)
+
+    base_iter = itertools.chain(csv_chunk_iter(), parquet_iter())
+    if prefetch <= 0:
+        for frame in base_iter:
+            yield frame
+    else:
+        buffer: List[pd.DataFrame] = []
+        for frame in base_iter:
+            buffer.append(frame)
+            if len(buffer) > prefetch:
+                yield buffer.pop(0)
+        for remaining in buffer:
+            yield remaining
 
 
 def stream_silver_promotion(
@@ -71,9 +97,31 @@ def stream_silver_promotion(
     history_name = artifact_names.get("history", "history")
     current_name = artifact_names.get("current", "current")
 
-    for chunk_index, chunk in enumerate(_iter_bronze_frames(bronze_path), start=1):
-        normalized = apply_schema_settings(chunk, schema_cfg)
-        normalized = normalize_dataframe(normalized, normalization_cfg)
+    for chunk_index, chunk in enumerate(
+        _iter_bronze_frames(
+            bronze_path,
+            chunk_size=run_opts.streaming_chunk_size,
+            prefetch=run_opts.streaming_prefetch,
+        ),
+        start=1,
+    ):
+        if run_opts.transform_processes > 0:
+            # Simple multiprocessing wrapper: apply schema + normalization in a separate process
+            import multiprocessing as mp
+            def _transform(df_bytes: bytes) -> pd.DataFrame:
+                import pickle
+                df = pickle.loads(df_bytes)
+                df = apply_schema_settings(df, schema_cfg)
+                df = normalize_dataframe(df, normalization_cfg)
+                return df
+            pickled = chunk.to_pickle(None)  # type: ignore[arg-type]
+            with mp.Pool(processes=run_opts.transform_processes) as pool:
+                # Map single element list; could be extended for batch of chunks
+                normalized_list = pool.map(_transform, [pickled])
+            normalized = normalized_list[0]
+        else:
+            normalized = apply_schema_settings(chunk, schema_cfg)
+            normalized = normalize_dataframe(normalized, normalization_cfg)
         if normalized.empty:
             continue
 
