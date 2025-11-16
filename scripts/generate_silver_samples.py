@@ -143,6 +143,30 @@ def main() -> None:
                     )
 
     print(f"Silver samples materialized under {SILVER_SAMPLE_ROOT}")
+    _synthesize_sample_readmes(SILVER_SAMPLE_ROOT)
+
+
+def _synthesize_sample_readmes(root_dir: Path) -> None:
+    """Write human-friendly README files in every pattern/model directory."""
+    for pattern_dir in root_dir.iterdir():
+        if not pattern_dir.is_dir():
+            continue
+        for model_dir in pattern_dir.iterdir():
+            if not model_dir.is_dir():
+                continue
+            readme_path = model_dir / "README.md"
+            model_name = model_dir.name.replace("_", " ")
+            content = f"""# {pattern_dir.name.capitalize()} silver samples ({model_name})
+
+This folder contains silver artifacts produced from the Bronze `{pattern_dir.name}` samples using the `{model_dir.name}` Silver model.
+
+- **Source Bronze pattern**: `{pattern_dir.name}`
+- **Silver model**: `{model_dir.name}`
+- **Regeneration command**: `python scripts/generate_silver_samples.py --formats both`
+
+For details on the Silver model presets, see `docs/EXTRACTION_GUIDANCE.md` and the matching config in `docs/examples/configs/`.
+"""
+            readme_path.write_text(content, encoding="utf-8")
 
 
 if __name__ == "__main__":
