@@ -51,7 +51,7 @@ def _find_brone_partitions() -> Iterable[Dict[str, object]]:
     for dir_path in BRONZE_SAMPLE_ROOT.rglob("dt=*"):
         if not dir_path.is_dir():
             continue
-        csv_files = sorted(dir_path.glob("*.csv"))
+        csv_files = sorted(dir_path.rglob("*.csv"))
         if not csv_files:
             continue
         rel_parts = dir_path.relative_to(BRONZE_SAMPLE_ROOT).parts
@@ -68,11 +68,15 @@ def _find_brone_partitions() -> Iterable[Dict[str, object]]:
             if part.startswith("system=") or part.startswith("table="):
                 continue
             suffix_parts.append(part.replace("=", "-"))
+        chunk_dir = csv_files[0].parent
+        extra_parts = chunk_dir.relative_to(dir_path).parts
+        for part in extra_parts:
+            suffix_parts.append(part.replace("=", "-"))
         suffix = "_".join(suffix_parts)
         label = f"{pattern}_{run_date}"
         if suffix:
             label = f"{label}_{suffix}"
-        key = f"{pattern}|{run_date}|{dir_path}"
+        key = f"{pattern}|{run_date}|{chunk_dir}"
         if key in seen:
             continue
         seen.add(key)
@@ -80,7 +84,7 @@ def _find_brone_partitions() -> Iterable[Dict[str, object]]:
             "pattern": pattern,
             "run_date": run_date,
             "label": label,
-            "dir": dir_path,
+            "dir": chunk_dir,
             "file": csv_files[0],
         }
         yield sample

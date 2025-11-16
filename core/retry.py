@@ -13,7 +13,7 @@ from __future__ import annotations
 import random
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable, Optional, Sequence, Tuple, Type
+from typing import Any, Callable, Optional, Tuple, Type
 
 from core.exceptions import RetryExhaustedError
 
@@ -32,6 +32,8 @@ class RetryPolicy:
         default_factory=lambda: (TimeoutError, ConnectionError, OSError)
     )
     retry_if: Optional[Predicate] = None  # custom predicate
+    # Optional callback to compute delay from an exception (e.g., Retry-After). If returns None, fall back to exponential.
+    delay_from_exception: Optional[Callable[[BaseException, int, float], Optional[float]]] = None
 
     def should_retry(self, exc: BaseException) -> bool:
         if self.retry_if is not None:
@@ -60,6 +62,7 @@ class CircuitBreaker:
     failure_threshold: int = 5
     cooldown_seconds: float = 30.0
     half_open_max_calls: int = 1
+    on_state_change: Optional[Callable[[str], None]] = None
 
     _state: str = field(default=CircuitState.CLOSED, init=False)
     _failures: int = field(default=0, init=False)
@@ -71,6 +74,11 @@ class CircuitBreaker:
         if self._state == CircuitState.OPEN:
             if now - self._opened_at >= self.cooldown_seconds:
                 self._state = CircuitState.HALF_OPEN
+                if self.on_state_change:
+                    try:
+                        self.on_state_change(self._state)
+                    except Exception:
+                        pass
                 self._half_open_calls = 0
             else:
                 return False
@@ -81,9 +89,15 @@ class CircuitBreaker:
         return True
 
     def record_success(self) -> None:
+        prev = self._state
         self._state = CircuitState.CLOSED
         self._failures = 0
         self._half_open_calls = 0
+        if prev != self._state and self.on_state_change:
+            try:
+                self.on_state_change(self._state)
+            except Exception:
+                pass
 
     def record_failure(self) -> None:
         self._failures += 1
@@ -91,6 +105,11 @@ class CircuitBreaker:
             self._state = CircuitState.OPEN
             self._opened_at = time.time()
             self._half_open_calls = 0
+            if self.on_state_change:
+                try:
+                    self.on_state_change(self._state)
+                except Exception:
+                    pass
 
     @property
     def state(self) -> str:
@@ -139,6 +158,13 @@ def execute_with_retry(
                     operation=operation_name or func.__name__,
                     last_error=exc,
                 ) from exc
-
+            # allow exception-specific delay override
             delay = policy.compute_delay(attempts)
+            if policy.delay_from_exception is not None:
+                try:
+                    override = policy.delay_from_exception(exc, attempts, delay)
+                    if override is not None:
+                        delay = max(0.0, float(override))
+                except Exception:
+                    pass
             time.sleep(delay)

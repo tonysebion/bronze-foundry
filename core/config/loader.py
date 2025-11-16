@@ -10,6 +10,7 @@ import yaml
 
 from .validation import validate_config_dict
 from .typed_models import parse_root_config, RootConfig
+from .v2_validation import validate_v2_config_dict
 from core.deprecation import emit_compat
 from core.paths import build_bronze_relative_path
 
@@ -51,6 +52,8 @@ def load_config(path: str, *, strict: bool = False) -> Dict[str, Any | RootConfi
             if strict:
                 raise ValueError("Missing required config_version in strict mode")
             emit_compat("Config missing config_version; defaulting to 1", code="CFG004")
+        if strict and int(validated.get("config_version", 1) or 1) >= 2:
+            validate_v2_config_dict(validated)
         validated["__typed_model__"] = typed
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("Typed config parse failed; proceeding with dict only: %s", exc)
@@ -101,6 +104,8 @@ def load_configs(path: str, *, strict: bool = False) -> List[Dict[str, Any | Roo
                 if strict:
                     raise ValueError("Missing required config_version in strict mode (multi-config load)")
                 emit_compat("Config missing config_version; defaulting to 1", code="CFG004")
+            if strict and int(validated.get("config_version", 1) or 1) >= 2:
+                validate_v2_config_dict(validated)
             validated["__typed_model__"] = typed
         except Exception as exc:  # pragma: no cover
             logger.warning("Typed config parse failed for source index %s: %s", idx, exc)

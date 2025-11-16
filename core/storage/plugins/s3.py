@@ -7,9 +7,9 @@ import os
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from core.storage.backend import StorageBackend
+from core.retry import RetryPolicy, execute_with_retry, CircuitBreaker
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,13 @@ class S3Storage(StorageBackend):
         except Exception as e:
             logger.error(f"Failed to create S3 client: {e}")
             raise
+        # circuit breakers per operation
+        def _emit(state: str) -> None:
+            logger.info("metric=breaker_state component=s3_storage state=%s", state)
+        self._breaker_upload = CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0, half_open_max_calls=1, on_state_change=_emit)
+        self._breaker_download = CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0, half_open_max_calls=1, on_state_change=_emit)
+        self._breaker_list = CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0, half_open_max_calls=1, on_state_change=_emit)
+        self._breaker_delete = CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0, half_open_max_calls=1, on_state_change=_emit)
     
     def _build_key(self, remote_path: str) -> str:
         """Build full S3 key from remote path and prefix."""
@@ -69,12 +76,6 @@ class S3Storage(StorageBackend):
             return f"{self.prefix}/{remote_path}"
         return remote_path
     
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type((BotoCoreError, ClientError)),
-        reraise=True
-    )
     def upload_file(self, local_path: str, remote_path: str) -> bool:
         """Upload a file to S3.
         
@@ -90,10 +91,46 @@ class S3Storage(StorageBackend):
         """
         key = self._build_key(remote_path)
         
+        def _retry_if(exc: BaseException) -> bool:  # type: ignore[name-defined]
+            if isinstance(exc, BotoCoreError):
+                return True
+            if isinstance(exc, ClientError):
+                try:
+                    status = int(exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 0))
+                except Exception:
+                    status = 0
+                code = exc.response.get("Error", {}).get("Code") if hasattr(exc, "response") else None
+                return status == 429 or status >= 500 or code in {"SlowDown", "RequestLimitExceeded"}
+            return False
+
+        def _delay_from_exc(exc: BaseException, attempt: int, default_delay: float) -> float | None:
+            if isinstance(exc, ClientError):
+                headers = exc.response.get("ResponseMetadata", {}).get("HTTPHeaders", {}) if hasattr(exc, "response") else {}
+                retry_after = headers.get("retry-after") or headers.get("x-amz-retry-after")
+                if retry_after:
+                    try:
+                        return float(retry_after)
+                    except Exception:
+                        return None
+            return None
+
+        policy = RetryPolicy(
+            max_attempts=5,
+            base_delay=0.5,
+            max_delay=8.0,
+            backoff_multiplier=2.0,
+            jitter=0.2,
+            retry_on_exceptions=(),
+            retry_if=_retry_if,
+            delay_from_exception=_delay_from_exc,
+        )
+
         try:
-            self.client.upload_file(local_path, self.bucket, key)
-            logger.info(f"Uploaded {Path(local_path).name} to s3://{self.bucket}/{key}")
-            return True
+            def _once() -> bool:
+                self.client.upload_file(local_path, self.bucket, key)
+                logger.info(f"Uploaded {Path(local_path).name} to s3://{self.bucket}/{key}")
+                return True
+            return execute_with_retry(_once, policy=policy, breaker=self._breaker_upload, operation_name="s3_upload")
         except (BotoCoreError, ClientError) as e:
             logger.error(f"Failed to upload {local_path} to S3: {e}")
             raise
@@ -101,12 +138,6 @@ class S3Storage(StorageBackend):
             logger.error(f"Unexpected error uploading to S3: {e}")
             raise
     
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type((BotoCoreError, ClientError)),
-        reraise=True
-    )
     def download_file(self, remote_path: str, local_path: str) -> bool:
         """Download a file from S3.
         
@@ -122,10 +153,46 @@ class S3Storage(StorageBackend):
         """
         key = self._build_key(remote_path)
         
+        def _retry_if(exc: BaseException) -> bool:  # type: ignore[name-defined]
+            if isinstance(exc, BotoCoreError):
+                return True
+            if isinstance(exc, ClientError):
+                try:
+                    status = int(exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 0))
+                except Exception:
+                    status = 0
+                code = exc.response.get("Error", {}).get("Code") if hasattr(exc, "response") else None
+                return status == 429 or status >= 500 or code in {"SlowDown", "RequestLimitExceeded"}
+            return False
+
+        def _delay_from_exc(exc: BaseException, attempt: int, default_delay: float) -> float | None:
+            if isinstance(exc, ClientError):
+                headers = exc.response.get("ResponseMetadata", {}).get("HTTPHeaders", {}) if hasattr(exc, "response") else {}
+                retry_after = headers.get("retry-after") or headers.get("x-amz-retry-after")
+                if retry_after:
+                    try:
+                        return float(retry_after)
+                    except Exception:
+                        return None
+            return None
+
+        policy = RetryPolicy(
+            max_attempts=5,
+            base_delay=0.5,
+            max_delay=8.0,
+            backoff_multiplier=2.0,
+            jitter=0.2,
+            retry_on_exceptions=(),
+            retry_if=_retry_if,
+            delay_from_exception=_delay_from_exc,
+        )
+
         try:
-            self.client.download_file(self.bucket, key, local_path)
-            logger.info(f"Downloaded s3://{self.bucket}/{key} to {local_path}")
-            return True
+            def _once() -> bool:
+                self.client.download_file(self.bucket, key, local_path)
+                logger.info(f"Downloaded s3://{self.bucket}/{key} to {local_path}")
+                return True
+            return execute_with_retry(_once, policy=policy, breaker=self._breaker_download, operation_name="s3_download")
         except (BotoCoreError, ClientError) as e:
             logger.error(f"Failed to download {remote_path} from S3: {e}")
             raise
@@ -147,15 +214,50 @@ class S3Storage(StorageBackend):
         """
         full_prefix = self._build_key(prefix)
         
+        def _retry_if(exc: BaseException) -> bool:  # type: ignore[name-defined]
+            if isinstance(exc, BotoCoreError):
+                return True
+            if isinstance(exc, ClientError):
+                try:
+                    status = int(exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 0))
+                except Exception:
+                    status = 0
+                code = exc.response.get("Error", {}).get("Code") if hasattr(exc, "response") else None
+                return status == 429 or status >= 500 or code in {"SlowDown", "RequestLimitExceeded"}
+            return False
+
+        def _delay_from_exc(exc: BaseException, attempt: int, default_delay: float) -> float | None:
+            if isinstance(exc, ClientError):
+                headers = exc.response.get("ResponseMetadata", {}).get("HTTPHeaders", {}) if hasattr(exc, "response") else {}
+                retry_after = headers.get("retry-after") or headers.get("x-amz-retry-after")
+                if retry_after:
+                    try:
+                        return float(retry_after)
+                    except Exception:
+                        return None
+            return None
+
+        policy = RetryPolicy(
+            max_attempts=5,
+            base_delay=0.5,
+            max_delay=8.0,
+            backoff_multiplier=2.0,
+            jitter=0.2,
+            retry_on_exceptions=(),
+            retry_if=_retry_if,
+            delay_from_exception=_delay_from_exc,
+        )
+
         try:
-            response = self.client.list_objects_v2(
-                Bucket=self.bucket,
-                Prefix=full_prefix
-            )
-            
-            files = [obj["Key"] for obj in response.get("Contents", [])]
-            logger.debug(f"Listed {len(files)} files with prefix '{full_prefix}'")
-            return files
+            def _once() -> List[str]:
+                response = self.client.list_objects_v2(
+                    Bucket=self.bucket,
+                    Prefix=full_prefix
+                )
+                files = [obj["Key"] for obj in response.get("Contents", [])]
+                logger.debug(f"Listed {len(files)} files with prefix '{full_prefix}'")
+                return files
+            return execute_with_retry(_once, policy=policy, breaker=self._breaker_list, operation_name="s3_list")
         except (BotoCoreError, ClientError) as e:
             logger.error(f"Failed to list files in S3: {e}")
             raise
@@ -163,12 +265,6 @@ class S3Storage(StorageBackend):
             logger.error(f"Unexpected error listing S3 files: {e}")
             raise
     
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type((BotoCoreError, ClientError)),
-        reraise=True
-    )
     def delete_file(self, remote_path: str) -> bool:
         """Delete a file from S3.
         
@@ -183,10 +279,46 @@ class S3Storage(StorageBackend):
         """
         key = self._build_key(remote_path)
         
+        def _retry_if(exc: BaseException) -> bool:  # type: ignore[name-defined]
+            if isinstance(exc, BotoCoreError):
+                return True
+            if isinstance(exc, ClientError):
+                try:
+                    status = int(exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 0))
+                except Exception:
+                    status = 0
+                code = exc.response.get("Error", {}).get("Code") if hasattr(exc, "response") else None
+                return status == 429 or status >= 500 or code in {"SlowDown", "RequestLimitExceeded"}
+            return False
+
+        def _delay_from_exc(exc: BaseException, attempt: int, default_delay: float) -> float | None:
+            if isinstance(exc, ClientError):
+                headers = exc.response.get("ResponseMetadata", {}).get("HTTPHeaders", {}) if hasattr(exc, "response") else {}
+                retry_after = headers.get("retry-after") or headers.get("x-amz-retry-after")
+                if retry_after:
+                    try:
+                        return float(retry_after)
+                    except Exception:
+                        return None
+            return None
+
+        policy = RetryPolicy(
+            max_attempts=5,
+            base_delay=0.5,
+            max_delay=8.0,
+            backoff_multiplier=2.0,
+            jitter=0.2,
+            retry_on_exceptions=(),
+            retry_if=_retry_if,
+            delay_from_exception=_delay_from_exc,
+        )
+
         try:
-            self.client.delete_object(Bucket=self.bucket, Key=key)
-            logger.info(f"Deleted s3://{self.bucket}/{key}")
-            return True
+            def _once() -> bool:
+                self.client.delete_object(Bucket=self.bucket, Key=key)
+                logger.info(f"Deleted s3://{self.bucket}/{key}")
+                return True
+            return execute_with_retry(_once, policy=policy, breaker=self._breaker_delete, operation_name="s3_delete")
         except (BotoCoreError, ClientError) as e:
             logger.error(f"Failed to delete {remote_path} from S3: {e}")
             raise

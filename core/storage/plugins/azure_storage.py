@@ -12,7 +12,7 @@ from azure.storage.blob import BlobServiceClient, ContainerClient
 
 from core.storage.backend import StorageBackend
 from core.storage.registry import register_backend
-from core.retry import RetryPolicy, execute_with_retry
+from core.retry import RetryPolicy, execute_with_retry, CircuitBreaker
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,13 @@ class AzureStorage(StorageBackend):
             self.container.create_container()
         except AzureError as exc:
             logger.warning("Unable to verify Azure container %s: %s", self.container_name, exc)
+        # circuit breakers per operation
+        def _emit(state: str) -> None:
+            logger.info("metric=breaker_state component=azure_storage state=%s", state)
+        self._breaker_upload = CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0, half_open_max_calls=1, on_state_change=_emit)
+        self._breaker_download = CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0, half_open_max_calls=1, on_state_change=_emit)
+        self._breaker_list = CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0, half_open_max_calls=1, on_state_change=_emit)
+        self._breaker_delete = CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0, half_open_max_calls=1, on_state_change=_emit)
 
     def _build_client(self, azure_cfg: Dict[str, Any]) -> BlobServiceClient:
         """Build the BlobServiceClient using the first available credential."""
@@ -93,7 +100,7 @@ class AzureStorage(StorageBackend):
                     self.container.upload_blob(blob_path, handle, overwrite=True)
                 return True
 
-            return execute_with_retry(_once, policy=policy, operation_name="azure_upload")
+            return execute_with_retry(_once, policy=policy, breaker=self._breaker_upload, operation_name="azure_upload")
         except AzureError as exc:
             logger.error("Azure upload failed [%s]: %s", blob_path, exc)
             raise
@@ -123,7 +130,7 @@ class AzureStorage(StorageBackend):
                     stream.readinto(handle)
                 return True
 
-            return execute_with_retry(_once, policy=policy, operation_name="azure_download")
+            return execute_with_retry(_once, policy=policy, breaker=self._breaker_download, operation_name="azure_download")
         except AzureError as exc:
             logger.error("Azure download failed [%s]: %s", blob_path, exc)
             raise
@@ -147,7 +154,7 @@ class AzureStorage(StorageBackend):
             def _once() -> List[str]:
                 return [blob.name for blob in self.container.list_blobs(name_starts_with=blob_prefix)]
 
-            return execute_with_retry(_once, policy=policy, operation_name="azure_list")
+            return execute_with_retry(_once, policy=policy, breaker=self._breaker_list, operation_name="azure_list")
         except AzureError as exc:
             logger.error("Azure list failed [%s]: %s", blob_prefix, exc)
             raise
@@ -172,7 +179,7 @@ class AzureStorage(StorageBackend):
                 self.container.delete_blob(blob_path)
                 return True
 
-            return execute_with_retry(_once, policy=policy, operation_name="azure_delete")
+            return execute_with_retry(_once, policy=policy, breaker=self._breaker_delete, operation_name="azure_delete")
         except AzureError as exc:
             logger.error("Azure delete failed [%s]: %s", blob_path, exc)
             raise

@@ -136,6 +136,12 @@ def handle_error_rows(
     return df.loc[~invalid_mask].copy()
 
 
+def _atomic_replace(tmp_path: Path, final_path: Path) -> None:
+    # Ensure parent exists
+    final_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path.replace(final_path)
+
+
 def _write_dataset(
     df: pd.DataFrame,
     base_name: str,
@@ -147,13 +153,23 @@ def _write_dataset(
     files: List[Path] = []
     output_dir.mkdir(parents=True, exist_ok=True)
     if write_parquet:
-        parquet_path = output_dir / f"{base_name}.parquet"
-        df.to_parquet(parquet_path, index=False, compression=parquet_compression)
-        files.append(parquet_path)
+        final_path = output_dir / f"{base_name}.parquet"
+        if final_path.exists():
+            files.append(final_path)
+        else:
+            tmp_path = output_dir / f".{base_name}.parquet.tmp"
+            df.to_parquet(tmp_path, index=False, compression=parquet_compression)
+            _atomic_replace(tmp_path, final_path)
+            files.append(final_path)
     if write_csv:
-        csv_path = output_dir / f"{base_name}.csv"
-        df.to_csv(csv_path, index=False)
-        files.append(csv_path)
+        final_path = output_dir / f"{base_name}.csv"
+        if final_path.exists():
+            files.append(final_path)
+        else:
+            tmp_path = output_dir / f".{base_name}.csv.tmp"
+            df.to_csv(tmp_path, index=False)
+            _atomic_replace(tmp_path, final_path)
+            files.append(final_path)
     return files
 
 def _write_dataset_chunk(
@@ -170,13 +186,23 @@ def _write_dataset_chunk(
     output_dir.mkdir(parents=True, exist_ok=True)
     suffix = f"-{chunk_tag}"
     if write_parquet:
-        parquet_path = output_dir / f"{base_name}{suffix}.parquet"
-        df.to_parquet(parquet_path, index=False, compression=parquet_compression)
-        files.append(parquet_path)
+        final_path = output_dir / f"{base_name}{suffix}.parquet"
+        if final_path.exists():
+            files.append(final_path)
+        else:
+            tmp_path = output_dir / f".{base_name}{suffix}.parquet.tmp"
+            df.to_parquet(tmp_path, index=False, compression=parquet_compression)
+            _atomic_replace(tmp_path, final_path)
+            files.append(final_path)
     if write_csv:
-        csv_path = output_dir / f"{base_name}{suffix}.csv"
-        df.to_csv(csv_path, index=False)
-        files.append(csv_path)
+        final_path = output_dir / f"{base_name}{suffix}.csv"
+        if final_path.exists():
+            files.append(final_path)
+        else:
+            tmp_path = output_dir / f".{base_name}{suffix}.csv.tmp"
+            df.to_csv(tmp_path, index=False)
+            _atomic_replace(tmp_path, final_path)
+            files.append(final_path)
     return files
 
 

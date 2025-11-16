@@ -7,7 +7,7 @@ from datetime import date
 
 import requests
 
-from core.retry import RetryPolicy, execute_with_retry
+from core.retry import RetryPolicy, execute_with_retry, CircuitBreaker
 
 from core.extractors.base import BaseExtractor
 
@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 class ApiExtractor(BaseExtractor):
     """Extractor for REST API sources with authentication and pagination."""
+    _breaker = CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0, half_open_max_calls=1)
 
     def _build_auth_headers(self, api_cfg: Dict[str, Any]) -> Dict[str, str]:
         """Build authentication headers based on config."""
@@ -96,8 +97,23 @@ class ApiExtractor(BaseExtractor):
             # Retry 5xx HTTP errors
             if isinstance(exc, requests.exceptions.HTTPError):
                 status = getattr(getattr(exc, "response", None), "status_code", None)
-                return bool(status) and 500 <= int(status) < 600
+                if status is None:
+                    return False
+                status = int(status)
+                return status == 429 or 500 <= status < 600
             return False
+
+        def _delay_from_exc(exc: BaseException, attempt: int, default_delay: float) -> float | None:
+            if isinstance(exc, requests.exceptions.HTTPError):
+                resp = getattr(exc, "response", None)
+                if resp is not None:
+                    retry_after = resp.headers.get("Retry-After") if hasattr(resp, "headers") else None
+                    if retry_after:
+                        try:
+                            return float(retry_after)
+                        except Exception:
+                            return None
+            return None
 
         policy = RetryPolicy(
             max_attempts=5,
@@ -107,9 +123,14 @@ class ApiExtractor(BaseExtractor):
             jitter=0.2,
             retry_on_exceptions=(),  # use custom predicate
             retry_if=_retry_if,
+            delay_from_exception=_delay_from_exc,
         )
+        # emit simple metrics on breaker transitions
+        def _on_state_change(state: str) -> None:
+            logger.info("metric=breaker_state component=api_extractor state=%s", state)
+        ApiExtractor._breaker.on_state_change = _on_state_change
 
-        return execute_with_retry(_once, policy=policy, operation_name="api_get")
+        return execute_with_retry(_once, policy=policy, breaker=ApiExtractor._breaker, operation_name="api_get")
 
     def _extract_records(self, data: Any, api_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Extract records from API response data."""
