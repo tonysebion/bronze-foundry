@@ -121,11 +121,11 @@ def _collect_metadata(output_root: Path) -> Path:
 
 
 USAGE_CONFIGS = [
-    ("file_example.yaml", ["2025-11-13"], {"events.parquet"}),
-    ("pattern_full.yaml", ["2025-11-13"], {"events.parquet"}),
-    ("pattern_cdc.yaml", ["2025-11-13"], {"events.parquet"}),
+    ("examples/file_example.yaml", ["2025-11-13"], {"events.parquet"}),
+    ("patterns/pattern_full.yaml", ["2025-11-13"], {"events.parquet"}),
+    ("patterns/pattern_cdc.yaml", ["2025-11-13"], {"events.parquet"}),
     (
-        "pattern_current_history.yaml",
+        "patterns/pattern_current_history.yaml",
         ["2025-11-13"],
         {"state_current.parquet", "state_history.parquet"},
     ),
