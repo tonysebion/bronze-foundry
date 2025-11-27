@@ -72,6 +72,14 @@ def _require_optional_str(value: Any, field_name: str) -> Optional[str]:
     return value or None
 
 
+def _require_bool(value: Any, field_name: str, default: bool) -> bool:
+    if value is None:
+        return default
+    if not isinstance(value, bool):
+        raise ValueError(f"{field_name} must be a boolean")
+    return value
+
+
 @dataclass
 class BronzeIntent:
     enabled: bool
@@ -139,6 +147,8 @@ class SilverIntent:
     version: int = 1
     load_partition_name: str = "load_date"
     include_pattern_folder: bool = False
+    write_parquet: bool = True
+    write_csv: bool = False
     require_checksum: bool = False
     semantic_owner: Optional[str] = None
     semantic_contact: Optional[str] = None
@@ -259,6 +269,12 @@ class SilverIntent:
         if not isinstance(load_partition_name, str):
             raise ValueError("silver.load_partition_name must be a string")
         include_pattern_folder = bool(data.get("include_pattern_folder", False))
+        write_parquet = _require_bool(
+            data.get("write_parquet"), "silver.write_parquet", True
+        )
+        write_csv = _require_bool(
+            data.get("write_csv"), "silver.write_csv", False
+        )
 
         return cls(
             enabled=enabled,
@@ -276,6 +292,8 @@ class SilverIntent:
             version=version_raw,
             load_partition_name=load_partition_name,
             include_pattern_folder=include_pattern_folder,
+            write_parquet=write_parquet,
+            write_csv=write_csv,
             require_checksum=require_checksum,
             semantic_owner=semantic_owner,
             semantic_contact=semantic_contact,
@@ -374,8 +392,8 @@ def dataset_to_runtime_config(dataset: DatasetConfig) -> Dict[str, Any]:
     local_run = {
         "load_pattern": load_pattern_value,
         "local_output_dir": bronze_base,
-        "write_parquet": True,
-        "write_csv": False,
+        "write_parquet": dataset.silver.write_parquet,
+        "write_csv": dataset.silver.write_csv,
     }
 
     source_cfg: Dict[str, Any] = {
@@ -481,8 +499,8 @@ def dataset_to_runtime_config(dataset: DatasetConfig) -> Dict[str, Any]:
         "version": dataset.silver.version,
         "load_partition_name": dataset.silver.load_partition_name,
         "include_pattern_folder": dataset.silver.include_pattern_folder,
-        "write_parquet": True,
-        "write_csv": False,
+        "write_parquet": dataset.silver.write_parquet,
+        "write_csv": dataset.silver.write_csv,
         "parquet_compression": "snappy",
         "primary_keys": list(dataset.silver.natural_keys),
         "order_column": order_column,
@@ -596,6 +614,12 @@ def legacy_to_dataset(cfg: Dict[str, Any]) -> Optional[DatasetConfig]:
             code="CFG_NEW_ORDER",
         )
 
+    write_parquet = _require_bool(
+        silver_raw.get("write_parquet"), "silver.write_parquet", True
+    )
+    write_csv = _require_bool(
+        silver_raw.get("write_csv"), "silver.write_csv", False
+    )
     silver_intent = SilverIntent(
         enabled=True,
         entity_kind=entity_kind,
@@ -608,6 +632,8 @@ def legacy_to_dataset(cfg: Dict[str, Any]) -> Optional[DatasetConfig]:
         change_ts_column=order_column if entity_kind.is_state_like else None,
         attributes=attributes,
         partition_by=partition_by,
+        write_parquet=write_parquet,
+        write_csv=write_csv,
     )
 
     domain = silver_raw.get("domain")
