@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 import json
 import os
 import shutil
@@ -24,6 +25,10 @@ PATTERN_DIRS = {
     "hybrid_incremental_point": "pattern6_hybrid_incremental_point",
     "hybrid_incremental_cumulative": "pattern7_hybrid_incremental_cumulative",
 }
+
+HYBRID_REFERENCE_INITIAL = date(2025, 11, 13)
+HYBRID_DELTA_DAYS = 28
+HYBRID_DELTA_PATTERN = "incremental_merge"
 
 
 def _pattern_dir(pattern: str) -> str:
@@ -122,6 +127,22 @@ def _collect_bronze_partition(output_root: Path) -> Path:
 
 def _read_metadata(metadata_path: Path) -> dict:
     return json.loads(metadata_path.read_text())
+
+
+def _read_bronze_parquet(bronze_partition: Path) -> pd.DataFrame:
+    parquet_files = list(bronze_partition.glob("*.parquet"))
+    assert parquet_files, f"No Parquet artifacts found under {bronze_partition}"
+    return pd.concat((pd.read_parquet(path) for path in parquet_files), ignore_index=True)
+
+
+def _expected_hybrid_delta_tags(run_date: str) -> set[str]:
+    run_date_obj = date.fromisoformat(run_date)
+    delta_span = (run_date_obj - HYBRID_REFERENCE_INITIAL).days
+    delta_span = min(max(delta_span, 0), HYBRID_DELTA_DAYS)
+    return {
+        f"{HYBRID_DELTA_PATTERN}-{(HYBRID_REFERENCE_INITIAL + timedelta(days=offset)).isoformat()}"
+        for offset in range(1, delta_span + 1)
+    }
 
 
 @pytest.mark.parametrize(
@@ -223,6 +244,16 @@ def test_bronze_to_silver_end_to_end(
         metadata = _read_metadata(bronze_partition / "_metadata.json")
         assert metadata["load_pattern"] == load_pattern
         assert metadata["record_count"] > 0
+        if pattern_dir == "hybrid_incremental_cumulative":
+            bronze_df = _read_bronze_parquet(bronze_partition)
+            assert {"delta_tag", "change_type"} <= set(bronze_df.columns), "Hybrid samples must emit delta metadata"
+            expected_tags = _expected_hybrid_delta_tags(run_date)
+            assert expected_tags, "Expected at least one cumulative delta tag for this run_date"
+            actual_tags = {str(tag) for tag in bronze_df["delta_tag"].dropna()}
+            missing_tags = expected_tags - actual_tags
+            assert not missing_tags, f"Bronze is missing cumulative tags for {run_date}: {sorted(missing_tags)}"
+            change_types = {str(value) for value in bronze_df["change_type"].dropna()}
+            assert {"insert", "update"} <= change_types, "Hybrid Bronze output should contain insert/update ops"
 
         _run_cli(
             ["silver_extract.py", "--config", str(rewritten_cfg), "--date", run_date]
