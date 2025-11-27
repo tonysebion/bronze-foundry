@@ -259,10 +259,6 @@ class PromotionOptions:
             on_success_webhooks=args.on_success_webhook or [],
             on_failure_webhooks=args.on_failure_webhook or [],
             artifact_writer_kind=getattr(args, "artifact_writer", "default"),
-            streaming_chunk_size=0,
-            streaming_prefetch=0,
-            transform_processes=0,
-            resume=False,
         )
 
         model_override = args.silver_model or silver_cfg.get("model")
