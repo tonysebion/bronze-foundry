@@ -1,7 +1,7 @@
 """Intent-driven dataset configuration models.
 
 These dataclasses implement the unified Bronze+Silver schema described in
-docs/silver_patterns.md and docs/pipeline_engine.md. They are lightweight and
+docs/framework/silver_patterns.md and docs/framework/pipeline_engine.md. They are lightweight and
 focus on semantic intent so higher-level orchestration can remain simple.
 """
 
