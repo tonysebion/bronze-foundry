@@ -24,10 +24,6 @@ class RunOptions:
     on_success_webhooks: List[str] = field(default_factory=list)
     on_failure_webhooks: List[str] = field(default_factory=list)
     artifact_writer_kind: str = "default"  # or "transactional"
-    streaming_chunk_size: int = 0  # 0 = file-level default
-    streaming_prefetch: int = 0  # number of chunks to prefetch/lookahead
-    transform_processes: int = 0  # >0 enables multiprocessing for chunk transforms
-    resume: bool = False  # resume streaming using checkpoints
 
     @staticmethod
     def default_artifacts() -> Dict[str, str]:
