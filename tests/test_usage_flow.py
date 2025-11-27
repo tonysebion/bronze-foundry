@@ -15,6 +15,19 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GENERATE_SCRIPT = Path("scripts") / "generate_sample_data.py"
 BRONZE_SAMPLE_ROOT = Path("sampledata/source_samples")
+PATTERN_DIRS = {
+    "full": "pattern1_full_events",
+    "cdc": "pattern2_cdc_events",
+    "current_history": "pattern3_scd_state",
+    "hybrid_cdc_point": "pattern4_hybrid_cdc_point",
+    "hybrid_cdc_cumulative": "pattern5_hybrid_cdc_cumulative",
+    "hybrid_incremental_point": "pattern6_hybrid_incremental_point",
+    "hybrid_incremental_cumulative": "pattern7_hybrid_incremental_cumulative",
+}
+
+
+def _pattern_dir(pattern: str) -> str:
+    return PATTERN_DIRS.get(pattern, pattern)
 CONFIG_ROOT = Path("docs/examples/configs")
 
 
@@ -36,14 +49,14 @@ def _build_sample_path(
     bronze_options = cfg.get("bronze", {}).get("options", {})
     if "source" in cfg:
         load_pattern = cfg["source"]["run"].get("load_pattern", "full")
-        pattern_dir = load_pattern
+        pattern_dir = _pattern_dir(load_pattern)
         system = cfg["source"]["system"]
         table = cfg["source"]["table"]
         filename = Path(cfg["source"]["file"]["path"]).name
         tail = [filename]
     else:
         load_pattern = bronze_options.get("load_pattern", "full")
-        pattern_dir = bronze_options.get("pattern_folder") or load_pattern
+        pattern_dir = _pattern_dir(bronze_options.get("pattern_folder") or load_pattern)
         system = cfg["system"]
         table = cfg["entity"]
         original_path = Path(cfg["bronze"].get("path_pattern", "sample.csv"))

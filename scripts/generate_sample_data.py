@@ -13,16 +13,40 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = REPO_ROOT / "docs" / "examples" / "configs"
 BASE_DIR = REPO_ROOT / "sampledata" / "source_samples"
 
+SAMPLE_START_DATE = date(2025, 11, 13)
+FULL_WEEKS = 4
+CDC_WEEKS = 4
+CURRENT_HISTORY_WEEKS = 4
 
-FULL_DATES = ["2025-11-13", "2025-11-14"]
-CDC_DATES = ["2025-11-13", "2025-11-14"]
-CURRENT_HISTORY_DATES = ["2025-11-13", "2025-11-14"]
+def _weekly_schedule(start: date, weeks: int) -> List[str]:
+    return [(start + timedelta(days=7 * week)).isoformat() for week in range(weeks)]
+
+FULL_DATES = _weekly_schedule(SAMPLE_START_DATE, FULL_WEEKS)
+CDC_DATES = _weekly_schedule(SAMPLE_START_DATE, CDC_WEEKS)
+CURRENT_HISTORY_DATES = _weekly_schedule(SAMPLE_START_DATE, CURRENT_HISTORY_WEEKS)
+FULL_ROW_COUNT = 1200
+CDC_ROW_COUNT = 800
+CURRENT_HISTORY_CURRENT = 500
+CURRENT_HISTORY_HISTORY = 1400
+PATTERN_DIRS = {
+    "full": "pattern1_full_events",
+    "cdc": "pattern2_cdc_events",
+    "current_history": "pattern3_scd_state",
+    "hybrid_cdc_point": "pattern4_hybrid_cdc_point",
+    "hybrid_cdc_cumulative": "pattern5_hybrid_cdc_cumulative",
+    "hybrid_incremental_point": "pattern6_hybrid_incremental_point",
+    "hybrid_incremental_cumulative": "pattern7_hybrid_incremental_cumulative",
+}
+
+
+def _pattern_dir(pattern: str) -> str:
+    return PATTERN_DIRS.get(pattern, pattern)
 HYBRID_REFERENCE_INITIAL = datetime(2025, 11, 13).date()
 HYBRID_REFERENCE_SWITCH_DAY = 9
 HYBRID_REFERENCE_SECOND = HYBRID_REFERENCE_INITIAL + timedelta(
     days=HYBRID_REFERENCE_SWITCH_DAY
 )
-HYBRID_DELTA_DAYS = 14
+HYBRID_DELTA_DAYS = 28
 HYBRID_COMBOS = [
     ("hybrid_cdc_point", "cdc", "point_in_time"),
     ("hybrid_cdc_cumulative", "cdc", "cumulative"),
@@ -62,12 +86,12 @@ def _write_metadata(
         json.dump(metadata, handle, indent=2)
 
 
-def generate_full_snapshot(seed: int = 42, row_count: int = 500) -> None:
+def generate_full_snapshot(seed: int = 42, row_count: int = FULL_ROW_COUNT) -> None:
     for day_offset, date_str in enumerate(FULL_DATES):
         rng = Random(seed + day_offset)
         base_dir = (
             BASE_DIR
-            / "full"
+            / _pattern_dir("full")
             / "system=retail_demo"
             / "table=orders"
             / "pattern=full"
@@ -216,13 +240,13 @@ def _build_delta_rows(
     return rows
 
 
-def generate_cdc(seed: int = 99, row_count: int = 400) -> None:
+def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
     change_types = ["insert", "update", "delete"]
     for day_offset, date_str in enumerate(CDC_DATES):
         rng = Random(seed + day_offset)
         base_dir = (
             BASE_DIR
-            / "cdc"
+            / _pattern_dir("cdc")
             / "system=retail_demo"
             / "table=orders"
             / "pattern=cdc"
@@ -291,13 +315,15 @@ def generate_cdc(seed: int = 99, row_count: int = 400) -> None:
 
 
 def generate_current_history(
-    seed: int = 7, current_rows: int = 200, history_rows: int = 600
+    seed: int = 7,
+    current_rows: int = CURRENT_HISTORY_CURRENT,
+    history_rows: int = CURRENT_HISTORY_HISTORY,
 ) -> None:
     for day_offset, date_str in enumerate(CURRENT_HISTORY_DATES):
         rng = Random(seed + day_offset)
         base_dir = (
             BASE_DIR
-            / "current_history"
+            / _pattern_dir("current_history")
             / "system=retail_demo"
             / "table=orders"
             / "pattern=current_history"
@@ -401,7 +427,7 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
     for combo_name, delta_pattern, delta_mode in HYBRID_COMBOS:
         base_pattern_dir = (
             BASE_DIR
-            / combo_name
+            / _pattern_dir(combo_name)
             / "system=retail_demo"
             / "table=orders"
             / f"pattern={combo_name}"
