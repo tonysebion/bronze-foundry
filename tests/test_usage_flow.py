@@ -165,7 +165,14 @@ def test_quickstart_and_pattern_flow(
 def test_owner_intent_expansion(tmp_path: Path) -> None:
     output = tmp_path / "owner_intent_resolved.yaml"
     subprocess.run(
-        [sys.executable, "scripts/expand_owner_intent.py", "--output", str(output)],
+        [
+            sys.executable,
+            "scripts/expand_owner_intent.py",
+            "--config",
+            "docs/examples/configs/templates/owner_intent_template.yaml",
+            "--output",
+            str(output),
+        ],
         check=True,
         cwd=REPO_ROOT,
     )
