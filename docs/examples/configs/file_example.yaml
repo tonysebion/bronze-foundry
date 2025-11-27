@@ -7,7 +7,7 @@ entity: orders
 bronze:
   enabled: true
   source_type: file
-  path_pattern: ./docs/examples/data/bronze_samples/full/system=retail_demo/table=orders/pattern=full/dt=2025-11-01/full-part-0001.csv  # demo file shipped with the repo
+  path_pattern: ./sampledata/source_samples/pattern1_full_events/system=retail_demo/table=orders/pattern=pattern1_full_events/dt=2025-11-01/full-part-0001.csv  # demo file shipped with the repo
   partition_column: extract_date                                     # matches the dt folders in the sample data
   options:
     format: csv                                                      # the bundled sample is CSV

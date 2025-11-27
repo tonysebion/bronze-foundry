@@ -1,0 +1,30 @@
+environment: dev
+domain: retail_demo
+system: retail_demo
+entity: orders
+
+bronze:
+  enabled: true
+  source_type: file
+  path_pattern: ./sampledata/source_samples/pattern3_scd_state/system=retail_demo/table=orders/pattern=pattern3_scd_state/dt=2025-11-13/current-history-part-0001.csv
+  partition_column: run_date
+  options:
+    format: csv
+    load_pattern: current_history
+    max_rows_per_file: 200000
+    partitioning_strategy: date
+
+silver:
+  enabled: true
+  entity_kind: state
+  history_mode: scd2
+  delete_mode: tombstone_state
+  schema_mode: allow_new_columns
+  natural_keys:
+    - order_id
+  change_ts_column: updated_at
+  attributes:
+    - status
+    - customer_id
+  partition_by:
+    - effective_from_dt

@@ -1,0 +1,35 @@
+environment: dev
+domain: retail_demo
+system: retail_demo
+entity: orders
+
+bronze:
+  enabled: true
+  source_type: file
+  path_pattern: ./sampledata/source_samples/pattern2_cdc_events/system=retail_demo/table=orders/pattern=pattern2_cdc_events/dt=2025-11-13/cdc-part-0001.csv
+  partition_column: run_date
+  options:
+    format: csv
+    load_pattern: cdc
+    max_rows_per_file: 150000
+    partitioning_strategy: batch_id
+    reference_mode:
+      role: delta
+      cadence_days: 1
+
+silver:
+  enabled: true
+  entity_kind: event
+  input_mode: append_log
+  delete_mode: tombstone_event
+  schema_mode: strict
+  natural_keys:
+    - order_id
+  event_ts_column: changed_at
+  attributes:
+    - status
+    - order_total
+    - customer_id
+    - change_type
+  partition_by:
+    - UpdatedAt_dt

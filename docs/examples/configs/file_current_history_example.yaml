@@ -7,7 +7,7 @@ entity: orders    # align with sample snapshot folder naming
 bronze:
   enabled: true
   source_type: file
-  path_pattern: ./docs/examples/data/bronze_samples/current_history/system=retail_demo/table=orders/pattern=current_history/dt=2025-11-03/current-history-part-0001.csv
+  path_pattern: ./sampledata/source_samples/pattern3_scd_state/system=retail_demo/table=orders/pattern=pattern3_scd_state/dt=2025-11-03/current-history-part-0001.csv
   partition_column: load_date
   options:
     format: csv

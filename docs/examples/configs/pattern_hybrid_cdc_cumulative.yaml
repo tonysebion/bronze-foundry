@@ -1,0 +1,30 @@
+environment: dev
+domain: retail_demo
+system: retail_demo
+entity: orders
+
+bronze:
+  enabled: true
+  source_type: file
+  path_pattern: ./sampledata/source_samples/pattern5_hybrid_cdc_cumulative/system=retail_demo/table=orders/pattern=pattern5_hybrid_cdc_cumulative/dt=2025-11-24/delta/delta-part-0001.csv
+  partition_column: run_date
+  options:
+    format: csv
+    load_pattern: cdc
+    pattern_folder: hybrid_cdc_cumulative
+    delta_mode: cumulative
+
+silver:
+  enabled: true
+  entity_kind: derived_state
+  history_mode: scd2
+  schema_mode: allow_new_columns
+  natural_keys:
+    - order_id
+  change_ts_column: changed_at
+  event_ts_column: changed_at
+  attributes:
+    - status
+    - delta_tag
+  partition_by:
+    - event_ts_dt

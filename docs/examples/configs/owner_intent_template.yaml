@@ -14,7 +14,7 @@ datasets:
     bronze:
       enabled: true
       source_type: file
-      path_pattern: ./docs/examples/data/bronze_samples/full/system=claims/table=claim_header/pattern=full/dt=2025-11-13/
+      path_pattern: ./sampledata/source_samples/pattern1_full_events/system=claims/table=claim_header/pattern=pattern1_full_events/dt=2025-11-13/
       partition_column: run_date
       owner_team: claims-platform
       owner_contact: claims-team@example.com
@@ -49,7 +49,7 @@ datasets:
     bronze:
       enabled: true
       source_type: file
-      path_pattern: ./docs/examples/data/bronze_samples/cdc/system=claims/table=claim_line/pattern=cdc/dt=2025-11-13/
+      path_pattern: ./sampledata/source_samples/pattern2_cdc_events/system=claims/table=claim_line/pattern=pattern2_cdc_events/dt=2025-11-13/
       partition_column: run_date
       options:
         format: csv

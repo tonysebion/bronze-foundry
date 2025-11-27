@@ -7,7 +7,7 @@ entity: orders   # reuse the same entity so sample data paths line up
 bronze:
   enabled: true
   source_type: file
-  path_pattern: ./docs/examples/data/bronze_samples/cdc/system=retail_demo/table=orders/pattern=cdc/dt=2025-11-02/cdc-part-0001.csv
+  path_pattern: ./sampledata/source_samples/pattern2_cdc_events/system=retail_demo/table=orders/pattern=pattern2_cdc_events/dt=2025-11-02/cdc-part-0001.csv
   partition_column: load_date
   options:
     format: csv
