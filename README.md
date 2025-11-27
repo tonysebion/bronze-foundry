@@ -13,7 +13,7 @@ This framework is intentionally lightweight and orchestration-neutral: you can r
 - **Multiple Source Types** – APIs (REST), databases (SQL), local files, or custom Python extractors
 - **Authentication** – Bearer tokens, API keys, Basic auth, and custom headers
 - **Pagination** – Offset, page, cursor, or none
-- **Incremental Loading** – State + checkpoint resume for efficient delta and recovery
+- **Incremental Loading** – Bronze deltas capture source changes while metadata tracks load patterns for safe replays
 - **Multiple Formats** – Parquet (Snappy) for analytics; optional CSV for debugging
 - **Pluggable Storage** – S3, Azure Blob/ADLS, local filesystem
 - **Resilience** – Unified retry + circuit breaker + rate limiting
@@ -29,11 +29,13 @@ This framework is intentionally lightweight and orchestration-neutral: you can r
   - Chunk-level: concurrent chunk processing (`parallel_workers`)
 - **Async HTTP Path** – httpx-based extractor with prefetch pagination & backpressure
 - **Batch Metadata** – Automatic `_metadata.json` for monitoring and idempotency
-- **Checkpoint Resume** – Safe restart of long running Silver streaming jobs (`--resume`)
+- **Reliable Reruns** – `_metadata.json` and `_checksums.json` ensure Bronze and Silver stay in sync so retrying a run is safe.
 - **Benchmark Harness** – Performance scenarios (sync vs async, rate limit impact)
 - **Extensible Architecture** – Clean interfaces for new storage backends or extractors
 
-*See [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) and [PERFORMANCE_TUNING.md](docs/PERFORMANCE_TUNING.md) for deep dives.*
+*See [docs/usage/patterns/ENHANCED_FEATURES.md](docs/usage/patterns/ENHANCED_FEATURES.md) and [docs/usage/PERFORMANCE_TUNING.md](docs/usage/PERFORMANCE_TUNING.md) for deep dives.*
+
+Need a concrete intent example before touching Python? Follow `docs/usage/onboarding/intent-owner-guide.md`—it bundles the owner intent template, the generated pattern matrix, the expand-intent helper, and a safe-first dry run (`python bronze_extract.py --config ... --dry-run`) into one narrative. After the guide, the new dataset checklist and Bronze readiness checklist list every checkbox you need before declaring a dataset “ready”. Use `docs/index.md` to jump to the setup track (environment, deps, first-run check), maintainer track (`silver_patterns.md`, `pipeline_engine.md`, etc.), or the owner track depending on whether you’re prepping the install, evolving the engine, or filling out configs. For a bird’s-eye view of the usage docs, start at `docs/usage/index.md` to see how beginner, onboarding, and pattern sections fit together.
 
 ## Architecture Principles
 
@@ -68,11 +70,14 @@ This framework is intentionally lightweight and orchestration-neutral: you can r
   - Uses exit codes (0 = success, non-zero = failure)
   - Structured logging with levels and timestamps
 
+- **Pattern-driven guidance**
+  Source and semantic owners can lean on `docs/framework/silver_patterns.md` and `docs/usage/onboarding/new_dataset_checklist.md` to describe entity_kind, history_mode, input_mode, natural keys, timestamps, attributes, and advanced controls for every dataset. These docs demonstrate how Bronze and Silver work together so configs become intent-driven rather than procedural.
+
 ## Quick Start
 
 ### Testing Your API (For Product/API Teams)
 
-**Not familiar with Python?** No problem! [docs/QUICKSTART.md](docs/QUICKSTART.md) has a complete step-by-step walkthrough.
+**Not familiar with Python?** No problem! [docs/usage/beginner/QUICKSTART.md](docs/usage/beginner/QUICKSTART.md) has a complete step-by-step walkthrough.
 
 **Quick summary:**
 
@@ -96,7 +101,7 @@ python bronze_extract.py --config config/test.yaml
 # 5. Check ./output/ folder - if you see data, you're done!
 ```
 
-**See [docs/QUICKSTART.md](docs/QUICKSTART.md) for detailed instructions with screenshots and troubleshooting.**
+**See [docs/usage/beginner/QUICKSTART.md](docs/usage/beginner/QUICKSTART.md) for detailed instructions with screenshots and troubleshooting.**
 
 ### Offline Local Quick Test
 
@@ -118,6 +123,23 @@ tree silver_output/domain=retail_demo
 ```
 
 This workflow uses only local files, so a non-Python user can validate everything end-to-end before wiring real APIs or databases.
+
+---
+
+### Running the new intent configs
+
+To exercise the example configurations under `docs/examples/configs`, run Bronze and Silver separately with the same YAML (each config now has both sections). For example:
+
+```bash
+python bronze_extract.py --config docs/examples/configs/file_complex.yaml --date 2025-11-13
+python silver_extract.py --config docs/examples/configs/file_complex.yaml --date 2025-11-13
+```
+
+Repeat those steps for `api_example.yaml`, `db_complex.yaml`, `file_cdc_example.yaml`, etc., to cover different entity kinds/load patterns. Bronze outputs always land under `output/env=<environment>/system=<system>/table=<entity>/…` (defaulting to no `env=` when none is specified); Silver promotes into `silver/env=<environment>/domain=<domain>/entity=<entity>/v<version>/<load_partition>=<date>/…`. Setting `environment` at the top level of the intent config ensures Bronze and Silver placements follow the same hierarchy.
+
+Need a single command to run Bronze and Silver together? Use `scripts/run_intent_config.py --config docs/examples/configs/<name>.yaml --date 2025-11-13`; it shells out to the Bronze and Silver CLIs so you can treat each intent config like a runnable script bundle. Use `--skip-bronze` or `--skip-silver` if you only want one leg.
+
+The integration tests (`tests/test_integration_samples.py`) already automate this loop; read it for how we rewrite file paths and validate the Tiered outputs. See `docs/usage/onboarding/intent-lifecycle.md` for the canonical Bronze→Silver flow, directory mapping, and metadata expectations that keep the manifesto-lived experience calm.
 
 ---
 
@@ -214,7 +236,7 @@ source:
 - Configure the Bronze CLI with `--load-pattern` (or `source.run.load_pattern`) to label outputs as `full`, `cdc`, or `current_history`
 - Bronze partition paths now include the load pattern (`system=foo/table=bar/pattern=current_history/...`) so downstream jobs can select data easily
 - Use the new `silver_extract.py` helper to pull Bronze chunks into curated Silver tables; it mirrors the partition layout and writes metadata for later stages
-- When Bronze partitions are large, run `silver_extract.py --stream` to process chunks one-by-one without building the entire DataFrame in memory.
+- When Bronze partitions are large, let `SilverProcessor` handle chunking; the retired streaming/resume flow is described in `docs/framework/operations/legacy-streaming.md`.
 - Example:
 
 ```bash
@@ -238,12 +260,12 @@ python silver_extract.py \
 - Bronze hybrid samples now include both point-in-time and cumulative variations per pattern (see `hybrid_cdc_point`, `hybrid_cdc_cumulative`, `hybrid_incremental_point`, `hybrid_incremental_cumulative`) plus rotated references; rerun `python scripts/generate_sample_data.py` to refresh them.
 - Documentation structure:
   - **Architecture overview**: `docs/ARCHITECTURE.md` sketches Bronze/Silver/storage flows plus the plugin registry and sample references.
-  - **Operations & governance**: `docs/OPERATIONS.md` describes validation, sample generation, storage policy, and log/metric practices so different roles know where to look.
+  - **Operations & governance**: `docs/framework/operations/OPERATIONS.md` describes validation, sample generation, storage policy, and log/metric practices so different roles know where to look.
 - **Silver Join**: Join two existing Silver assets with `silver_join.py`, including configurable `join_key_pairs`, `join_strategy`, `quality_guards`, spill directories, checkpoints (`progress.json`), and richer metadata (column lineage, chunk metrics) that trace back to the Bronze inputs. Sample outputs in `docs/examples/data/silver_join_samples/v1` exercise every combination of inputs/formats and are generated with `python scripts/generate_silver_join_samples.py --version 1 --formats both`. See `docs/SILVER_JOIN.md` and `docs/examples/configs/silver_join_example.yaml` for configuration patterns.
 - Matching configs: `file_example.yaml` (full), `file_cdc_example.yaml` (cdc), `file_current_history_example.yaml`
 
 ### Sample Configs
-- `docs/examples/configs/` contains `_simple.yaml` starter configs plus `_complex.yaml` versions that showcase advanced options for each extractor type (API, DB, file, custom). Use the simple configs to get Bronze/Silver running quickly and refer to the complex ones when you need to enable partitioning, normalization, error handling, or streaming mode.
+- `docs/examples/configs/` contains `_simple.yaml` starter configs plus `_complex.yaml` versions that showcase advanced options for each extractor type (API, DB, file, custom). Use the simple configs to get Bronze/Silver running quickly and refer to the complex ones when you need to enable partitioning, normalization, error handling, or chunk-friendly tuning; `SilverProcessor` chunking happens automatically (legacy streaming flags are now documented in `docs/framework/operations/legacy-streaming.md`).
 
 ### Multi-Source Pipelines (One YAML, Many Jobs)
 
@@ -367,12 +389,12 @@ silver_output/
 
 ## ?? Documentation
 
-- [OPS_PLAYBOOK.md](docs/OPS_PLAYBOOK.md) ï¿½ day-two operations, hooks, and monitoring tips.
-- [GOLD_CONTRACTS.md](docs/GOLD_CONTRACTS.md) ï¿½ guidance for documenting downstream contracts and expectations.
+- [OPS_PLAYBOOK.md](docs/framework/operations/OPS_PLAYBOOK.md) ï¿½ day-two operations, hooks, and monitoring tips.
+- [GOLD_CONTRACTS.md](docs/framework/operations/GOLD_CONTRACTS.md) ï¿½ guidance for documenting downstream contracts and expectations.
 - [docs/QUICKSTART.md](docs/QUICKSTART.md) ï¿½ detailed tutorial with screenshots.
-- [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) ï¿½ architecture concepts and FAQs.
+- [docs/framework/reference/DOCUMENTATION.md](docs/framework/reference/DOCUMENTATION.md) ï¿½ architecture concepts and FAQs.
 - [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) ï¿½ advanced configuration & features.
-- [CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) ï¿½ exhaustive list of config options.
+- [CONFIG_REFERENCE.md](docs/framework/reference/CONFIG_REFERENCE.md) ï¿½ exhaustive list of config options.
 - [TESTING.md](TESTING.md) ï¿½ how to run tests and interpret results.
 ### Silver Refinement Options\n- silver.schema: rename or reorder columns for standardized curated tables.\n- silver.normalization: toggle 	rim_strings / empty_strings_as_null to keep formatting consistent across datasets.\n- silver.error_handling: set enabled, max_bad_records, and max_bad_percent to quarantine bad rows into _errors/ files instead of failing immediately.\n- silver.partitioning: add a secondary partition column (e.g., status, region) for Silver outputs while still mirroring the Bronze folder layout.\n- silver.domain / entity / ersion / load_partition_name: describe the medallion layout so outputs land under domain=<domain>/entity=<entity>/v<version>/<load partition>=YYYY-MM-DD/.. Optional include_pattern_folder: true inserts pattern=<load_pattern> before the load partition.\n- silver.model: choose the Silver asset type to emit. Available options now mirror the requested asset catalogue:\n  - scd_type_1 â€“ deduplicated current view (SCD Type 1).\n  - scd_type_2 â€“ current + full history split with an is_current flag (SCD Type 2).\n  - incremental_merge â€“ incremental change set from the Bronze data (CDC/timestamp).\n  - ull_merge_dedupe â€“ full snapshot deduplicated by the configured keys/order column, ready for full merges.\n  - periodic_snapshot â€“ exact Bronze snapshot for periodic refreshes.\n  - silver.model_profile â€“ pick a named preset (analytics, operational, merge_ready, cdc_delta, snapshot) that maps to silver.model.\n- storage_metadata: classify your storage target with oundary, provider_type, and cloud_provider. Use --storage-scope onprem to force an on-prem policy.\n\nExample Silver section:
 
@@ -440,10 +462,10 @@ silver_output/
 
 ## ?? Documentation
 
-- [OPS_PLAYBOOK.md](docs/OPS_PLAYBOOK.md) ï¿½ day-two operations, hooks, and monitoring tips.
-- [GOLD_CONTRACTS.md](docs/GOLD_CONTRACTS.md) ï¿½ guidance for documenting downstream contracts and expectations.
+- [OPS_PLAYBOOK.md](docs/framework/operations/OPS_PLAYBOOK.md) ï¿½ day-two operations, hooks, and monitoring tips.
+- [GOLD_CONTRACTS.md](docs/framework/operations/GOLD_CONTRACTS.md) ï¿½ guidance for documenting downstream contracts and expectations.
 - [docs/QUICKSTART.md](docs/QUICKSTART.md) ï¿½ detailed tutorial with screenshots.
-- [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) ï¿½ architecture concepts and FAQs.
+- [docs/framework/reference/DOCUMENTATION.md](docs/framework/reference/DOCUMENTATION.md) ï¿½ architecture concepts and FAQs.
 - [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) ï¿½ advanced configuration & features.
-- [CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) ï¿½ exhaustive list of config options.
+- [CONFIG_REFERENCE.md](docs/framework/reference/CONFIG_REFERENCE.md) ï¿½ exhaustive list of config options.
 - [TESTING.md](TESTING.md) ï¿½ how to run tests and interpret results.

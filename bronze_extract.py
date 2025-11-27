@@ -149,7 +149,7 @@ def main() -> int:
         for backend in backends:
             print(f"  - {backend}")
         print(
-            "\nNote: Azure requires additional dependencies. See docs/INSTALLATION.md"
+            "\nNote: Azure requires additional dependencies. See docs/setup/INSTALLATION.md"
         )
         return 0
 

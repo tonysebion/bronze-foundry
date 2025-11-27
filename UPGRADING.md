@@ -15,21 +15,11 @@
 | CFG001 | Implicit fallback using `platform.bronze.output_dir` as `local_path` | Add explicit `platform.bronze.local_path` |
 | CFG002 | Legacy `source.api.url` key | Rename to `source.api.base_url` |
 | CFG003 | Missing `source.api.endpoint` defaulting to `/` | Add explicit `endpoint` |
-| API001 | Positional `write_silver_outputs` wrapper | Switch to `DefaultSilverArtifactWriter().write()` |
+| API001 | Positional `write_silver_outputs` wrapper (REMOVED) | The wrapper has been removed; use `DefaultSilverArtifactWriter().write()` |
+| STREAM001 | Legacy `silver_extract.py --stream` / `--resume` flags | Migrate to `SilverProcessor` chunking; update automation and docs to rely on metadata/checksums (see `docs/framework/operations/legacy-streaming.md`). |
 
 ### Migration Steps
-1. Search for `write_silver_outputs(` and refactor calls to use:
-   ```python
-   from core.silver.writer import DefaultSilverArtifactWriter
-   writer = DefaultSilverArtifactWriter()
-   outputs = writer.write(
-       df,
-       primary_keys=..., order_column=..., write_parquet=True, write_csv=False,
-       parquet_compression="snappy", artifact_names={...}, partition_columns=[],
-       error_cfg={"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0},
-       silver_model=model, output_dir=target_dir,
-   )
-   ```
+1. Use `DefaultSilverArtifactWriter` instead of the removed wrapper.
 2. Update configs: add `platform.bronze.local_path` where missing.
 3. Replace any `source.api.url` with `base_url` and ensure `endpoint` present.
 4. (Optional) Begin consuming typed models:
@@ -38,6 +28,7 @@
    typed = cfg.get("__typed_model__")  # RootConfig instance
    ```
 5. Use bootstrap command (to be exposed via CLI in a future release) to generate Bronze samples instead of relying on implicit synthesis.
+6. Remove any workflows or docs still invoking `--stream`/`--resume`; reruns now rely on `_metadata.json`/`_checksums.json` plus Bronze load patterns.
 
 ### Future (Post 1.1.0)
 - Wrapper removal warnings will escalate to errors in 1.2.0 before deletion in 1.3.0.
