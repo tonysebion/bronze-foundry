@@ -227,3 +227,4 @@ _checksums.json
 !/config/README.md
 /config/*
 /config/*.*
+sampledata/

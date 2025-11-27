@@ -14,16 +14,14 @@ CONFIG_DIR = REPO_ROOT / "docs" / "examples" / "configs"
 BASE_DIR = REPO_ROOT / "sampledata" / "source_samples"
 
 SAMPLE_START_DATE = date(2025, 11, 13)
-FULL_WEEKS = 4
-CDC_WEEKS = 4
-CURRENT_HISTORY_WEEKS = 4
+DAILY_DAYS = 28
 
-def _weekly_schedule(start: date, weeks: int) -> List[str]:
-    return [(start + timedelta(days=7 * week)).isoformat() for week in range(weeks)]
+def _daily_schedule(start: date, days: int) -> List[str]:
+    return [(start + timedelta(days=day)).isoformat() for day in range(days)]
 
-FULL_DATES = _weekly_schedule(SAMPLE_START_DATE, FULL_WEEKS)
-CDC_DATES = _weekly_schedule(SAMPLE_START_DATE, CDC_WEEKS)
-CURRENT_HISTORY_DATES = _weekly_schedule(SAMPLE_START_DATE, CURRENT_HISTORY_WEEKS)
+FULL_DATES = _daily_schedule(SAMPLE_START_DATE, DAILY_DAYS)
+CDC_DATES = _daily_schedule(SAMPLE_START_DATE, DAILY_DAYS)
+CURRENT_HISTORY_DATES = _daily_schedule(SAMPLE_START_DATE, DAILY_DAYS)
 FULL_ROW_COUNT = 1200
 CDC_ROW_COUNT = 800
 CURRENT_HISTORY_CURRENT = 500
@@ -36,6 +34,15 @@ PATTERN_DIRS = {
     "hybrid_cdc_cumulative": "pattern5_hybrid_cdc_cumulative",
     "hybrid_incremental_point": "pattern6_hybrid_incremental_point",
     "hybrid_incremental_cumulative": "pattern7_hybrid_incremental_cumulative",
+}
+PATTERN_DESC = {
+    "pattern1_full_events": "Pattern 1 – Full events: daily rewrites of the entire dataset.",
+    "pattern2_cdc_events": "Pattern 2 – CDC events: append-only changelog with change_type metadata.",
+    "pattern3_scd_state": "Pattern 3 – SCD state: current + history rows with effective dates.",
+    "pattern4_hybrid_cdc_point": "Pattern 4 – Hybrid CDC point: reference metadata plus delta files.",
+    "pattern5_hybrid_cdc_cumulative": "Pattern 5 – Hybrid CDC cumulative: cumulative deltas layered over reference.",
+    "pattern6_hybrid_incremental_point": "Pattern 6 – Hybrid incremental point: incremental merges for point-in-time state.",
+    "pattern7_hybrid_incremental_cumulative": "Pattern 7 – Hybrid incremental cumulative: cumulative merges with history retention.",
 }
 
 
@@ -94,7 +101,7 @@ def generate_full_snapshot(seed: int = 42, row_count: int = FULL_ROW_COUNT) -> N
             / _pattern_dir("full")
             / "system=retail_demo"
             / "table=orders"
-            / "pattern=full"
+            / f"pattern={_pattern_dir('full')}"
             / f"dt={date_str}"
         )
         rows: List[Dict[str, object]] = []
@@ -249,7 +256,7 @@ def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
             / _pattern_dir("cdc")
             / "system=retail_demo"
             / "table=orders"
-            / "pattern=cdc"
+            / f"pattern={_pattern_dir('cdc')}"
             / f"dt={date_str}"
         )
         rows: List[Dict[str, object]] = []
@@ -326,7 +333,7 @@ def generate_current_history(
             / _pattern_dir("current_history")
             / "system=retail_demo"
             / "table=orders"
-            / "pattern=current_history"
+            / f"pattern={_pattern_dir('current_history')}"
             / f"dt={date_str}"
         )
 
@@ -430,7 +437,7 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
             / _pattern_dir(combo_name)
             / "system=retail_demo"
             / "table=orders"
-            / f"pattern={combo_name}"
+            / f"pattern={_pattern_dir(combo_name)}"
         )
         for ref_date in (HYBRID_REFERENCE_INITIAL, HYBRID_REFERENCE_SECOND):
             ref_dir = base_pattern_dir / f"dt={ref_date.isoformat()}" / "reference"
@@ -477,6 +484,23 @@ def main() -> None:
     generate_current_history()
     generate_hybrid_combinations()
     print(f"Sample datasets written under {BASE_DIR}")
+    _write_pattern_readmes()
+
+
+def _write_pattern_readmes() -> None:
+    for pattern, desc in PATTERN_DESC.items():
+        pattern_dir = BASE_DIR / pattern
+        pattern_dir.mkdir(parents=True, exist_ok=True)
+        readme = pattern_dir / "README.md"
+        lines = [
+            f"# {pattern}",
+            "",
+            desc,
+            "",
+            "Each `dt=YYYY-MM-DD` directory contains the daily source data for this pattern.",
+            "Refer back to `docs/usage/patterns/pattern_matrix.md` to understand how these files feed Bronze and Silver.",
+        ]
+        readme.write_text("\n".join(lines), encoding="utf-8")
 
 
 if __name__ == "__main__":
