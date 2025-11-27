@@ -149,70 +149,70 @@ def _expected_hybrid_delta_tags(run_date: str) -> set[str]:
     "config_name, load_pattern, pattern_dir, expected_silver_files, run_dates",
     [
         (
-            "file_example.yaml",
+            "examples/file_example.yaml",
             "full",
             "full",
             {"events.parquet"},
             ["2025-11-13", "2025-11-14"],
         ),
         (
-            "file_cdc_example.yaml",
+            "patterns/file_cdc_example.yaml",
             "cdc",
             "cdc",
             {"events.parquet"},
             ["2025-11-13", "2025-11-14"],
         ),
         (
-            "file_current_history_example.yaml",
+            "patterns/file_current_history_example.yaml",
             "current_history",
             "current_history",
             {"state_history.parquet", "state_current.parquet"},
             ["2025-11-13", "2025-11-14"],
         ),
         (
-            "pattern_full.yaml",
+            "patterns/pattern_full.yaml",
             "full",
             "full",
             {"events.parquet"},
             ["2025-11-13"],
         ),
         (
-            "pattern_cdc.yaml",
+            "patterns/pattern_cdc.yaml",
             "cdc",
             "cdc",
             {"events.parquet"},
             ["2025-11-13"],
         ),
         (
-            "pattern_current_history.yaml",
+            "patterns/pattern_current_history.yaml",
             "current_history",
             "current_history",
             {"state_history.parquet", "state_current.parquet"},
             ["2025-11-13"],
         ),
         (
-            "pattern_hybrid_cdc_point.yaml",
+            "patterns/pattern_hybrid_cdc_point.yaml",
             "cdc",
             "hybrid_cdc_point",
             None,
             ["2025-11-24"],
         ),
         (
-            "pattern_hybrid_cdc_cumulative.yaml",
+            "patterns/pattern_hybrid_cdc_cumulative.yaml",
             "cdc",
             "hybrid_cdc_cumulative",
             None,
             ["2025-11-24"],
         ),
         (
-            "pattern_hybrid_incremental_point.yaml",
+            "patterns/pattern_hybrid_incremental_point.yaml",
             "cdc",
             "hybrid_incremental_point",
             None,
             ["2025-11-24"],
         ),
         (
-            "pattern_hybrid_incremental_cumulative.yaml",
+            "patterns/pattern_hybrid_incremental_cumulative.yaml",
             "cdc",
             "hybrid_incremental_cumulative",
             None,
@@ -292,7 +292,7 @@ def test_bronze_to_silver_end_to_end(
 def test_silver_require_checksum_succeeds(
     tmp_path: Path, bronze_samples_dir: Path
 ) -> None:
-    config_path = Path("docs/examples/configs") / "file_example.yaml"
+    config_path = Path("docs/examples/configs/examples/file_example.yaml")
     run_date = "2025-11-13"
 
     rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_config(
@@ -314,7 +314,7 @@ def test_silver_require_checksum_succeeds(
 def test_silver_require_checksum_missing_manifest(
     tmp_path: Path, bronze_samples_dir: Path
 ) -> None:
-    config_path = Path("docs/examples/configs") / "file_example.yaml"
+    config_path = Path("docs/examples/configs/examples/file_example.yaml")
     run_date = "2025-11-14"
 
     rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_config(
