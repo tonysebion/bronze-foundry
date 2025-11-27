@@ -5,6 +5,18 @@ includes the behavioral cues that send you down each path, a precise checklist o
 configuration fields to populate, and a pointer back to the canonical sections in
 `docs/framework/silver_patterns.md` and `docs/framework/pipeline_engine.md`.
 
+## Pattern Overview
+
+| Pattern | Name | When to Use | Bronze Input | Silver Output |
+|---------|------|-------------|--------------|---------------|
+| 1 | Full Events | Simple table dumps, rewrites everything | Single file per date | Event log with deduplication |
+| 2 | CDC Events | Transactional logs with inserts/updates/deletes | Delta files with change types | Event log with tombstone deletes |
+| 3 | SCD State | Current + historical rows with effective dates | Snapshot with current/historical flags | SCD Type 2 with history tracking |
+| 4 | Derived Events (CDC) | Deltas + reference metadata → change events | Hybrid: reference + deltas | Derived event stream |
+| 5 | Derived State (Cumulative) | Cumulative deltas → current + history state | Cumulative change files | SCD Type 2 from deltas |
+| 6 | Derived State (Latest) | Incremental snapshots, latest value wins | Point-in-time slices | Latest-only state |
+| 7 | Derived State (SCD) | Reference + deltas → full history reconstruction | Hybrid reference + incremental | Complete SCD Type 2 history |
+
 ## Start here: map your answers to a pattern
 
 Answer the questions below in order and follow the pattern number in parentheses so you
@@ -120,7 +132,7 @@ lists the core config fields, and ends with “See also” links to the authorit
 ## Running the sample matrix
 
 1. Regenerate fixtures so each pattern has Bronze data (`python scripts/generate_sample_data.py`).  
-2. Optional: refresh the owner intent mapping (`python scripts/expand_owner_intent.py --config docs/examples/configs/owner_intent_template.yaml`).  
+2. Optional: refresh the owner intent mapping (`python scripts/expand_owner_intent.py --config docs/examples/configs/templates/owner_intent_template.yaml`).  
 3. Run the integration suite covering every `pattern_*.yaml` (`pytest tests/test_integration_samples.py`).  
 
 Each config targets an exact Bronze sample under `sampledata/source_samples/<pattern>/…`. Every pattern folder now records daily loads spanning several weeks, so you can inspect how that pattern’s files evolve day-to-day and understand what downstream Bronze or Silver operations must handle (e.g., full rewrites vs. new CDC deltas vs. refreshed current/history rows).
