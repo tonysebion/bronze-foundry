@@ -265,7 +265,7 @@ python silver_extract.py \
 - Matching configs: `file_example.yaml` (full), `file_cdc_example.yaml` (cdc), `file_current_history_example.yaml`
 
 ### Sample Configs
-- `docs/examples/configs/` contains `_simple.yaml` starter configs plus `_complex.yaml` versions that showcase advanced options for each extractor type (API, DB, file, custom). Use the simple configs to get Bronze/Silver running quickly and refer to the complex ones when you need to enable partitioning, normalization, error handling, or chunk-friendly tuning; `SilverProcessor` chunking happens automatically (legacy streaming flags are now documented in `docs/framework/operations/legacy-streaming.md`).
+- `docs/examples/configs/` contains starter configs in `simple/` plus advanced versions in `complex/` that showcase options for each extractor type (API, DB, file, custom). Use the simple configs to get Bronze/Silver running quickly and refer to the complex ones when you need to enable partitioning, normalization, error handling, or chunk-friendly tuning; `SilverProcessor` chunking happens automatically (legacy streaming flags are now documented in `docs/framework/operations/legacy-streaming.md`).
 
 ### Multi-Source Pipelines (One YAML, Many Jobs)
 
@@ -310,8 +310,8 @@ This keeps medallion assets in sync without juggling dozens of CLI flags or besp
 - Run both stages with the same file so settings stay in sync:
 
 ```bash
-python bronze_extract.py --config docs/examples/configs/file_example.yaml --date 2025-11-14
-python silver_extract.py --config docs/examples/configs/file_example.yaml --date 2025-11-14
+python bronze_extract.py --config docs/examples/configs/examples/file_example.yaml --date 2025-11-14
+python silver_extract.py --config docs/examples/configs/examples/file_example.yaml --date 2025-11-14
 ```
 
 - Silver CLI highlights:

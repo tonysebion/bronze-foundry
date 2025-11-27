@@ -141,7 +141,7 @@ $env:AZURE_STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountNa
 ### 3. Run Extraction
 
 ```bash
-python bronze_extract.py --config docs/examples/configs/api_example.yaml
+python bronze_extract.py --config docs/examples/configs/examples/api_example.yaml
 ```
 
 ## Example Outputs
@@ -167,7 +167,7 @@ azure://container/prefix/system=<system>/table=<table>/dt=YYYY-MM-DD/
 
 ```bash
 # Run with quick test config (no cloud dependencies)
-python bronze_extract.py --config docs/examples/configs/quick_test.yaml
+python bronze_extract.py --config docs/examples/configs/quickstart/quick_test.yaml
 
 # Expected output:
 # - Local files in output/system=jsonplaceholder/table=todos/
@@ -191,11 +191,19 @@ docs/examples/
 ├── README.md                          # This file - examples directory index
 │
 ├── configs/                           # Configuration examples
-│   ├── api_example.yaml              # Basic REST API extraction
-│   ├── db_example.yaml               # SQL database extraction
-│   ├── custom_example.yaml           # Custom Python extractor
-│   ├── enhanced_example.yaml         # Production features (file size, partitioning, parallel)
-│   └── quick_test.yaml               # 2-minute quick start
+│   ├── README.md                     # Config directory organization
+│   ├── examples/                     # Main example configs
+│   │   ├── api_example.yaml          # Basic REST API extraction
+│   │   ├── db_example.yaml           # SQL database extraction
+│   │   ├── file_example.yaml         # File extraction
+│   │   └── custom_example.yaml       # Custom Python extractor
+│   ├── simple/                       # Minimal starter configs
+│   ├── complex/                      # Advanced production configs
+│   ├── patterns/                     # Load pattern examples
+│   ├── advanced/                     # Specialized features
+│   ├── templates/                    # Config templates
+│   └── quickstart/                   # Quick start configs
+│       └── quick_test.yaml           # 2-minute quick start
 │
 ├── extensions/                        # Optional feature extensions
 │   └── azure_storage/                # Azure storage backend

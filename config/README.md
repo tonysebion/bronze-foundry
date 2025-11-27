@@ -14,16 +14,16 @@ Choose a template from the examples directory:
 
 ```bash
 # Quick API test (recommended for first-time users)
-cp docs/examples/configs/quick_test.yaml config/my_first_api.yaml
+cp docs/examples/configs/quickstart/quick_test.yaml config/my_first_api.yaml
 
 # Full API configuration
-cp docs/examples/configs/api_example.yaml config/my_api.yaml
+cp docs/examples/configs/examples/api_example.yaml config/my_api.yaml
 
 # Database extraction
-cp docs/examples/configs/db_example.yaml config/my_db.yaml
+cp docs/examples/configs/examples/db_example.yaml config/my_db.yaml
 
 # Custom extractor
-cp docs/examples/configs/custom_example.yaml config/my_custom.yaml
+cp docs/examples/configs/examples/custom_example.yaml config/my_custom.yaml
 ```
 
 ### 2. Edit Configuration
@@ -81,11 +81,11 @@ All example configurations are in `docs/examples/configs/`:
 
 | Template | Purpose | Use When |
 |----------|---------|----------|
-| `quick_test.yaml` | Fast API validation | Testing if API is data-ready |
-| `api_example.yaml` | Full API extraction | Production API jobs |
-| `db_example.yaml` | Database extraction | SQL Server, PostgreSQL, MySQL |
-| `custom_example.yaml` | Custom Python extractor | Special data sources |
-| `enhanced_example.yaml` | Advanced features | File sizing, parallelism, hourly loads |
+| `quickstart/quick_test.yaml` | Fast API validation | Testing if API is data-ready |
+| `examples/api_example.yaml` | Full API extraction | Production API jobs |
+| `examples/db_example.yaml` | Database extraction | SQL Server, PostgreSQL, MySQL |
+| `examples/custom_example.yaml` | Custom Python extractor | Special data sources |
+| `advanced/enhanced_example.yaml` | Advanced features | File sizing, parallelism, hourly loads |
 
 ### Configuration Reference
 
@@ -199,7 +199,7 @@ ValueError: Missing required key 'source.api.base_url' in config
 
 **Solution**: Compare your config to example templates:
 ```bash
-diff config/my_api.yaml docs/examples/configs/api_example.yaml
+diff config/my_api.yaml docs/examples/configs/examples/api_example.yaml
 ```
 
 ### Environment Variable Not Set
