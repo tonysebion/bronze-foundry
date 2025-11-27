@@ -115,24 +115,6 @@ def main() -> int:
         help="Select artifact writer implementation for downstream Silver (default|transactional)",
     )
     parser.add_argument(
-        "--streaming-chunk-size",
-        type=int,
-        default=0,
-        help="CSV chunk size for streaming promotions (0 = file at a time)",
-    )
-    parser.add_argument(
-        "--streaming-prefetch",
-        type=int,
-        default=0,
-        help="Prefetch buffer size (number of chunks) for streaming promotions",
-    )
-    parser.add_argument(
-        "--transform-processes",
-        type=int,
-        default=0,
-        help="Number of worker processes for chunk transforms in streaming promotions (0 = disable)",
-    )
-    parser.add_argument(
         "--storage-scope",
         choices=["any", "onprem"],
         default="any",
