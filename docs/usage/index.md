@@ -1,22 +1,40 @@
-# Usage Documentation
+# Usage Guide
 
-This section collates the owner-focused guides, checklists, and pattern references that help you explore the Bronze→Silver workflow without touching the engine internals.
+**Ready to extract data?** Choose your path:
 
-## Beginner track
-- [`QUICKSTART`](beginner/QUICKSTART.md) – run your first Bronze and Silver jobs with only YAML configuration.
-- [`FIRST_RUN_CHECKLIST`](beginner/FIRST_RUN_CHECKLIST.md) – verify dependencies, storage access, and smoke tests before your first production run.
+## 🚀 **I'm New - Just Get Started**
 
-## Onboarding & intent
-- [`intent-owner-guide`](onboarding/intent-owner-guide.md) – story-driven intent templates, safe-first runs, and metadata expectations.
-- [`new_dataset_checklist`](onboarding/new_dataset_checklist.md) – capture ownership, entity intent, and load controls before running Bronze.
-- [`bronze_readiness_checklist`](onboarding/bronze_readiness_checklist.md) – post-run audit to confirm Bronze files, metadata, and ownership align with intent.
-- [`intent-lifecycle`](../framework/reference/intent-lifecycle.md) – command/path/map reference showing how Bronze, Silver, and metadata files move through the tiered pipeline.
+1. **[Quick Start](beginner/QUICKSTART.md)** - Run sample data in 10 minutes
+2. **[Copy & Customize](beginner/COPY_AND_CUSTOMIZE.md)** - Adapt configs for your data
+3. **[First Production Run](beginner/FIRST_RUN_CHECKLIST.md)** - Go live safely
 
-## Patterns & advanced controls
-- [`QUICK_REFERENCE`](patterns/QUICK_REFERENCE.md) – cheat sheet for common data scenarios and pattern selection.
-- [`pattern_matrix`](patterns/pattern_matrix.md) – decision router and config recipes for every load model.
-- [`EXTRACTION_GUIDANCE`](patterns/EXTRACTION_GUIDANCE.md) – when to choose `full`, `cdc`, or `current_history`.
-- [`ENHANCED_FEATURES`](patterns/ENHANCED_FEATURES.md) – tuning knobs, partitioning, and observability options.
-- [`docs/examples/configs/*.yaml`](../examples/configs) – copy-ready configs that reflect each pattern and feed the sample data.
+## 🎯 **I Have Specific Data Source**
 
-> **Usage tests** – `tests/test_usage_flow.py` exercises the quickstart/config patterns, silver flows, and owner intent expansion so this walk-through stays accurate.
+| Data Source | Start Here | Example Use Case |
+|-------------|------------|------------------|
+| **REST API** | [API Config](../examples/configs/examples/api_example.yaml) | GitHub issues, Shopify orders |
+| **Database** | [DB Config](../examples/configs/examples/db_example.yaml) | SQL Server tables, PostgreSQL views |
+| **Files (CSV/JSON)** | [File Config](../examples/configs/examples/file_example.yaml) | S3 buckets, local CSVs |
+| **Custom Logic** | [Custom Config](../examples/configs/examples/custom_example.yaml) | Build your own extractor |
+
+## ⚙️ **Production Setup**
+
+- **[Intent Owner Guide](onboarding/intent-owner-guide.md)** - Define datasets and ownership
+- **[Pattern Matrix](patterns/pattern_matrix.md)** - Choose the right extraction strategy
+- **[Production Checklist](onboarding/new_dataset_checklist.md)** - Pre-flight validation
+
+## 🔍 **Find the Right Pattern**
+
+- **[Quick Reference](patterns/QUICK_REFERENCE.md)** - Common scenarios and solutions
+- **[Pattern Matrix](patterns/pattern_matrix.md)** - Detailed pattern selection guide
+- **[Enhanced Features](patterns/ENHANCED_FEATURES.md)** - Advanced configuration options
+
+## 🆘 **Troubleshooting**
+
+- **[Config Doctor](../framework/operations/CONFIG_DOCTOR.md)** - Automated config validation
+- **[Error Codes](../framework/operations/ERROR_CODES.md)** - Common issues and solutions
+- **[Operations](../framework/operations/OPERATIONS.md)** - Production runbooks
+
+## 📚 **Examples Directory**
+
+Browse [examples](../examples/README.md) for working configurations and sample data.

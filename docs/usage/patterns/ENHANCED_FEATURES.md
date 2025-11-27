@@ -534,7 +534,7 @@ export BRONZE_TRACING=1  # Enable tracing
 
 ### Benchmark Harness & Performance Guidance
 
-Included script `scripts/benchmark.py` plus tuning strategies in [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md).
+Included script `scripts/benchmark.py` plus tuning strategies in [PERFORMANCE_TUNING.md](../../framework/operations/PERFORMANCE_TUNING.md).
 
 **Usage**:
 ```bash
@@ -549,7 +549,7 @@ python scripts/benchmark.py --scenario sync_vs_async
 
 ### Operational Error Codes
 
-Standardized categories documented in [ERROR_CODES.md](ERROR_CODES.md) for alert routing and triage.
+Standardized categories documented in [ERROR_CODES.md](../../framework/operations/ERROR_CODES.md) for alert routing and triage.
 
 **Benefits**:
 - Consistent error classification
@@ -726,6 +726,6 @@ WHERE dt = DATE '2025-01-12'
 
 ## Next Steps
 
-- See [framework/reference/CONFIG_REFERENCE.md](framework/reference/CONFIG_REFERENCE.md) for complete configuration options
-- See [QUICKSTART.md](QUICKSTART.md) for basic usage
-- See [EXTENDING_EXTRACTORS.md](EXTENDING_EXTRACTORS.md) for custom extractors
+- See [framework/reference/CONFIG_REFERENCE.md](../../framework/reference/CONFIG_REFERENCE.md) for complete configuration options
+- See [QUICKSTART.md](../beginner/QUICKSTART.md) for basic usage
+- See [EXTENDING_EXTRACTORS.md](../../framework/EXTENDING_EXTRACTORS.md) for custom extractors

@@ -574,12 +574,12 @@ Set `BRONZE_TRACING=1` to emit OpenTelemetry spans (no-op if instrumentation abs
 `SilverProcessor` automatically handles chunked outputs, and reruns rely on metadata/checksum validation instead of explicit `--resume` flags; see `docs/framework/operations/legacy-streaming.md` for the retired behavior.
 
 **Benchmark Harness & Performance Guidance**
-Included script `scripts/benchmark.py` plus tuning strategies in [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md).
+Included script `scripts/benchmark.py` plus tuning strategies in [PERFORMANCE_TUNING.md](../operations/PERFORMANCE_TUNING.md).
 
 **Operational Error Codes**
-Standardized categories documented in [ERROR_CODES.md](ERROR_CODES.md) for alert routing and triage.
+Standardized categories documented in [ERROR_CODES.md](../operations/ERROR_CODES.md) for alert routing and triage.
 
-See also: [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) & [ERROR_CODES.md](ERROR_CODES.md) for deeper coverage.
+See also: [PERFORMANCE_TUNING.md](../operations/PERFORMANCE_TUNING.md) & [ERROR_CODES.md](../operations/ERROR_CODES.md) for deeper coverage.
 
 ---
 
@@ -1075,8 +1075,8 @@ For deeper technical details, see:
 - **[Enhanced Features](ENHANCED_FEATURES.md)** - Advanced features for production use
 - **[Architecture](ARCHITECTURE.md)** - Core framework design principles
 - **[Configuration Reference](CONFIG_REFERENCE.md)** - Complete YAML configuration guide
-- **[Performance Tuning](PERFORMANCE_TUNING.md)** - Benchmark scenarios and optimization strategies
-- **[Error Codes](ERROR_CODES.md)** - Unified operational error taxonomy
+- **[Performance Tuning](../operations/PERFORMANCE_TUNING.md)** - Benchmark scenarios and optimization strategies
+- **[Error Codes](../operations/ERROR_CODES.md)** - Unified operational error taxonomy
 
 ---
 

@@ -1,76 +1,77 @@
 # Quick Start Guide
 
-Start here if you are new to Bronze/Silver and want to build confidence by landing example data before wiring up your own source feed.
+**Get data flowing in 10 minutes** - No API keys required!
 
-## 1. Finish the shared setup guide
+## 🎯 **Goal**
 
-Complete [`docs/setup/INSTALLATION.md`](../../setup/INSTALLATION.md) first. That document proves cloning, the virtual environment, and all dependencies are ready so the quickstart can concentrate on Bronze/Silver concepts.
+Run sample data through Bronze → Silver pipeline to understand the flow.
 
-## 2. Generate sample data
+## 📋 **Steps**
 
-We keep realistic CSV snapshots over multiple weeks under `sampledata/source_samples/`. Run the helper script once to populate that folder so each pattern named in `docs/usage/patterns/pattern_matrix.md` has a matching directory, and each directory captures daily loads that visualize how the Bronze files shift across weeks.
+### 1. Install & Setup
 
-```powershell
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Generate sample data (creates realistic test datasets)
 python scripts/generate_sample_data.py
 ```
 
-This writes
+### 2. Run Bronze Extraction
 
-- `sampledata/source_samples/` with CSV input for each pattern; this is the single canonical store used by the docs, tests, and quickstarts.
-
-You can also copy the generated Bronze files into a dedicated `sampledata/` folder if you want to experiment outside the repo tree; just point your config at that path.
-
-## 3. Create your quickstart config
-
-```powershell
-mkdir -ErrorAction SilentlyContinue config
-copy docs\examples\configs\quickstart\quick_test.yaml config\test.yaml
+```bash
+# Extract sample data to Bronze layer
+python bronze_extract.py --config docs/examples/configs/examples/file_example.yaml --date 2025-11-27
 ```
 
-Edit `config\test.yaml`:
+**What happens:** Reads CSV files → Creates Parquet files in `output/` with metadata.
 
-- Set `environment`, `domain`, `system`, and `entity` to describe your dataset.  
-- Leave the bronze `path_pattern` and silver defaults untouched while you learn—they are already wired to the generated sample data.  
-- Update the auth block near line 30 to match your API (bearer token, API key header, or basic auth) and export the required environment variables.
-- Adjust pagination only if your source actually pages.
+### 3. Run Silver Promotion
 
-Save the file and keep it nearby for the run.
-
-## 4. Set secrets and optional overrides
-
-In PowerShell (or your shell) set the credentials referenced by the config:
-
-```powershell
-$env:MY_API_TOKEN="your-token-here"
+```bash
+# Promote Bronze data to Silver layer
+python silver_extract.py --config docs/examples/configs/examples/file_example.yaml --date 2025-11-27
 ```
 
-If you are testing a database config, set `DB_CONN_STR` or other env vars as named in the YAML.
+**What happens:** Reads Bronze Parquet → Creates curated datasets in `silver_output/`.
 
-## 5. Run Bronze (+ optional Silver) against sample data
+### 4. Check Results
 
-```powershell
-python bronze_extract.py --config config\test.yaml --date 2025-11-13 --dry-run
-python bronze_extract.py --config config\test.yaml --date 2025-11-13
-python silver_extract.py --config config\test.yaml --date 2025-11-13
+```bash
+# View Bronze output
+ls output/system=retail_demo/table=orders/dt=2025-11-27/
+
+# View Silver output
+ls silver_output/domain=retail_demo/entity=orders/v1/load_date=2025-11-27/
 ```
 
-The dry run verifies paths without writing data. The subsequent runs produce Bronze files under `output/system=<system>/table=<table>/dt=2025-11-13/` and Silver artifacts under `silver_output/domain=<domain>`.
+## 🎉 **Success!**
 
-## 6. Inspect Bronze + Silver
+You now understand:
+- **Bronze**: Raw extracted data with metadata
+- **Silver**: Curated, transformed datasets
+- **Pipeline**: Config-driven data movement
 
-- Confirm `output/.../dt=2025-11-13/` contains `part-0001.csv`/`.parquet` and `_metadata.json`.  
-- Open `output/.../_metadata.json` to see `run_date`, `load_pattern`, and `relative_path` recorded.  
-- Use `silver_output/.../events.parquet` (or the `state_*` files for `current_history`) to verify Silver matches the pattern matrix expectations.
+## 🚀 **Next Steps**
 
-## 7. Troubleshooting
+### **Experiment Safely**
+- [Safe Experimentation Guide](SAFE_EXPERIMENTATION.md) - Test configs without breaking things
+- Run `python scripts/run_demo.py` for interactive demo
+- Try different dates: `--date 2025-11-26`, `--date 2025-11-28`
 
-- Missing modules or env vars? Rerun `docs/setup/INSTALLATION.md` to reinstall Python/dependencies.  
-- “No data returned”? Validate your endpoint/auth in Postman before rerunning Bronze.  
-- Permission errors? Ensure `output/` and `silver_output/` are writable in your shell.
+### **Customize for Your Data**
+1. [Copy & Customize Guide](COPY_AND_CUSTOMIZE.md) - Adapt configs for your sources
+2. [Pattern Picker](../patterns/QUICK_REFERENCE.md) - Choose the right extraction strategy
+3. [Production Setup](../onboarding/intent-owner-guide.md) - Go live with real data
 
-## 8. What’s next
+### **Common Issues**
+- **"No data found"**: Check date matches sample data range
+- **Permission errors**: Ensure write access to output directories
+- **Config errors**: Run `--validate-only` first
 
-- Run `tests/test_usage_flow.py` to continuously exercise this quickstart path and keep the docs accurate.  
-- **Customize configs**: See [`docs/usage/beginner/COPY_AND_CUSTOMIZE.md`](COPY_AND_CUSTOMIZE.md) for detailed guidance on adapting example configs for your data sources.  
-- Advance to [`docs/usage/onboarding/intent-owner-guide.md`](../onboarding/intent-owner-guide.md) to define real datasets, ownership, and metadata.  
-- Explore `docs/usage/patterns/pattern_matrix.md` plus `docs/examples/configs/patterns/` for more refined Bronze/Silver patterns.
+## 🆘 **Stuck?**
+
+1. Run the demo: `python scripts/run_demo.py`
+2. Check [Copy & Customize Guide](COPY_AND_CUSTOMIZE.md)
+3. Browse [examples](../../examples/README.md) for working configs

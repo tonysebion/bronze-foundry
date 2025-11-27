@@ -1,62 +1,99 @@
 # medallion-foundry
 
-Welcome to the documentation hub. The docs now live inside three
-focused subdirectories:
+**Extract data from APIs, databases, or files → Bronze layer → Silver curated datasets**
 
-- `setup/` – installation, dependency checks, and first-production-run prerequisites that both maintainer and owner audiences share.
-- `usage/` – beginner walkthroughs, onboarding guides, and pattern references for source/semantic owners.
-- `framework/` – design docs, architecture notes, and operations playbooks for core contributors.
+---
 
-Use this page as a single navigation map if you are deciding where to go next. Each section below lists the key docs per track, plus the quick links you need from setup to usage to maintainer level detail.
+## 🚀 **Quick Start (5 minutes)**
 
-## 1. Setup (shared prep)
+**New to data pipelines?** Get running in 5 minutes:
 
-Before running Bronze/Silver, complete the setup guide so cloning, virtualenv, and dependencies are verified:
+```bash
+# 1. Install
+pip install -r requirements.txt
 
-| Doc | Focus |
-| --- | ----- |
-| `docs/setup/INSTALLATION.md` | Platform setup, dependency installation, security checks, and post-install verifications that keep both owners and maintainers runnable from day one. |
+# 2. Try the demo
+python scripts/run_demo.py
 
-## 2. Usage (owner-facing)
+# 3. Copy a config for your data
+cp docs/examples/configs/examples/api_example.yaml config/my_api.yaml
+# Edit config/my_api.yaml with your API details
 
-Use these guides to move from “what is Bronze/Silver?” to selecting a pattern and executing your first extract:
+# 4. Run
+python bronze_extract.py --config config/my_api.yaml --date 2025-11-27
+```
 
-| Doc | Focus |
-| --- | ----- |
-| `docs/usage/index.md` | Overview of beginner, onboarding, and pattern docs so every user knows what to read next. |
-| `docs/usage/beginner/QUICKSTART.md` | Step-by-step walkthrough that gets you from zero to running `bronze_extract.py` and `silver_extract.py`. |
-| `docs/usage/beginner/FIRST_RUN_CHECKLIST.md` | Checklist that ensures logging, metadata, and run controls are in place before a production run. |
-| `docs/usage/onboarding/intent-owner-guide.md` | Story-driven intent templates, safe-first runs, and metadata expectations. |
-| `docs/framework/reference/intent-lifecycle.md` | Command/path reference showing how Bronze, Silver, and metadata files move through the tiered flow. |
-| `docs/usage/onboarding/new_dataset_checklist.md` | Owner questionnaire capturing metadata, load controls, and observability flags before running Bronze. |
-| `docs/usage/onboarding/bronze_readiness_checklist.md` | Post-run audit to confirm Bronze files, `_metadata.json`, `_checksums.json`, and ownership align with your intent. |
-| `docs/usage/patterns/QUICK_REFERENCE.md` | Cheat sheet for common data scenarios and quick pattern selection. |
-| `docs/usage/patterns/pattern_matrix.md` | Decision router + per-pattern recipes that map load behaviors to config fields. |
-| `docs/usage/patterns/EXTRACTION_GUIDANCE.md` | When to choose `full`, `cdc`, `current_history`, or hybrid loads for your source. |
-| `docs/usage/patterns/ENHANCED_FEATURES.md` | Tunable features (partitioning, chunking, observability) to keep Bronze/Silver efficient. |
-| `docs/examples/configs/*.yaml` | Ready-to-copy configs for each pattern that align with the sample data and tests. |
+**That's it!** Check `output/` for your Bronze data, then run Silver for curated datasets.
 
-## 3. Framework Maintainers
+---
 
-When you need to change the engine, add patterns, or understand the architecture, these references are the source of truth:
+## 🎯 **What Do You Want To Do?**
 
-| Doc | Focus |
-| --- | ----- |
-| `docs/framework/silver_patterns.md` | Canonical intent model: `entity_kind`, `history_mode`, `input_mode`, deletes, partitioning, metadata, etc. |
-| `docs/framework/pipeline_engine.md` | Engine behaviors, Bronze/Silver flow, orchestration contracts, and metadata reporting. |
-| `docs/framework/architecture.md` | Design intent for the services, layering, and data observability. |
-| `docs/framework/reference/DOCUMENTATION.md` | Holistic guide that summarizes the framework patterns, config surfaces, and architecture FAQs. |
-| `docs/framework/reference/CONFIG_REFERENCE.md` / `docs/framework/reference/QUICK_REFERENCE.md` | Exhaustive YAML options plus quick CLI patterns for tuning and automation. |
-| `docs/framework/operations/OPERATIONS.md` / `docs/framework/operations/OPS_PLAYBOOK.md` | Operations guidance, monitoring, and metadata visibility for Bronze/Silver. |
-| `docs/framework/operations/PERFORMANCE_TUNING.md` | Profiling, chunking, and write tuning notes to keep throughput and file size manageable. |
-| `docs/framework/operations/CONFIG_DOCTOR.md` / `docs/framework/operations/ERROR_CODES.md` | Troubleshooting tools, error keys, and diagnostics. |
-| `docs/framework/operations/SILVER_JOIN.md` | Silver-level joins and curated dataset guidance. |
-| `docs/framework/operations/CONTRIBUTING.md` / `docs/framework/operations/TESTING.md` | Contribution process and automation/test expectations. |
-| `docs/framework/manifesto-playbook.md` + `docs/framework/UPGRADING.md` | Experience goals and migration notes that keep the manifesto’s promise consistent. |
+### **I want to extract data from...**
 
-## Keeping the tracks aligned
+| Data Source | Quick Config | Example |
+|-------------|--------------|---------|
+| **REST API** | `docs/examples/configs/examples/api_example.yaml` | GitHub API, Shopify, Stripe |
+| **Database** | `docs/examples/configs/examples/db_example.yaml` | SQL Server, PostgreSQL |
+| **CSV/JSON Files** | `docs/examples/configs/examples/file_example.yaml` | Local files, S3 buckets |
+| **Custom Source** | `docs/examples/configs/examples/custom_example.yaml` | Build your own extractor |
 
-1. Update the **framework docs** (maintainer track) when you add patterns or change behaviors.  
-2. Refresh the **usage docs** so owners still find the right onboarding path (intent guide, pattern matrix, checklist).  
-3. Review the **setup guide** when prerequisites, dependencies, or install steps change.  
-4. Re-run the sample generator (`python scripts/generate_sample_data.py`) and automation tests (`pytest tests/test_integration_samples.py`) so examples stay executable and aligned with new paths.
+### **I want to...**
+
+- **Learn the basics** → [`Beginner Guide`](usage/beginner/QUICKSTART.md)
+- **Customize configs** → [`Copy & Customize Guide`](usage/beginner/COPY_AND_CUSTOMIZE.md)
+- **Set up production** → [`Production Setup`](usage/onboarding/intent-owner-guide.md)
+- **Choose the right pattern** → [`Pattern Picker`](usage/patterns/QUICK_REFERENCE.md)
+- **Troubleshoot** → [`Config Doctor`](framework/operations/CONFIG_DOCTOR.md)
+
+---
+
+## 📚 **Learning Paths**
+
+### **Path 1: Just Get Data Moving (Beginner)**
+1. [Quick Start](usage/beginner/QUICKSTART.md) - Run sample data
+2. [Copy & Customize](usage/beginner/COPY_AND_CUSTOMIZE.md) - Adapt for your source
+3. [First Production Run](usage/beginner/FIRST_RUN_CHECKLIST.md) - Go live safely
+
+### **Path 2: Production Data Pipeline (Advanced)**
+1. [Intent Owner Guide](usage/onboarding/intent-owner-guide.md) - Define your dataset
+2. [Pattern Matrix](usage/patterns/pattern_matrix.md) - Choose load strategy
+3. [Production Checklist](usage/onboarding/new_dataset_checklist.md) - Pre-flight checks
+
+### **Path 3: Extend the Framework (Developer)**
+1. [Architecture](framework/architecture.md) - System design
+2. [Contributing](framework/operations/CONTRIBUTING.md) - Add features
+3. [Testing](framework/operations/TESTING.md) - Quality assurance
+
+---
+
+## 🔧 **Common Tasks**
+
+| Task | Command | Notes |
+|------|---------|-------|
+| **Extract data** | `python bronze_extract.py --config config/my.yaml --date YYYY-MM-DD` | Creates Bronze layer |
+| **Create Silver** | `python silver_extract.py --config config/my.yaml --date YYYY-MM-DD` | Curates Bronze data |
+| **Validate config** | `python bronze_extract.py --config config/my.yaml --validate-only` | Check before running |
+| **Dry run** | `python bronze_extract.py --config config/my.yaml --dry-run` | Test connections |
+| **Run demo** | `python scripts/run_demo.py` | Safe experimentation |
+
+---
+
+## 📖 **Reference**
+
+- [Configuration Reference](framework/reference/CONFIG_REFERENCE.md) - All config options
+- [API Documentation](api/core.md) - Code reference
+- [Operations](framework/operations/OPERATIONS.md) - Production runbooks
+- [Troubleshooting](framework/operations/ERROR_CODES.md) - Common issues
+
+---
+
+## 🆘 **Need Help?**
+
+**Stuck?** Try these in order:
+1. Run `python scripts/run_demo.py` - See working examples
+2. Check [Copy & Customize Guide](usage/beginner/COPY_AND_CUSTOMIZE.md) - Step-by-step config adaptation
+3. Use [Config Doctor](framework/operations/CONFIG_DOCTOR.md) - Automated troubleshooting
+4. Search [Pattern Reference](usage/patterns/QUICK_REFERENCE.md) - Find your use case
+
+**Still stuck?** Check the [examples](../examples/) directory for working configs.
