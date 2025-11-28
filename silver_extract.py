@@ -9,12 +9,11 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Mapping, cast
+from typing import Any, Dict, List, Optional, Tuple, Mapping
 
 import pandas as pd
 
 from core.config import DatasetConfig, build_relative_path, load_configs
-from core.config.typed_models import RootConfig
 from core.context import RunContext, build_run_context, load_run_context
 from core.bronze.io import (
     write_batch_metadata,
@@ -318,7 +317,7 @@ class SilverPromotionService:
         )
         # cfg_list can contain typed RootConfig objects or plain dicts depending
         # on how the configs are loaded. Explicitly annotate accordingly.
-        self.cfg_list: Optional[List[Dict[str, Any] | RootConfig]]
+        self.cfg_list: Optional[List[Dict[str, Any]]]
         if self._provided_run_context:
             self.cfg_list = [self._provided_run_context.cfg]
         else:
@@ -344,7 +343,7 @@ class SilverPromotionService:
         if not self._provided_run_context and not self.cfg_list:
             self.parser.error("Either --config or --run-context must be provided")
 
-        cfg: Optional[Dict[str, Any] | RootConfig] = None
+        cfg: Optional[Dict[str, Any]] = None
         if self._provided_run_context:
             run_context = self._provided_run_context
             cfg = run_context.cfg
@@ -352,18 +351,14 @@ class SilverPromotionService:
         else:
             cfg = self._select_config()
             run_date = self._resolve_run_date()
-            if isinstance(cfg, RootConfig):
-                run_context = self._build_run_context(cast(Dict[str, Any], cfg.model_dump()), run_date)
-            else:
-                run_context = self._build_run_context(cast(Dict[str, Any], cfg), run_date)
+            # _select_config returns a plain dict, so pass it directly
+            run_context = self._build_run_context(cast(Dict[str, Any], cfg), run_date)
 
-        # normalize a dict view of the config for functions that expect plain dicts
-        if isinstance(cfg, RootConfig):
-            cfg_dict: Optional[Dict[str, Any]] = cast(Dict[str, Any], cfg.model_dump())
-        else:
-            cfg_dict = cast(Optional[Dict[str, Any]], cfg)
+        # cfg is always a dict (either from RunContext or load_configs), so
+        # use it directly as a dict view
+        cfg_dict: Optional[Dict[str, Any]] = cfg
 
-        platform_cfg: Dict[str, Any] = cast(Dict[str, Any], cfg_dict.get("platform", {})) if cfg_dict else {}
+        platform_cfg: Dict[str, Any] = cfg_dict.get("platform", {}) if cfg_dict else {}
         enforce_storage_scope(platform_cfg, self.args.storage_scope)
         bronze_path = run_context.bronze_path
         self._update_hook_context(
@@ -644,25 +639,15 @@ class SilverPromotionService:
                 )
         else:
             for item in self.cfg_list:
-                cfg_dict = (
-                    cast(Dict[str, Any], item.model_dump())
-                    if isinstance(item, RootConfig)
-                    else cast(Dict[str, Any], item)
-                )
                 logger.info(
-                    "Silver configuration valid for %s", cfg_dict["source"]["config_name"]
+                    "Silver configuration valid for %s", item["source"]["config_name"]
                 )
 
     def _select_config(self) -> Optional[Dict[str, Any]]:
         if not self.cfg_list:
             return None
-        # Normalize any RootConfig instances into plain dicts for the legacy selector
-        normalized: List[Dict[str, Any]] = []
-        for entry in self.cfg_list:
-            if isinstance(entry, RootConfig):
-                normalized.append(cast(Dict[str, Any], entry.model_dump()))
-            else:
-                normalized.append(cast(Dict[str, Any], entry))
+        # Entries are already plain dicts when loaded via load_configs or RunContext
+        normalized: List[Dict[str, Any]] = list(self.cfg_list)
         try:
             return _select_config(normalized, self.args.source_name)
         except ValueError as exc:
