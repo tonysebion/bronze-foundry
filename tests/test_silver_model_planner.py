@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
+from typing import List
 
 import pandas as pd
 import pytest
 
-from core.silver.artifacts import SilverModelPlanner
+from core.silver.artifacts import DatasetWriter, SilverModelPlanner
 from core.silver.models import SilverModel
 
 
@@ -18,11 +20,20 @@ def _make_df() -> pd.DataFrame:
     )
 
 
-class DummyWriter:
-    def __init__(self):
-        self.written: list[str] = []
+class DummyWriter(DatasetWriter):
+    def __init__(self) -> None:
+        super().__init__(
+            base_dir=Path("."),
+            primary_keys=[],
+            partition_columns=[],
+            error_cfg={"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0},
+            write_parquet=False,
+            write_csv=False,
+            parquet_compression="snappy",
+        )
+        self.written: List[str] = []
 
-    def write_dataset(self, name: str, df: pd.DataFrame):
+    def write_dataset(self, name: str, df: pd.DataFrame) -> List[Path]:
         self.written.append(name)
         return []
 

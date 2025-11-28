@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from collections import defaultdict
 from pathlib import Path
+from typing import List
 
 import pandas as pd
 import pytest
 
 from core.patterns import LoadPattern
+from core.silver.artifacts import DatasetWriter
 from core.silver.models import SilverModel
 from silver_extract import SilverModelPlanner
 from core.silver.writer import DefaultSilverArtifactWriter
@@ -33,13 +35,22 @@ def _build_sample_df() -> pd.DataFrame:
     return frame
 
 
-class TrackingWriter:
+class TrackingWriter(DatasetWriter):
     """Stub writer that records dataset names and dataframes."""
 
     def __init__(self) -> None:
+        super().__init__(
+            base_dir=Path("."),
+            primary_keys=[],
+            partition_columns=[],
+            error_cfg={"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0},
+            write_parquet=False,
+            write_csv=False,
+            parquet_compression="snappy",
+        )
         self.written: dict[str, list[pd.DataFrame]] = defaultdict(list)
 
-    def write_dataset(self, dataset_name: str, dataset_df: pd.DataFrame) -> list:
+    def write_dataset(self, dataset_name: str, dataset_df: pd.DataFrame) -> List[Path]:
         self.written[dataset_name].append(dataset_df.copy())
         return []
 
