@@ -28,6 +28,7 @@ classifiers = [
 requires-python = ">=3.8"
 dependencies = [
     "boto3>=1.26.0",
+    "jmespath>=1.0.0",  # Required by boto3
     "pandas>=1.5.0",
     "pyarrow>=10.0.0",
     "pyyaml>=6.0",
@@ -78,8 +79,8 @@ bronze-extract = "bronze_extract:main"
 silver-extract = "silver_extract:main"
 
 [tool.setuptools]
-packages = ["core", "extractors"]
-py-modules = ["bronze_extract", "silver_extract"]
+packages = ["core", "core.bronze", "core.config", "core.extractors", "core.runner", "core.silver", "core.storage"]
+py-modules = ["bronze_extract", "silver_extract", "silver_join"]
 
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.yml"]

@@ -14,6 +14,9 @@ Environment:
 
 import os
 import pytest
+
+# Skip entire module if S3 test dependencies not available
+# Note: boto3 is a core dependency, but this allows for future optional S3 testing
 from core.storage.plugins.s3 import S3StorageBackend
 
 
