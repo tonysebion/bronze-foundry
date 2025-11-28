@@ -306,7 +306,10 @@ def main() -> None:
         raise RuntimeError("No Bronze partitions found; generate Bronze samples first.")
 
     if SILVER_SAMPLE_ROOT.exists():
-        shutil.rmtree(SILVER_SAMPLE_ROOT)
+        try:
+            shutil.rmtree(SILVER_SAMPLE_ROOT)
+        except PermissionError as exc:
+            print(f"[WARN] Unable to delete existing Silver samples: {exc}; continuing")
     SILVER_SAMPLE_ROOT.mkdir(parents=True, exist_ok=True)
 
     pattern_configs = _discover_pattern_configs()
