@@ -25,16 +25,13 @@ from pathlib import Path
 
 # All pattern configurations with their appropriate run dates
 PATTERN_CONFIGS = [
-    ("docs/examples/configs/patterns/pattern_full.yaml", ["2025-11-13"]),
-    ("docs/examples/configs/patterns/pattern_cdc.yaml", ["2025-11-13"]),
-    ("docs/examples/configs/patterns/pattern_current_history.yaml", ["2025-11-13"]),
-    ("docs/examples/configs/patterns/pattern_hybrid_cdc_point.yaml", ["2025-11-24"]),
-    ("docs/examples/configs/patterns/pattern_hybrid_cdc_cumulative.yaml", ["2025-11-24"]),
-    ("docs/examples/configs/patterns/pattern_hybrid_incremental_point.yaml", ["2025-11-24"]),
-    ("docs/examples/configs/patterns/pattern_hybrid_incremental_cumulative.yaml", ["2025-11-24"]),
-    ("docs/examples/configs/examples/file_example.yaml", ["2025-11-13"]),
-    ("docs/examples/configs/patterns/file_cdc_example.yaml", ["2025-11-13"]),
-    ("docs/examples/configs/patterns/file_current_history_example.yaml", ["2025-11-13"]),
+    ("docs/examples/configs/patterns/pattern_full.yaml", []),
+    ("docs/examples/configs/patterns/pattern_cdc.yaml", []),
+    ("docs/examples/configs/patterns/pattern_current_history.yaml", []),
+    ("docs/examples/configs/patterns/pattern_hybrid_cdc_point.yaml", []),
+    ("docs/examples/configs/patterns/pattern_hybrid_cdc_cumulative.yaml", []),
+    ("docs/examples/configs/patterns/pattern_hybrid_incremental_point.yaml", []),
+    ("docs/examples/configs/patterns/pattern_hybrid_incremental_cumulative.yaml", []),
 ]
 
 def run_command(cmd, description):
@@ -71,7 +68,7 @@ def get_available_dates():
     return sorted(dates)
 
 
-def fix_file_example_config(original_path, run_date, temp_dir, output_base_dir):
+def fix_file_example_config(original_path, run_date, temp_dir, output_base):
     """Fix configs to use the correct date and output directory."""
     config = yaml.safe_load(Path(original_path).read_text())
 
@@ -85,15 +82,27 @@ def fix_file_example_config(original_path, run_date, temp_dir, output_base_dir):
             config["bronze"]["path_pattern"]
         )
 
-    # Set output directory to sampledata/bronze_outputs
+        # Extract pattern number from path_pattern
+        match = re.search(r'pattern(\d+)_', config["bronze"]["path_pattern"])
+        if match:
+            pattern_num = match.group(1)
+            output_dir = output_base / f"pattern{pattern_num}"
+        else:
+            config_name = Path(original_path).name
+            output_dir = output_base / config_name.replace('.yaml', '')
+    else:
+        config_name = Path(original_path).name
+        output_dir = output_base / config_name.replace('.yaml', '')
+
+    # Set output directory
     if "bronze" in config:
         if "options" not in config["bronze"]:
             config["bronze"]["options"] = {}
-        config["bronze"]["options"]["local_output_dir"] = str(output_base_dir)
+        config["bronze"]["options"]["local_output_dir"] = str(output_dir)
 
     # Also set silver output if it exists
     if "silver" in config:
-        config["silver"]["output_dir"] = str(output_base_dir / "silver")
+        config["silver"]["output_dir"] = str(output_dir / "silver")
 
     config_name = Path(original_path).name
     # Write to temp file
@@ -131,19 +140,26 @@ def main():
 
     print(f"Configs to run: {len(PATTERN_CONFIGS)}")
 
+    # Get all available dates
+    available_dates = get_available_dates()
+    print(f"Available dates: {len(available_dates)} ({available_dates[0]} to {available_dates[-1]})")
+
     # Set up output directory
-    output_base = Path("sampledata/bronze_outputs")
+    output_base = Path("sampledata/bronze_samples")
     output_base.mkdir(parents=True, exist_ok=True)
 
+    # Update PATTERN_CONFIGS to use all available dates
+    updated_configs = [(path, available_dates) for path, _ in PATTERN_CONFIGS]
+
     # Run Bronze extraction for each pattern config and its dates
-    total_runs = sum(len(dates) for _, dates in PATTERN_CONFIGS)
+    total_runs = sum(len(dates) for _, dates in updated_configs)
     run_count = 0
     results = []
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        for config_path, run_dates in PATTERN_CONFIGS:
+        for config_path, run_dates in updated_configs:
             config_name = Path(config_path).name
 
             for run_date in run_dates:
@@ -174,7 +190,7 @@ def main():
     if successful == total:
         print("\n✅ ALL BRONZE EXTRACTIONS SUCCEEDED!")
         print(f"\n📁 Outputs saved to: {output_base}/")
-        print("   Bronze data: sampledata/bronze_outputs/")
+        print("   Bronze data: sampledata/bronze_samples/")
     else:
         print("\n❌ SOME BRONZE EXTRACTIONS FAILED")
         print("\nFailed runs:")
