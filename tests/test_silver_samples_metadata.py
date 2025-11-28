@@ -39,7 +39,9 @@ def _load_expected_silver_config(config_path: Path) -> Dict[str, object]:
     silver_cfg.setdefault("version", 1)
     silver_cfg.setdefault("load_partition_name", "load_date")
     silver_cfg.setdefault("include_pattern_folder", False)
-    silver_cfg.setdefault("primary_keys", [])
+    natural_keys = silver_cfg.get("natural_keys") or []
+    primary_keys = silver_cfg.get("primary_keys") or natural_keys
+    silver_cfg["primary_keys"] = list(primary_keys)
     silver_cfg.setdefault("order_column", None)
     silver_cfg.setdefault("parquet_compression", "snappy")
     silver_cfg.setdefault("normalization", DEFAULT_NORMALIZATION.copy())
