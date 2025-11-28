@@ -4,6 +4,18 @@ system: payments                        # Required: source system name, drives B
 entity: transactions                    # Required: logical entity name used across Bronze/Silver.
 bronze_status: pending                  # Optional note you can inspect/propagate downstream (e.g., ready/pending).
 
+# Optional: Customize partition key names in directory structure
+# All fields have defaults - omit this entire section to use standard naming
+# Useful for environment-specific conventions (e.g., "env" instead of "sample")
+path_structure:
+  sample_key: "sample"                   # Default: "sample" → sample=pattern1_full_events
+  system_key: "system"                   # Default: "system" → system=payments
+  entity_key: "table"                    # Default: "table" → table=transactions
+  date_key: "dt"                         # Default: "dt" → dt=2025-11-13
+  silver_model_key: "silver_model"       # Default: "silver_model" → silver_model=scd_type_2
+  domain_key: "domain"                   # Default: "domain" → domain=finance
+  load_date_key: "load_date"             # Default: "load_date" → load_date=2025-11-13
+
 datasets:
   - name: transactions                                # Friendly label for ops; appears in metadata/checklist.
     system: payments                                 # Repeat the system (keeps configs copy-paste friendly).

@@ -4,6 +4,15 @@ domain: retail_demo
 system: retail_demo
 entity: orders
 
+path_structure:
+  sample_key: "sample"
+  system_key: "system"
+  entity_key: "table"
+  date_key: "dt"
+  silver_model_key: "silver_model"
+  domain_key: "domain"
+  load_date_key: "load_date"
+
 bronze:
   enabled: true
   source_type: file

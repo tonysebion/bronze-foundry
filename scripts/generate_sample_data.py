@@ -7,23 +7,65 @@ import sys
 from datetime import datetime, date, timedelta
 from pathlib import Path
 from random import Random
-from typing import Iterable, List, Dict
+from typing import Iterable, List, Dict, Any
 import shutil
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from core.bronze.io import write_batch_metadata  # noqa: E402
+from core.bronze.io import write_batch_metadata, write_checksum_manifest  # noqa: E402
 
-CONFIG_DIR = REPO_ROOT / "docs" / "examples" / "configs"
+CONFIG_DIR = REPO_ROOT / "docs" / "examples" / "configs" / "patterns"
 BASE_DIR = REPO_ROOT / "sampledata" / "source_samples"
 SAMPLE_BRONZE_SAMPLES = REPO_ROOT / "sampledata" / "bronze_samples"
 # Mirror the generated source_samples into sampledata/bronze_samples for quick lookups
 
 SAMPLE_START_DATE = date(2025, 11, 13)
 DAILY_DAYS = 28
+
+
+def load_pattern_configs() -> Dict[str, Any]:
+    """Load all pattern YAML config files."""
+    configs = {}
+    for yaml_file in CONFIG_DIR.glob("pattern*.yaml"):
+        cfg = yaml.safe_load(yaml_file.read_text(encoding="utf-8"))
+        pattern_id = cfg.get("pattern_id")
+        if pattern_id:
+            configs[pattern_id] = cfg
+    return configs
+
+
+# Load pattern configs once at module level
+PATTERN_CONFIGS = load_pattern_configs()
+
+
+def _get_path_keys(pattern_id: str) -> Dict[str, str]:
+    """Extract path_structure keys from pattern config with defaults."""
+    config = PATTERN_CONFIGS.get(pattern_id, {})
+    path_struct = config.get("path_structure", {})
+    return {
+        "sample_key": path_struct.get("sample_key", "sample"),
+        "system_key": path_struct.get("system_key", "system"),
+        "entity_key": path_struct.get("entity_key", "table"),
+        "date_key": path_struct.get("date_key", "dt"),
+    }
+
+
+def _get_runtime_values(pattern_id: str) -> Dict[str, str]:
+    """Extract runtime values (system, entity, pattern_folder) from pattern config."""
+    config = PATTERN_CONFIGS.get(pattern_id, {})
+    bronze = config.get("bronze", {})
+    options = bronze.get("options", {}) or {}
+
+    return {
+        "system": config.get("system", "retail_demo"),
+        "entity": config.get("entity", "orders"),
+        "pattern_folder": options.get("pattern_folder", pattern_id),
+        "load_pattern": options.get("load_pattern", "full"),
+    }
 
 
 def _daily_schedule(start: date, days: int) -> List[str]:
@@ -117,15 +159,18 @@ def _write_csv(path: Path, rows: Iterable[Dict[str, object]]) -> None:
 
 
 def generate_full_snapshot(seed: int = 42, row_count: int = FULL_ROW_COUNT) -> None:
+    pattern_id = _pattern_dir("full")
+    runtime = _get_runtime_values(pattern_id)
+    path_keys = _get_path_keys(pattern_id)
+
     for day_offset, date_str in enumerate(FULL_DATES):
         rng = Random(seed + day_offset)
-        pattern_id = _pattern_dir("full")
         base_dir = (
             BASE_DIR
-            / f"sample={pattern_id}"
-            / "system=retail_demo"
-            / "table=orders"
-            / f"dt={date_str}"
+            / f"{path_keys['sample_key']}={runtime['pattern_folder']}"
+            / f"{path_keys['system_key']}={runtime['system']}"
+            / f"{path_keys['entity_key']}={runtime['entity']}"
+            / f"{path_keys['date_key']}={date_str}"
         )
         rows: List[Dict[str, object]] = []
         start = datetime.fromisoformat(f"{date_str}T00:00:00")
@@ -161,6 +206,9 @@ def generate_full_snapshot(seed: int = 42, row_count: int = FULL_ROW_COUNT) -> N
         total_records = len(rows)
         chunk_count = 1
 
+        # Add metadata files for Bronze layer
+        csv_files = [chunk_path]
+
         if day_offset == 1:
             schema_rows: List[Dict[str, object]] = []
             for idx in range(30):
@@ -178,8 +226,21 @@ def generate_full_snapshot(seed: int = 42, row_count: int = FULL_ROW_COUNT) -> N
                 )
             schema_chunk = base_dir / "full-part-0002.csv"
             _write_csv(schema_chunk, schema_rows)
+            csv_files.append(schema_chunk)
             total_records += len(schema_rows)
             chunk_count += 1
+
+        # Write metadata files for Bronze layer
+        write_batch_metadata(
+            out_dir=base_dir,
+            record_count=total_records,
+            chunk_count=chunk_count,
+        )
+        write_checksum_manifest(
+            out_dir=base_dir,
+            files=csv_files,
+            load_pattern=runtime["load_pattern"],
+        )
 
 
 def _write_hybrid_reference(
@@ -295,16 +356,19 @@ def _write_delta_metadata(
 
 
 def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
+    pattern_id = _pattern_dir("cdc")
+    runtime = _get_runtime_values(pattern_id)
+    path_keys = _get_path_keys(pattern_id)
     change_types = ["insert", "update", "delete"]
+
     for day_offset, date_str in enumerate(CDC_DATES):
         rng = Random(seed + day_offset)
-        pattern_id = _pattern_dir("cdc")
         base_dir = (
             BASE_DIR
-            / f"sample={pattern_id}"
-            / "system=retail_demo"
-            / "table=orders"
-            / f"dt={date_str}"
+            / f"{path_keys['sample_key']}={runtime['pattern_folder']}"
+            / f"{path_keys['system_key']}={runtime['system']}"
+            / f"{path_keys['entity_key']}={runtime['entity']}"
+            / f"{path_keys['date_key']}={date_str}"
         )
         rows: List[Dict[str, object]] = []
         start = datetime.fromisoformat(f"{date_str}T08:00:00")
@@ -344,6 +408,9 @@ def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
         total_records = len(rows)
         chunk_count = 1
 
+        # Add metadata files for Bronze layer
+        csv_files = [chunk_path]
+
         if day_offset == 1:
             schema_rows: List[Dict[str, object]] = []
             for idx in range(20):
@@ -362,8 +429,21 @@ def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
                 )
             schema_chunk = base_dir / "cdc-part-0002.csv"
             _write_csv(schema_chunk, schema_rows)
+            csv_files.append(schema_chunk)
             total_records += len(schema_rows)
             chunk_count += 1
+
+        # Write metadata files for Bronze layer
+        write_batch_metadata(
+            out_dir=base_dir,
+            record_count=total_records,
+            chunk_count=chunk_count,
+        )
+        write_checksum_manifest(
+            out_dir=base_dir,
+            files=csv_files,
+            load_pattern=runtime["load_pattern"],
+        )
 
 
 def generate_current_history(
@@ -371,15 +451,18 @@ def generate_current_history(
     current_rows: int = CURRENT_HISTORY_CURRENT,
     history_rows: int = CURRENT_HISTORY_HISTORY,
 ) -> None:
+    pattern_id = _pattern_dir("current_history")
+    runtime = _get_runtime_values(pattern_id)
+    path_keys = _get_path_keys(pattern_id)
+
     for day_offset, date_str in enumerate(CURRENT_HISTORY_DATES):
         rng = Random(seed + day_offset)
-        pattern_id = _pattern_dir("current_history")
         base_dir = (
             BASE_DIR
-            / f"sample={pattern_id}"
-            / "system=retail_demo"
-            / "table=orders"
-            / f"dt={date_str}"
+            / f"{path_keys['sample_key']}={runtime['pattern_folder']}"
+            / f"{path_keys['system_key']}={runtime['system']}"
+            / f"{path_keys['entity_key']}={runtime['entity']}"
+            / f"{path_keys['date_key']}={date_str}"
         )
 
         def build_history_rows() -> List[Dict[str, object]]:
@@ -441,7 +524,11 @@ def generate_current_history(
         )
         total_records = len(combined_rows)
         chunk_count = 1
-        _write_csv(base_dir / "current-history-part-0001.csv", combined_rows)
+        chunk_path = base_dir / "current-history-part-0001.csv"
+        _write_csv(chunk_path, combined_rows)
+
+        # Add metadata files for Bronze layer
+        csv_files = [chunk_path]
 
         if day_offset == 1:
             skew_rows: List[Dict[str, object]] = []
@@ -469,18 +556,37 @@ def generate_current_history(
                 )
             skew_chunk = base_dir / "current-history-part-0002.csv"
             _write_csv(skew_chunk, skew_rows)
+            csv_files.append(skew_chunk)
             total_records += len(skew_rows)
             chunk_count += 1
+
+        # Write metadata files for Bronze layer
+        write_batch_metadata(
+            out_dir=base_dir,
+            record_count=total_records,
+            chunk_count=chunk_count,
+        )
+        write_checksum_manifest(
+            out_dir=base_dir,
+            files=csv_files,
+            load_pattern=runtime["load_pattern"],
+        )
 
 
 def generate_hybrid_combinations(seed: int = 123) -> None:
     for combo_name, delta_pattern, delta_mode in HYBRID_COMBOS:
         pattern_id = _pattern_dir(combo_name)
+        runtime = _get_runtime_values(pattern_id)
+        path_keys = _get_path_keys(pattern_id)
+
         base_pattern_dir = (
-            BASE_DIR / f"sample={pattern_id}" / "system=retail_demo" / "table=orders"
+            BASE_DIR
+            / f"{path_keys['sample_key']}={runtime['pattern_folder']}"
+            / f"{path_keys['system_key']}={runtime['system']}"
+            / f"{path_keys['entity_key']}={runtime['entity']}"
         )
         for ref_date in (HYBRID_REFERENCE_INITIAL, HYBRID_REFERENCE_SECOND):
-            ref_dir = base_pattern_dir / f"dt={ref_date.isoformat()}" / "reference"
+            ref_dir = base_pattern_dir / f"{path_keys['date_key']}={ref_date.isoformat()}" / "reference"
             _write_hybrid_reference(
                 ref_dir,
                 ref_date.isoformat(),
@@ -499,7 +605,7 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
                 rows_to_write = cumulative_rows.copy()
             else:
                 rows_to_write = rows
-            delta_dir = base_pattern_dir / f"dt={delta_date.isoformat()}" / "delta"
+            delta_dir = base_pattern_dir / f"{path_keys['date_key']}={delta_date.isoformat()}" / "delta"
             if delta_date == HYBRID_REFERENCE_SECOND:
                 reference_run_date = HYBRID_REFERENCE_INITIAL
             elif delta_date > HYBRID_REFERENCE_SECOND:
@@ -531,7 +637,10 @@ def main() -> None:
 
 def _write_pattern_readmes() -> None:
     for pattern_key, desc in PATTERN_DESC.items():
-        pattern_dir = BASE_DIR / f"sample={pattern_key}"
+        # Get the pattern_folder from YAML config
+        runtime = _get_runtime_values(pattern_key)
+        path_keys = _get_path_keys(pattern_key)
+        pattern_dir = BASE_DIR / f"{path_keys['sample_key']}={runtime['pattern_folder']}"
         pattern_dir.mkdir(parents=True, exist_ok=True)
         readme = pattern_dir / "README.md"
         lines = [

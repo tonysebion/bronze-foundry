@@ -4,6 +4,17 @@ domain: retail_demo
 system: retail_demo
 entity: orders
 
+# Optional: Configure partition key names (defaults shown below)
+# Useful for environment-specific naming (e.g., env=dev vs sample=dev)
+path_structure:
+  sample_key: "sample"          # Creates: sample=pattern1_full_events
+  system_key: "system"          # Creates: system=retail_demo
+  entity_key: "table"           # Creates: table=orders
+  date_key: "dt"                # Creates: dt=2025-11-01
+  silver_model_key: "silver_model"  # Silver: silver_model=incremental_merge
+  domain_key: "domain"          # Silver: domain=retail_demo
+  load_date_key: "load_date"    # Silver: load_date=2025-11-01
+
 bronze:
   enabled: true
   source_type: file
