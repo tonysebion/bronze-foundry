@@ -318,7 +318,7 @@ class SilverPromotionService:
         )
         # cfg_list can contain typed RootConfig objects or plain dicts depending
         # on how the configs are loaded. Explicitly annotate accordingly.
-            self.cfg_list: Optional[List[Dict[str, Any] | RootConfig]]
+        self.cfg_list: Optional[List[Dict[str, Any] | RootConfig]]
         if self._provided_run_context:
             self.cfg_list = [self._provided_run_context.cfg]
         else:
