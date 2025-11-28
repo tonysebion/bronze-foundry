@@ -318,7 +318,7 @@ class SilverPromotionService:
         )
         # cfg_list can contain typed RootConfig objects or plain dicts depending
         # on how the configs are loaded. Explicitly annotate accordingly.
-        self.cfg_list: Optional[List[Dict[str, Any | RootConfig]]]
+            self.cfg_list: Optional[List[Dict[str, Any] | RootConfig]]
         if self._provided_run_context:
             self.cfg_list = [self._provided_run_context.cfg]
         else:
@@ -344,7 +344,7 @@ class SilverPromotionService:
         if not self._provided_run_context and not self.cfg_list:
             self.parser.error("Either --config or --run-context must be provided")
 
-        cfg: Optional[Dict[str, Any | RootConfig]] = None
+        cfg: Optional[Dict[str, Any] | RootConfig] = None
         if self._provided_run_context:
             run_context = self._provided_run_context
             cfg = run_context.cfg
@@ -352,7 +352,10 @@ class SilverPromotionService:
         else:
             cfg = self._select_config()
             run_date = self._resolve_run_date()
-            run_context = self._build_run_context(cfg, run_date)
+            if isinstance(cfg, RootConfig):
+                run_context = self._build_run_context(cast(Dict[str, Any], cfg.model_dump()), run_date)
+            else:
+                run_context = self._build_run_context(cast(Dict[str, Any], cfg), run_date)
 
         # normalize a dict view of the config for functions that expect plain dicts
         if isinstance(cfg, RootConfig):
@@ -371,7 +374,8 @@ class SilverPromotionService:
                 f"Bronze path '{bronze_path}' does not exist or is not a directory"
             )
 
-        load_pattern = self._resolve_load_pattern(cfg, bronze_path)
+        # Pass dict view to functions expecting dicts
+        load_pattern = self._resolve_load_pattern(cfg_dict, bronze_path)
         run_context.load_pattern = load_pattern
         self._update_hook_context(load_pattern=load_pattern.value)
 
@@ -392,7 +396,7 @@ class SilverPromotionService:
             )
 
         silver_partition = self._resolve_silver_partition(
-            cfg, bronze_path, load_pattern, run_date
+            cfg_dict, bronze_path, load_pattern, run_date
         )
         logger.info("Bronze partition: %s", bronze_path)
         logger.info("Silver partition: %s", silver_partition)
@@ -643,7 +647,7 @@ class SilverPromotionService:
                     "Silver configuration valid for %s", cfg["source"]["config_name"]
                 )
 
-    def _select_config(self) -> Optional[Dict[str, Any | RootConfig]]:
+    def _select_config(self) -> Optional[Dict[str, Any] | RootConfig]:
         if not self.cfg_list:
             return None
         try:
