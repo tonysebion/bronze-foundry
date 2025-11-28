@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
+from typing import Mapping
+
 import pytest
 
 from core.storage.policy import validate_storage_metadata, enforce_storage_scope
 
 
 def _platform(
-    metadata: dict[str, object] | None = None, backend: str = "s3"
+    metadata: Mapping[str, object | None] | None = None, backend: str = "s3"
 ) -> dict[str, object]:
     bronze: dict[str, object] = {"storage_backend": backend}
     if metadata is not None:
-        bronze["storage_metadata"] = metadata
+        bronze["storage_metadata"] = dict(metadata)
     return {"bronze": bronze}
 
 
