@@ -313,13 +313,19 @@ class ApiExtractor(BaseExtractor):
             cursor_param = pagination_cfg.get("cursor_param", "cursor")
             cursor_path = pagination_cfg.get("cursor_path", "next_cursor")
 
-            cursor = None
+            cursor: Optional[str] = None
+            first_iteration = True
 
-            while True:
-                if cursor:
-                    params[cursor_param] = cursor
+            while first_iteration or cursor is not None:
+                if first_iteration:
+                    first_iteration = False
+                request_params = dict(params)
+                if cursor is not None:
+                    request_params[cursor_param] = cursor
 
-                resp = self._make_request(session, url, headers, params, timeout, auth)
+                resp = self._make_request(
+                    session, url, headers, request_params, timeout, auth
+                )
                 data = resp.json()
 
                 records = self._extract_records(data, api_cfg)
@@ -331,17 +337,17 @@ class ApiExtractor(BaseExtractor):
                     f"Fetched {len(records)} records (total: {len(all_records)})"
                 )
 
-                # Extract next cursor
-                cursor = None
-                if isinstance(data, dict):
-                    obj: Any = data
+                cursor_val: Optional[str] = None
+                obj: Any = data
+                if isinstance(obj, dict):
                     for key in cursor_path.split("."):
                         obj = obj.get(key) if isinstance(obj, dict) else None
                         if obj is None:
                             break
-                    cursor = obj
+                    cursor_val = obj
 
-                if not cursor:
+                cursor = cursor_val
+                if cursor is None:
                     break
 
         else:
@@ -419,9 +425,7 @@ class ApiExtractor(BaseExtractor):
             params[page_size_param] = page_size
 
             # Prefetch next page while processing current page
-            import asyncio
-
-            next_page_task = None
+            next_page_task: Optional[asyncio.Task[Dict[str, Any]]] = None
 
             while True:
                 if max_pages > 0 and page > max_pages:
@@ -432,7 +436,7 @@ class ApiExtractor(BaseExtractor):
                 params_copy[page_param] = page
 
                 # If we have a prefetch task running, await it; otherwise fetch current page
-                if next_page_task:
+                if next_page_task is not None:
                     data = await next_page_task
                 else:
                     data = await _get(params_copy)
@@ -457,7 +461,7 @@ class ApiExtractor(BaseExtractor):
                 )
 
                 if len(records) < page_size:
-                    if next_page_task:
+                    if next_page_task is not None:
                         next_page_task.cancel()
                     break
 
@@ -466,11 +470,16 @@ class ApiExtractor(BaseExtractor):
         elif pagination_type == "cursor":
             cursor_param = pagination_cfg.get("cursor_param", "cursor")
             cursor_path = pagination_cfg.get("cursor_path", "next_cursor")
-            cursor = None
-            while True:
-                if cursor:
-                    params[cursor_param] = cursor
-                data = await _get(params)
+
+            cursor: Optional[str] = None
+            first_iteration = True
+            while first_iteration or cursor is not None:
+                if first_iteration:
+                    first_iteration = False
+                request_params = dict(params)
+                if cursor is not None:
+                    request_params[cursor_param] = cursor
+                data = await _get(request_params)
                 records = self._extract_records(data, api_cfg)
                 if not records:
                     break
@@ -522,10 +531,8 @@ class ApiExtractor(BaseExtractor):
         logger.info(f"Starting API extraction from {base_url}{endpoint}")
 
         try:
-            if is_async_enabled(api_cfg):
-                import asyncio
-
-                records = asyncio.run(
+        if is_async_enabled(api_cfg):
+            records = asyncio.run(
                     self._paginate_async(
                         base_url, endpoint, headers, api_cfg, run_cfg, auth
                     )
