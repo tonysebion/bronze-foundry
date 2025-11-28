@@ -637,21 +637,34 @@ class SilverPromotionService:
         if not self.cfg_list:
             self.parser.error("--config is required when using --validate-only")
         if self.args.source_name:
-            cfg = _select_config(self.cfg_list, self.args.source_name)
-            logger.info(
-                "Silver configuration valid for %s", cfg["source"]["config_name"]
-            )
-        else:
-            for cfg in self.cfg_list:
+            cfg = self._select_config()
+            if cfg:
                 logger.info(
                     "Silver configuration valid for %s", cfg["source"]["config_name"]
                 )
+        else:
+            for item in self.cfg_list:
+                cfg_dict = (
+                    cast(Dict[str, Any], item.model_dump())
+                    if isinstance(item, RootConfig)
+                    else cast(Dict[str, Any], item)
+                )
+                logger.info(
+                    "Silver configuration valid for %s", cfg_dict["source"]["config_name"]
+                )
 
-    def _select_config(self) -> Optional[Dict[str, Any] | RootConfig]:
+    def _select_config(self) -> Optional[Dict[str, Any]]:
         if not self.cfg_list:
             return None
+        # Normalize any RootConfig instances into plain dicts for the legacy selector
+        normalized: List[Dict[str, Any]] = []
+        for entry in self.cfg_list:
+            if isinstance(entry, RootConfig):
+                normalized.append(cast(Dict[str, Any], entry.model_dump()))
+            else:
+                normalized.append(cast(Dict[str, Any], entry))
         try:
-            return _select_config(self.cfg_list, self.args.source_name)
+            return _select_config(normalized, self.args.source_name)
         except ValueError as exc:
             self.parser.error(str(exc))
 
