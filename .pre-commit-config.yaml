@@ -32,6 +32,12 @@ repos:
         additional_dependencies:
           - types-PyYAML
           - types-requests
+          - pydantic
+          - httpx
+          - opentelemetry-sdk
+          - azure-core
+          - azure-identity
+          - azure-storage-blob
         args: [--config-file=mypy.ini, --no-incremental]
         exclude: ^(tests/|docs/)
   - repo: https://github.com/Yelp/detect-secrets
