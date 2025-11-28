@@ -5,7 +5,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, cast
+from typing import Any, Dict
 
 from core.config import build_relative_path
 from core.config.typed_models import RootConfig
@@ -51,7 +51,7 @@ def build_run_context(
         cfg_dict = typed.model_dump()
     else:
         typed = None
-        cfg_dict = cast(Dict[str, Any], cfg)
+        cfg_dict = cfg
         run_cfg = cfg_dict["source"].get("run", {})
 
     local_output_dir = Path(
