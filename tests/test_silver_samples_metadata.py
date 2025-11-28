@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List, cast
 
 import pytest
 import yaml
@@ -19,10 +19,10 @@ DEFAULT_ERROR_HANDLING = {
     "max_bad_records": 0,
     "max_bad_percent": 0.0,
 }
-DEFAULT_SCHEMA: dict[str, object] = {"rename_map": {}, "column_order": None}
+DEFAULT_SCHEMA: Dict[str, Any] = {"rename_map": {}, "column_order": None}
 
 
-def _load_expected_silver_config(config_path: Path) -> Dict[str, object]:
+def _load_expected_silver_config(config_path: Path) -> Dict[str, Any]:
     if not config_path.exists():
         raise FileNotFoundError(f"Config not found at {config_path}")
     cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
@@ -82,13 +82,13 @@ def _find_intent_config(label_dir: Path) -> Path:
 
 
 def _expected_artifact_names(
-    model: SilverModel, silver_cfg: Dict[str, object]
+    model: SilverModel, silver_cfg: Dict[str, Any]
 ) -> List[str]:
-    artifact_names = {
-        "full_snapshot": silver_cfg["full_output_name"],
-        "cdc": silver_cfg["cdc_output_name"],
-        "history": silver_cfg["history_output_name"],
-        "current": silver_cfg["current_output_name"],
+    artifact_names: Dict[str, str] = {
+        "full_snapshot": str(silver_cfg["full_output_name"]),
+        "cdc": str(silver_cfg["cdc_output_name"]),
+        "history": str(silver_cfg["history_output_name"]),
+        "current": str(silver_cfg["current_output_name"]),
     }
     mapping = {
         SilverModel.SCD_TYPE_1: ["current"],
@@ -113,7 +113,7 @@ def test_silver_metadata_matches_config(silver_metadata_files: List[Path]) -> No
     assert silver_metadata_files, "Expected at least one Silver metadata file"
 
     for metadata_path in silver_metadata_files:
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        metadata: Dict[str, Any] = json.loads(metadata_path.read_text(encoding="utf-8"))
         silver_model_value = metadata.get("silver_model")
         if not silver_model_value:
             relative_parts = metadata_path.relative_to(SILVER_ROOT).parts
@@ -147,10 +147,11 @@ def test_silver_metadata_matches_config(silver_metadata_files: List[Path]) -> No
         assert metadata["error_handling"] == expected_cfg["error_handling"]
 
         expected_artifacts = set(_expected_artifact_names(silver_model, expected_cfg))
-        artifact_keys = set(metadata["artifacts"].keys())
+        artifacts = cast(Dict[str, List[str]], metadata["artifacts"])
+        artifact_keys = set(artifacts.keys())
         assert artifact_keys == expected_artifacts
         for artifact_name in expected_artifacts:
-            output_files = metadata["artifacts"][artifact_name]
+            output_files = artifacts[artifact_name]
             assert set(output_files) == {
                 f"{artifact_name}.parquet",
                 f"{artifact_name}.csv",
