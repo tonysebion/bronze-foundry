@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from core.io import write_batch_metadata, write_checksum_manifest
+from core.bronze.io import write_batch_metadata, write_checksum_manifest
 from core.patterns import LoadPattern
 
 

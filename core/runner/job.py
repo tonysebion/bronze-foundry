@@ -22,7 +22,7 @@ from core.extractors.api_extractor import ApiExtractor
 from core.extractors.base import BaseExtractor
 from core.extractors.db_extractor import DbExtractor
 from core.extractors.file_extractor import FileExtractor
-from core.io import chunk_records
+from core.bronze.io import chunk_records
 from core.patterns import LoadPattern
 from core.runner.chunks import ChunkProcessor, ChunkWriter
 from core.storage import get_storage_backend

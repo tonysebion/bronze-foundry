@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from core.io import write_csv_chunk, write_parquet_chunk
+from core.bronze.io import write_csv_chunk, write_parquet_chunk
 from core.storage.backend import StorageBackend
 
 logger = logging.getLogger(__name__)

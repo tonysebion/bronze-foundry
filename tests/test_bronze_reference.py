@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from core.io import write_batch_metadata
+from core.bronze.io import write_batch_metadata
 from scripts.generate_sample_data import (
     HYBRID_DELTA_DAYS,
     HYBRID_REFERENCE_INITIAL,

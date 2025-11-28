@@ -15,7 +15,7 @@ import pandas as pd
 
 from core.config import DatasetConfig, build_relative_path, load_configs
 from core.context import RunContext, build_run_context, load_run_context
-from core.io import (
+from core.bronze.io import (
     write_batch_metadata,
     verify_checksum_manifest,
     write_checksum_manifest,

@@ -5,7 +5,7 @@ import pandas as pd
 
 import pytest
 
-from core.io import (
+from core.bronze.io import (
     chunk_records,
     verify_checksum_manifest,
     write_checksum_manifest,

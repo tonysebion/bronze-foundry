@@ -2,7 +2,7 @@
 
 import pytest
 from datetime import date
-from core.io import chunk_records, write_batch_metadata
+from core.bronze.io import chunk_records, write_batch_metadata
 from core.config import build_relative_path
 
 
