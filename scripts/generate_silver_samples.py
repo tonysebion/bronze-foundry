@@ -307,12 +307,12 @@ def _generate_for_partition(
 
     # Build Silver base using sample= prefix matching Bronze
     # silver_extract.py will add domain/entity/v1/load_date internally
-      silver_base = (
-          TEMP_SILVER_SAMPLE_ROOT
-          / f"sample={pattern_id}"
-          / f"silver_model={config.silver_model}"
-      )
-      silver_base.mkdir(parents=True, exist_ok=True)
+    silver_base = (
+        TEMP_SILVER_SAMPLE_ROOT
+        / f"sample={pattern_id}"
+        / f"silver_model={config.silver_model}"
+    )
+    silver_base.mkdir(parents=True, exist_ok=True)
 
     cmd = [
         "silver_extract.py",
