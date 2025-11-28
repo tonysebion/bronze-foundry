@@ -13,7 +13,13 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import pandas as pd
 
-from core.config import DatasetConfig, build_relative_path, load_configs
+from core.config import (
+    DatasetConfig,
+    build_relative_path,
+    load_configs,
+    ensure_root_config,
+)
+from core.config.typed_models import RootConfig
 from core.config import ensure_root_config
 from core.context import RunContext, build_run_context, load_run_context
 from core.bronze.io import (
@@ -318,7 +324,7 @@ class SilverPromotionService:
         )
         # cfg_list can contain typed RootConfig objects or plain dicts depending
         # on how the configs are loaded. Explicitly annotate accordingly.
-        self.cfg_list: Optional[List[Dict[str, Any]]]
+        self.cfg_list: Optional[List[RootConfig]]
         if self._provided_run_context:
             self.cfg_list = [ensure_root_config(self._provided_run_context.cfg)]
         else:
@@ -344,22 +350,21 @@ class SilverPromotionService:
         if not self._provided_run_context and not self.cfg_list:
             self.parser.error("Either --config or --run-context must be provided")
 
-        cfg: Optional[Dict[str, Any]] = None
+        cfg: Optional[RootConfig] = None
         if self._provided_run_context:
             run_context = self._provided_run_context
-            cfg = run_context.cfg
+            cfg = ensure_root_config(run_context.cfg)
             run_date = run_context.run_date
         else:
             cfg = self._select_config()
             if cfg is None:
                 self.parser.error("No configuration available for the requested source")
             run_date = self._resolve_run_date()
-            run_context = self._build_run_context(cfg, run_date)
+            run_context = self._build_run_context(cfg.model_dump(), run_date)
 
-        # cfg is always a dict (either from RunContext or load_configs), so
-        # use it directly as a dict view
-        cfg_dict: Optional[Dict[str, Any]] = cfg
-
+        # cfg is always a typed RootConfig; create a dict view for functions that expect a dict
+        cfg_dict: Optional[Dict[str, Any]] = cfg.model_dump() if cfg else None
+            # cfg: Optional[RootConfig] = None  # No-op formatting adjustment
         platform_cfg: Dict[str, Any] = cfg_dict.get("platform", {}) if cfg_dict else {}
         enforce_storage_scope(platform_cfg, self.args.storage_scope)
         bronze_path = run_context.bronze_path
@@ -636,24 +641,31 @@ class SilverPromotionService:
         if self.args.source_name:
             cfg = self._select_config()
             if cfg:
+                cfg_dict = cfg.model_dump()
                 logger.info(
-                    "Silver configuration valid for %s", cfg["source"]["config_name"]
+                    "Silver configuration valid for %s", cfg_dict["source"]["config_name"]
                 )
         else:
             for item in self.cfg_list:
+                cfg_dict = item.model_dump()
                 logger.info(
-                    "Silver configuration valid for %s", item["source"]["config_name"]
+                    "Silver configuration valid for %s", cfg_dict["source"]["config_name"]
                 )
 
-    def _select_config(self) -> Optional[Dict[str, Any]]:
+    def _select_config(self) -> Optional[RootConfig]:
         if not self.cfg_list:
             return None
-        # Entries are already plain dicts when loaded via load_configs or RunContext
-        normalized: List[Dict[str, Any]] = list(self.cfg_list)
-        try:
-            return _select_config(normalized, self.args.source_name)
-        except ValueError as exc:
-            self.parser.error(str(exc))
+        if self.args.source_name:
+            for entry in self.cfg_list:
+                entry_dict = entry.model_dump()
+                if entry_dict.get("source", {}).get("config_name") == self.args.source_name:
+                    return entry
+            self.parser.error(f"No source named '{self.args.source_name}' found in config")
+        if len(self.cfg_list) == 1:
+            return self.cfg_list[0]
+        self.parser.error(
+            "Config contains multiple sources; specify --source-name to select one."
+        )
 
     def _resolve_run_date(self) -> dt.date:
         return (
