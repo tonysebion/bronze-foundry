@@ -8,7 +8,7 @@ legacy code paths still expecting dictionaries.
 from __future__ import annotations
 
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, StrictBool, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 from enum import Enum
 
 from core.patterns import LoadPattern
@@ -66,9 +66,11 @@ class RunConfig(BaseModel):
 
 
 class SourceConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
     pattern_id: Optional[str] = (
         None  # Configurable identifier for tracing across layers (e.g., pattern1_full_events, retail_pos_api)
     )
+    config_name: Optional[str] = None
     type: SourceType = SourceType.api
     system: str
     table: str
@@ -242,6 +244,7 @@ class PlatformConfig(BaseModel):
 
 
 class RootConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
     config_version: int = 1
     platform: PlatformConfig
     source: SourceConfig
