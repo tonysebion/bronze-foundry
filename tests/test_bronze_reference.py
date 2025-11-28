@@ -7,6 +7,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any, Dict, cast
 
 import pytest
 
@@ -29,7 +30,7 @@ HYBRID_COMBOS = [
 
 
 def _write_metadata_with_reference(
-    tmp_path: Path, run_date: dt.date, reference_mode: dict[str, object]
+    tmp_path: Path, run_date: dt.date, reference_mode: Dict[str, Any]
 ) -> Path:
     path = (
         tmp_path
@@ -68,8 +69,8 @@ def test_reference_then_cdc_delta(tmp_path: Path) -> None:
         dt.date(2025, 11, 14),
         {"role": "delta", "delta_patterns": ["cdc"]},
     )
-    ref_meta = json.loads((ref_path / "_metadata.json").read_text())
-    delta_meta = json.loads((delta_path / "_metadata.json").read_text())
+    ref_meta = cast(Dict[str, Any], json.loads((ref_path / "_metadata.json").read_text()))
+    delta_meta = cast(Dict[str, Any], json.loads((delta_path / "_metadata.json").read_text()))
     assert ref_meta["reference_mode"]["role"] == "reference"
     assert delta_meta["reference_mode"]["role"] == "delta"
     assert delta_meta["reference_mode"]["delta_patterns"] == ["cdc"]
@@ -90,8 +91,8 @@ def test_reference_then_incremental_delta(tmp_path: Path) -> None:
         dt.date(2025, 11, 14),
         {"role": "delta", "delta_patterns": ["incremental_merge"]},
     )
-    ref_meta = json.loads((ref_path / "_metadata.json").read_text())
-    delta_meta = json.loads((delta_path / "_metadata.json").read_text())
+    ref_meta = cast(Dict[str, Any], json.loads((ref_path / "_metadata.json").read_text()))
+    delta_meta = cast(Dict[str, Any], json.loads((delta_path / "_metadata.json").read_text()))
     assert "incremental_merge" in ref_meta["reference_mode"]["delta_patterns"]
     assert delta_meta["reference_mode"]["role"] == "delta"
 
@@ -110,7 +111,7 @@ def test_hybrid_samples_cover_delta_sequence() -> None:
                 base / f"dt={ref_date.isoformat()}" / "reference" / "_metadata.json"
             )
             assert reference_meta_path.exists()
-            reference_meta = json.loads(reference_meta_path.read_text())
+            reference_meta = cast(Dict[str, Any], json.loads(reference_meta_path.read_text()))
             assert (
                 reference_meta["reference_mode"]["reference_run_date"]
                 == ref_date.isoformat()
@@ -122,7 +123,7 @@ def test_hybrid_samples_cover_delta_sequence() -> None:
                 base / f"dt={delta_date.isoformat()}" / "delta" / "_metadata.json"
             )
             assert delta_meta_path.exists()
-            delta_meta = json.loads(delta_meta_path.read_text())
+            delta_meta = cast(Dict[str, Any], json.loads(delta_meta_path.read_text()))
             assert delta_meta["reference_mode"]["role"] == "delta"
             assert delta_meta["reference_mode"]["delta_mode"] == delta_mode
             if delta_date > HYBRID_REFERENCE_SECOND:

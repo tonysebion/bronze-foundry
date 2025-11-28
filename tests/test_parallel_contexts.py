@@ -1,17 +1,32 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
+from datetime import date
+from pathlib import Path
+from typing import List
 
-
+from core.context import RunContext
 from core.parallel import _safe_run_extract, run_parallel_extracts
+from core.patterns import LoadPattern
 
 
-def _build_context(name: str) -> SimpleNamespace:
-    return SimpleNamespace(config_name=name)
+def _build_context(name: str) -> RunContext:
+    base_dir = Path(".")
+    return RunContext(
+        cfg={},
+        run_date=date.today(),
+        relative_path="",
+        local_output_dir=base_dir,
+        bronze_path=base_dir,
+        source_system="system",
+        source_table="table",
+        dataset_id=name,
+        config_name=name,
+        load_pattern=LoadPattern.FULL,
+    )
 
 
 def test_run_parallel_extracts_reports_status(monkeypatch) -> None:
-    contexts = [
+    contexts: List[RunContext] = [
         _build_context("success"),
         _build_context("failure"),
     ]

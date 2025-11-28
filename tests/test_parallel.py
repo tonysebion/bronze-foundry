@@ -1,19 +1,33 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
+from datetime import date
+from pathlib import Path
 from typing import List
 
-
+from core.context import RunContext
 from core.parallel import _safe_run_extract, run_parallel_extracts
+from core.patterns import LoadPattern
 
 
-class DummyContext(SimpleNamespace):
-    pass
+def _build_context(name: str) -> RunContext:
+    base_dir = Path(".")
+    return RunContext(
+        cfg={},
+        run_date=date.today(),
+        relative_path="",
+        local_output_dir=base_dir,
+        bronze_path=base_dir,
+        source_system="system",
+        source_table="table",
+        dataset_id=name,
+        config_name=name,
+        load_pattern=LoadPattern.FULL,
+    )
 
 
 def test_safe_run_extract_success(monkeypatch):
     monkeypatch.setattr("core.parallel.run_extract", lambda context: 0)
-    context = DummyContext(config_name="success")
+    context = _build_context("success")
     status, error = _safe_run_extract(context)
     assert status == 0
     assert error is None
@@ -24,16 +38,16 @@ def test_safe_run_extract_failure(monkeypatch):
         raise RuntimeError("boom")
 
     monkeypatch.setattr("core.parallel.run_extract", raise_error)
-    context = DummyContext(config_name="fail")
+    context = _build_context("fail")
     status, error = _safe_run_extract(context)
     assert status == -1
     assert isinstance(error, RuntimeError)
 
 
 def test_run_parallel_extracts_reports_statuses(monkeypatch):
-    contexts: List[DummyContext] = [
-        DummyContext(config_name="success"),
-        DummyContext(config_name="partial"),
+    contexts: List[RunContext] = [
+        _build_context("success"),
+        _build_context("partial"),
     ]
 
     def fake_safe(context):
