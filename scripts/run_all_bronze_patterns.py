@@ -200,8 +200,8 @@ def main() -> int:
     total_runs = sum(len(entry["run_dates"]) for entry in pattern_runs)
     print(f"Configs to run: {len(pattern_runs)} ({total_runs} Bronze runs)")
 
-    bronze_out = Path("sampledata/bronze_samples")
-    bronze_out.mkdir(parents=True, exist_ok=True)
+    bronze_root = Path("sampledata/bronze_samples")
+    bronze_root.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
@@ -210,20 +210,22 @@ def main() -> int:
         for entry in pattern_runs:
             for run_date in entry["run_dates"]:
                 run_counter += 1
+                pattern_dir = bronze_root / (entry["pattern"] or Path(entry["config"]).stem)
+                pattern_dir.mkdir(parents=True, exist_ok=True)
                 tasks.append(
                     {
                         "config_path": entry["config"],
                         "run_date": run_date,
                         "run_count": run_counter,
                         "temp_path": temp_path,
-                        "output_base": bronze_out,
+                        "output_base": pattern_dir,
                         "total_runs": total_runs,
                         "pattern": entry["pattern"],
                     }
                 )
 
         results: list[tuple[str, str, bool]] = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             futures = [executor.submit(process_run, task) for task in tasks]
             for future in concurrent.futures.as_completed(futures):
                 results.append(future.result())
@@ -237,7 +239,7 @@ def main() -> int:
     print(f"\nCompleted: {successful}/{total} runs")
     if successful == total:
         print("\n✅ ALL BRONZE EXTRACTIONS SUCCEEDED!")
-        print(f"\n📁 Bronze outputs: {bronze_out.resolve()}")
+        print(f"\n📁 Bronze outputs: {bronze_root.resolve()}")
     else:
         print("\n❌ SOME BRONZE EXTRACTIONS FAILED")
         print("\nFailed runs:")
