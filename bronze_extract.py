@@ -276,14 +276,14 @@ class BronzeOrchestrator:
                 for cfg in cfgs:
                     tcfg = cfg
                     source = tcfg.source
+                    cfg_dict = cfg.model_dump()
                     logger.info(
-                        f"  ✓ System: {tcfg.source.system}, Table: {tcfg.source.table}, Type: {cfg.get('source', {}).get('type', 'api')}, Config: {cfg.get('source', {}).get('config_name')}"
+                        f"  ✓ System: {tcfg.source.system}, Table: {tcfg.source.table}, Type: {cfg_dict.get('source', {}).get('type', 'api')}, Config: {cfg_dict.get('source', {}).get('config_name')}"
                     )
                     logger.info(
                         f"  ✓ Load pattern: {tcfg.source.run.load_pattern.value if getattr(tcfg.source, 'run', None) else LoadPattern.FULL.value}"
                     )
-
-                    platform = cfg["platform"]
+                    platform = cfg.model_dump()["platform"]
                     storage_backend = platform["bronze"].get("storage_backend", "s3")
                     logger.info(f"  ✓ Storage backend: {storage_backend}")
 
