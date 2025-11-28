@@ -9,7 +9,7 @@ try:  # optional dependency
 
     _OTEL_AVAILABLE = True
 except Exception:  # pragma: no cover - optional
-    otel_trace = None
+    otel_trace: Any = None
     _OTEL_AVAILABLE = False
 
 
