@@ -3,20 +3,22 @@
 import pytest
 import sys
 from pathlib import Path
-from core.samples.bootstrap import bootstrap as bootstrap_samples
-from datetime import date
 
 
 @pytest.fixture(scope="session", autouse=True)
-def ensure_bootstrap_samples(tmp_path_factory):
-    """Ensure Bronze sample data exists before tests run.
-
-    Uses today's date for deterministic partition names already referenced
-    in example configs. If data already exists, no changes are made.
-    """
+def ensure_sample_data_available() -> None:
+    """Fail early if Bronze sample data is missing so tests don't run blind."""
     root = Path("sampledata/source_samples")
-    if not root.exists() or not any(root.rglob("*.csv")):
-        bootstrap_samples([date.today().isoformat()])
+    if not root.exists():
+        pytest.exit(
+            "Bronze sample data missing; populate `sampledata/source_samples` "
+            "before running tests (e.g., `python scripts/generate_sample_data.py`)."
+        )
+    if not any(root.rglob("*.csv")):
+        pytest.exit(
+            "Bronze sample fixtures are empty; ensure `sampledata/source_samples` "
+            "contains generated data (e.g., run `python scripts/generate_sample_data.py`)."
+        )
 
 
 # Add the project root to the Python path

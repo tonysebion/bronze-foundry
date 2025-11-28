@@ -6,7 +6,7 @@
 - Typed config models (Pydantic) embedded in loaded config dicts under `__typed_model__`.
 - `SilverArtifactWriter` protocol (`core.silver.writer`) and `DefaultSilverArtifactWriter` implementation.
 - Partition abstractions: `BronzePartition`, `SilverPartition` (centralized path logic).
-- Explicit Bronze sample bootstrap command.
+- Clear documentation that Bronze sample fixtures must be created before running extractors/tests (e.g., via `python scripts/generate_sample_data.py`).
 - Structured deprecation & compatibility warnings.
 
 ### Deprecations (Removal Target 1.3.0)
@@ -27,7 +27,7 @@
    cfg = load_config(path)
    typed = cfg.get("__typed_model__")  # RootConfig instance
    ```
-5. Use bootstrap command (to be exposed via CLI in a future release) to generate Bronze samples instead of relying on implicit synthesis.
+5. Ensure Bronze fixtures exist before testing or extraction by running `python scripts/generate_sample_data.py` (or providing an equivalent `sampledata/source_samples` tree); the old bootstrap helper is no longer available.
 6. Remove any workflows or docs still invoking `--stream`/`--resume`; reruns now rely on `_metadata.json`/`_checksums.json` plus Bronze load patterns.
 
 ### Future (Post 1.1.0)
