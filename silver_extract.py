@@ -9,7 +9,7 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Mapping
+from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
 
 import pandas as pd
 
