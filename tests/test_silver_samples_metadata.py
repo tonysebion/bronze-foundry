@@ -19,7 +19,7 @@ DEFAULT_ERROR_HANDLING = {
     "max_bad_records": 0,
     "max_bad_percent": 0.0,
 }
-DEFAULT_SCHEMA = {"rename_map": {}, "column_order": None}
+DEFAULT_SCHEMA: dict[str, object] = {"rename_map": {}, "column_order": None}
 
 
 def _load_expected_silver_config(config_path: Path) -> Dict[str, object]:
