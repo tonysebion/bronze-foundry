@@ -672,7 +672,9 @@ class SilverPromotionService:
             dt.date.fromisoformat(self.args.date) if self.args.date else dt.date.today()
         )
 
-    def _build_run_context(self, cfg: Dict[str, Any], run_date: dt.date) -> RunContext:
+    def _build_run_context(
+        self, cfg: Dict[str, Any] | RootConfig, run_date: dt.date
+    ) -> RunContext:
         cfg_dict: Dict[str, Any]
         if isinstance(cfg, RootConfig):
             cfg_dict = cfg.model_dump()
@@ -680,18 +682,18 @@ class SilverPromotionService:
             cfg_dict = cfg
         relative_path = build_relative_path(cfg_dict, run_date)
         local_output_dir = Path(
-            cfg["source"]["run"].get("local_output_dir", "./output")
+            cfg_dict["source"]["run"].get("local_output_dir", "./output")
         )
         if self.args.bronze_path:
             bronze_path = Path(self.args.bronze_path).resolve()
         else:
-            part = build_bronze_partition(cfg, run_date)
+            part = build_bronze_partition(cfg_dict, run_date)
             bronze_path = (local_output_dir / part.relative_path()).resolve()
         load_pattern_override = (
             None if (self.args.pattern in (None, "auto")) else self.args.pattern
         )
         return build_run_context(
-            cfg,
+            cfg_dict,
             run_date,
             local_output_override=local_output_dir,
             relative_override=relative_path,
