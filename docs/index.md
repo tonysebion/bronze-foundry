@@ -85,6 +85,8 @@ python bronze_extract.py --config config/my_api.yaml --date 2025-11-27
 - [API Documentation](api/core.md) - Code reference
 - [Operations](framework/operations/OPERATIONS.md) - Production runbooks
 - [Troubleshooting](framework/operations/ERROR_CODES.md) - Common issues
+- [Project Review](framework/PROJECT_REVIEW.md) - Comprehensive project audit (architecture, testing, components)
+- [Review Insights](framework/PROJECT_REVIEW_INSIGHTS.md) - Key insights, decisions, roadmap for developers
 
 ---
 

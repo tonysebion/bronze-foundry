@@ -22,6 +22,8 @@ This page is the visual anchor for how Bronze → Silver (and storage backends) 
 
 ## Next steps
 
+- **For project overview & component deep-dive**: See `docs/framework/PROJECT_REVIEW.md` (comprehensive project audit)
+- **For design decisions & roadmap**: See `docs/framework/PROJECT_REVIEW_INSIGHTS.md` (key insights for contributors)
 - For more detail on storage backends see `docs/STORAGE_BACKEND_ARCHITECTURE.md`.
 - To plug in new storage providers, follow `core/storage/registry.py` + `core/storage/plugin_factories.py` and register your factory.
 - Resilience & async: See `docs/ENHANCED_FEATURES.md` for retry/breaker, async HTTP, rate limiting, and tracing guidance.
