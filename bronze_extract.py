@@ -400,9 +400,9 @@ class BronzeOrchestrator:
             )
 
         # Fallback to dict-based extraction if typed model missing.
-        cfg_dict = cast(Dict[str, Any], configs[0].model_dump())
-        source_cfg = cast(Dict[str, Any], cfg_dict["source"])
-        run_cfg = cast(Dict[str, Any], source_cfg["run"])
+        cfg_dict: Any = configs[0].model_dump()
+        source_section = cast(Dict[str, Any], cfg_dict.get("source", {}))
+        run_cfg = cast(Dict[str, Any], source_section.get("run", {}))
         silver_cfg = cast(Dict[str, Any], cfg_dict.get("silver", {}))
         load_pattern = LoadPattern.normalize(run_cfg.get("load_pattern"))
         write_parquet = run_cfg.get("write_parquet", True)
