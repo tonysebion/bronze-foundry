@@ -5,6 +5,7 @@ import logging
 from typing import Any, Dict
 
 from .typed_models import SilverConfig
+from pydantic import ValidationError
 from core.deprecation import emit_compat, emit_deprecation, DeprecationSpec
 from core.patterns import LoadPattern
 from core.storage.policy import validate_storage_metadata
@@ -17,7 +18,13 @@ def _normalize_silver_config(
     source: Dict[str, Any],
     load_pattern: LoadPattern,
 ) -> Dict[str, Any]:
-    model = SilverConfig.from_raw(raw_silver, source, load_pattern)
+    try:
+        model = SilverConfig.from_raw(raw_silver, source, load_pattern)
+    except ValidationError as exc:
+        error_fields = {err.get("loc", (None,))[0] for err in exc.errors()}
+        if "require_checksum" in error_fields:
+            raise ValueError("silver.require_checksum must be a boolean") from exc
+        raise
     return model.to_dict()
 
 
