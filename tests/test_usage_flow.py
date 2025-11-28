@@ -72,10 +72,9 @@ def _build_sample_path(
             tail = [original_path.name]
     return (
         BRONZE_SAMPLE_ROOT
-        / pattern_dir
+        / f"sample={pattern_dir}"
         / f"system={system}"
         / f"table={table}"
-        / f"pattern={pattern_dir}"
         / f"dt={run_date}"
         / Path(*tail)
     )

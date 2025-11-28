@@ -101,10 +101,9 @@ def test_hybrid_samples_cover_delta_sequence() -> None:
         pattern_folder = SAMPLE_PATTERN_DIRS.get(combo_name, combo_name)
         base = (
             HYBRID_DIR
-            / pattern_folder
+            / f"sample={pattern_folder}"
             / "system=retail_demo"
             / "table=orders"
-            / f"pattern={pattern_folder}"
         )
         for ref_date in (HYBRID_REFERENCE_INITIAL, HYBRID_REFERENCE_SECOND):
             reference_meta_path = (
