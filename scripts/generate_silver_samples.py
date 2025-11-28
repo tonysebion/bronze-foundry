@@ -315,7 +315,7 @@ def main() -> None:
         configs = pattern_configs.get(partition["pattern"])
         if not configs:
             print(
-                f"⚠ No pattern configs found for pattern '{partition['pattern']}' - skipping"
+                f"[WARN] No pattern configs found for pattern '{partition['pattern']}' - skipping"
             )
             continue
 
@@ -326,7 +326,7 @@ def main() -> None:
             generated_count += 1
 
     print(
-        f"\n✅ Generated {generated_count} Silver sample(s) under {SILVER_SAMPLE_ROOT}"
+        f"\n[OK] Generated {generated_count} Silver sample(s) under {SILVER_SAMPLE_ROOT}"
     )
     print("\nDirectory structure now matches Bronze hierarchy with sample= prefix:")
     print(f"  {SILVER_SAMPLE_ROOT}/")
