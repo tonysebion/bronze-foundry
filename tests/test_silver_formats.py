@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional, cast
 
 import pytest
 import yaml
@@ -33,10 +33,10 @@ RUN_DATES = ["2025-11-13", "2025-11-14"]
 
 def _ensure_source(cfg: Dict[str, Any]) -> Dict[str, Any]:
     if "source" in cfg:
-        return cfg["source"]
-    bronze = cfg.get("bronze", {})
-    options = bronze.get("options", {}) or {}
-    source = {
+        return cast(Dict[str, Any], cfg["source"])
+    bronze = cast(Dict[str, Any], cfg.get("bronze") or {})
+    options = cast(Dict[str, Any], bronze.get("options") or {})
+    source: Dict[str, Any] = {
         "system": cfg.get("system"),
         "table": cfg.get("entity"),
         "run": {"load_pattern": options.get("load_pattern", "full")},
@@ -50,15 +50,18 @@ def _ensure_source(cfg: Dict[str, Any]) -> Dict[str, Any]:
 def _resolve_pattern_folder(
     cfg: Dict[str, Any], source: Dict[str, Any]
 ) -> str:
-    pattern_folder = source["run"].get("pattern_folder")
-    if pattern_folder:
+    run_cfg = cast(Dict[str, Any], source["run"])
+    pattern_folder = run_cfg.get("pattern_folder")
+    if isinstance(pattern_folder, str) and pattern_folder:
         return pattern_folder
-    bronze = cfg.get("bronze", {})
-    options = bronze.get("options", {}) or {}
-    resolved = options.get("pattern_folder") or source["run"].get(
-        "load_pattern", "full"
-    )
-    return PATTERN_DIRS.get(resolved, resolved)
+    bronze = cast(Dict[str, Any], cfg.get("bronze") or {})
+    options = cast(Dict[str, Any], bronze.get("options") or {})
+    candidate = options.get("pattern_folder")
+    if not isinstance(candidate, str) or not candidate:
+        candidate = run_cfg.get("load_pattern", "full")
+    if not isinstance(candidate, str):
+        candidate = "full"
+    return PATTERN_DIRS.get(candidate, candidate)
 
 
 def _build_sample_path(cfg: Dict[str, Any], run_date: str) -> Path:
