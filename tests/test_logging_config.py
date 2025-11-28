@@ -4,6 +4,7 @@ import json
 import logging
 import sys
 from pathlib import Path
+from typing import Any, Mapping, cast
 
 import pytest
 
@@ -58,7 +59,8 @@ def test_setup_logging_writes_json_file(tmp_path: Path) -> None:
 def test_get_logger_with_extra_returns_adapter() -> None:
     adapter = get_logger("core.logging", extra={"system": "retail"})
     assert isinstance(adapter, logging.LoggerAdapter)
-    assert adapter.extra["system"] == "retail"
+    extra = cast(Mapping[str, Any], adapter.extra)
+    assert extra["system"] == "retail"
 
 
 def test_list_storage_backends_contains_known_values() -> None:

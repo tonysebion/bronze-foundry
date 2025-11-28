@@ -8,6 +8,7 @@ import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
+from typing import Any, Dict, Tuple, cast
 
 import pandas as pd
 import pytest
@@ -64,8 +65,8 @@ def _read_source_dataframe(source_path: Path) -> pd.DataFrame:
 
 def _rewrite_bronze_config(
     config_path: Path, run_date: str, tmp_dir: Path
-) -> tuple[Path, Path, dict[str, object]]:
-    cfg = yaml.safe_load(config_path.read_text())
+) -> tuple[Path, Path, Dict[str, Any]]:
+    cfg = cast(Dict[str, Any], yaml.safe_load(config_path.read_text()))
     bronze_cfg = cfg.setdefault("bronze", {})
     path_pattern = bronze_cfg.get("path_pattern")
     if not path_pattern:
@@ -129,7 +130,7 @@ def test_bronze_preserves_source_rows(
     _run_cli(["bronze_extract.py", "--config", str(rewritten_cfg), "--date", run_date])
 
     bronze_partition = _collect_bronze_partition(bronze_out)
-    metadata = json.loads((bronze_partition / "_metadata.json").read_text())
+    metadata = cast(Dict[str, Any], json.loads((bronze_partition / "_metadata.json").read_text()))
 
     source_path = Path(cfg_data["bronze"]["path_pattern"])
     assert source_path.exists(), f"Source path missing: {source_path}"

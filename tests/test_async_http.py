@@ -5,6 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from typing import Any, Dict
+
 from core.extractors.async_http import AsyncApiClient, is_async_enabled, HTTPX_AVAILABLE
 from core.exceptions import RetryExhaustedError
 
@@ -97,23 +99,26 @@ def test_async_client_handles_rate_limit():
             mock_limited.headers = {"Retry-After": "0.01"}
 
             class RateLimitException(Exception):
-                pass
+                response: Any
 
-            rate_exc = RateLimitException("rate limit")
+                def __init__(self, message: str, response: Any) -> None:
+                    super().__init__(message)
+                    self.response = response
+
+            rate_exc = RateLimitException("rate limit", mock_limited)
             type(rate_exc).__name__ = "HTTPStatusError"
             type(rate_exc).__module__ = "httpx._exceptions"
-            rate_exc.response = mock_limited
 
             mock_limited.raise_for_status.side_effect = rate_exc
             mock_success = MagicMock()
             mock_success.json.return_value = {"ok": "after-rate"}
             mock_success.raise_for_status = MagicMock()
 
+            call_counter: Dict[str, int] = {"count": 0}
+
             async def mock_get(*args, **kwargs):
-                if not hasattr(mock_get, "count"):
-                    mock_get.count = 0
-                mock_get.count += 1
-                if mock_get.count == 1:
+                call_counter["count"] += 1
+                if call_counter["count"] == 1:
                     raise rate_exc
                 return mock_success
 
@@ -126,9 +131,9 @@ def test_async_client_handles_rate_limit():
             client = AsyncApiClient("https://api.example.com", headers={}, timeout=1)
             result = await client.get("/rate")
             assert result["ok"] == "after-rate"
-            assert mock_get.count == 2
+            assert call_counter["count"] == 2
 
-            mock_get.count = 0
+            call_counter["count"] = 0
             sleep_calls = []
 
             async def fake_sleep(delay):
@@ -139,7 +144,7 @@ def test_async_client_handles_rate_limit():
             ):
                 await client.get("/rate")
 
-            assert any(call >= 0.01 for call in sleep_calls)
+                assert any(call >= 0.01 for call in sleep_calls)
 
     asyncio.run(_inner())
 
@@ -237,30 +242,21 @@ def test_async_client_get_many_respects_max_concurrent():
                 "https://api.example.com", headers={}, max_concurrent=2
             )
 
-            class TrackingSemaphore:
-                def __init__(self, value: int):
-                    self._value = value
-                    self._waiters = []
+            class TrackingSemaphore(asyncio.Semaphore):
+                def __init__(self, value: int) -> None:
+                    super().__init__(value)
                     self.active = 0
                     self.max_seen = 0
 
                 async def __aenter__(self):
-                    while self._value <= 0:
-                        fut = asyncio.get_event_loop().create_future()
-                        self._waiters.append(fut)
-                        await fut
-                    self._value -= 1
+                    await super().__aenter__()
                     self.active += 1
                     self.max_seen = max(self.max_seen, self.active)
                     return self
 
                 async def __aexit__(self, exc_type, exc, tb):
                     self.active -= 1
-                    self._value += 1
-                    if self._waiters:
-                        waiter = self._waiters.pop(0)
-                        if not waiter.done():
-                            waiter.set_result(None)
+                    await super().__aexit__(exc_type, exc, tb)
 
             client._semaphore = TrackingSemaphore(2)
 

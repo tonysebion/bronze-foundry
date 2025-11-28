@@ -13,7 +13,7 @@ class TestBaseExtractor:
     def test_cannot_instantiate_base(self):
         """Test that BaseExtractor cannot be instantiated directly."""
         with pytest.raises(TypeError):
-            BaseExtractor()
+            BaseExtractor()  # type: ignore[abstract]
 
     def test_subclass_must_implement_fetch_records(self):
         """Test that subclasses must implement fetch_records."""
@@ -22,7 +22,7 @@ class TestBaseExtractor:
             pass
 
         with pytest.raises(TypeError):
-            IncompleteExtractor()
+            IncompleteExtractor()  # type: ignore[abstract]
 
     def test_valid_subclass(self):
         """Test that valid subclass can be created."""
