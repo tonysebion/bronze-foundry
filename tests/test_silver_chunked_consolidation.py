@@ -127,7 +127,7 @@ def test_intent_chunk_metadata_written(tmp_path: Path) -> None:
     cfg_file.write_text(yaml.safe_dump(config), encoding="utf-8")
 
     chunk_tag = f"intent-test-{uuid.uuid4().hex[:6]}"
-    cmd_base = [sys.executable, str(REPO_ROOT / "silver_extract.py"), "--config", str(cfg_file), "--silver-base", str(silver_tmp), "--write-parquet", "--artifact-writer", "transactional"]
+    cmd_base = [sys.executable, str(REPO_ROOT / "silver_extract.py"), "--config", str(cfg_file), "--bronze-path", str(bronze_part), "--silver-base", str(silver_tmp), "--write-parquet", "--artifact-writer", "transactional"]
     p = subprocess.run([*cmd_base, "--chunk-tag", chunk_tag], cwd=REPO_ROOT, capture_output=True, text=True)
     if p.returncode != 0:
         raise RuntimeError(f"silver_extract failed for intent config: returncode={p.returncode}\nSTDOUT:\n{p.stdout}\nSTDERR:\n{p.stderr}")
