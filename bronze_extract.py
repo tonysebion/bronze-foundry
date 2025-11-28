@@ -402,19 +402,19 @@ class BronzeOrchestrator:
         # Fallback to dict-based extraction if typed model missing.
         cfg_dict: Any = configs[0].model_dump()
         source_section = cast(Dict[str, Any], cfg_dict.get("source", {}))
-        run_cfg = cast(Dict[str, Any], source_section.get("run", {}))
-        silver_cfg = cast(Dict[str, Any], cfg_dict.get("silver", {}))
-        load_pattern = LoadPattern.normalize(run_cfg.get("load_pattern"))
-        write_parquet = run_cfg.get("write_parquet", True)
-        write_csv = run_cfg.get("write_csv", False)
-        parquet_compression = run_cfg.get("parquet_compression", "snappy")
-        primary_keys = silver_cfg.get("primary_keys", []) or []
-        order_column = silver_cfg.get("order_column")
-        partition_columns = silver_cfg.get("partitioning", {}).get("columns", [])
+        run_cfg_dict = cast(Dict[str, Any], source_section.get("run", {}))
+        silver_cfg_dict = cast(Dict[str, Any], cfg_dict.get("silver", {}))
+        load_pattern = LoadPattern.normalize(run_cfg_dict.get("load_pattern"))
+        write_parquet = run_cfg_dict.get("write_parquet", True)
+        write_csv = run_cfg_dict.get("write_csv", False)
+        parquet_compression = run_cfg_dict.get("parquet_compression", "snappy")
+        primary_keys = silver_cfg_dict.get("primary_keys", []) or []
+        order_column = silver_cfg_dict.get("order_column")
+        partition_columns = silver_cfg_dict.get("partitioning", {}).get("columns", [])
 
         return RunOptions(
             load_pattern=load_pattern,
-            require_checksum=silver_cfg.get("require_checksum", False),
+            require_checksum=silver_cfg_dict.get("require_checksum", False),
             write_parquet=write_parquet,
             write_csv=write_csv,
             parquet_compression=parquet_compression,
