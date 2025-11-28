@@ -7,6 +7,7 @@ import subprocess
 import sys
 import uuid
 from pathlib import Path
+import yaml
 
 import pytest
 
@@ -87,3 +88,52 @@ def test_consolidate_prune_chunks(tmp_path: Path) -> None:
     # fallback: also remove files matching -[0-9a-f]{8}
     assert not list(silver_tmp.rglob("*_metadata_chunk_*.json")), "Expected no chunk metadata files after pruning"
     # We can't easily assert no chunk artifact remain due to naming; ensure _metadata_chunk files removed is good enough
+
+
+def test_intent_chunk_metadata_written(tmp_path: Path) -> None:
+    bronze_part = _find_bronze_partition()
+    silver_tmp = tmp_path / "silver_tmp"
+    silver_tmp.mkdir(parents=True, exist_ok=True)
+
+    # Build a simple intent config using 'datasets' style that points at the found Bronze partition
+    config = {
+        "datasets": [
+            {
+                "name": "orders_intent",
+                "system": "retail_demo",
+                "entity": "orders",
+                "bronze": {
+                    "enabled": True,
+                    "source_type": "file",
+                    "path_pattern": str(bronze_part),
+                    "partition_column": "load_date",
+                    "options": {"format": "csv", "load_pattern": "full"},
+                },
+                "silver": {
+                    "enabled": True,
+                    "entity_kind": "event",
+                    "input_mode": "append_log",
+                    "natural_keys": ["id"],
+                    "event_ts_column": "effective_from_dt",
+                    "attributes": ["state_current"],
+                    "partition_by": ["effective_from_dt"],
+                    "write_parquet": True,
+                    "write_csv": False,
+                },
+            }
+        ]
+    }
+    cfg_file = tmp_path / "intent_config.yaml"
+    cfg_file.write_text(yaml.safe_dump(config), encoding="utf-8")
+
+    chunk_tag = f"intent-test-{uuid.uuid4().hex[:6]}"
+    cmd_base = [sys.executable, str(REPO_ROOT / "silver_extract.py"), "--config", str(cfg_file), "--silver-base", str(silver_tmp), "--write-parquet", "--artifact-writer", "transactional"]
+    p = subprocess.run([*cmd_base, "--chunk-tag", chunk_tag], cwd=REPO_ROOT, capture_output=True, text=True)
+    if p.returncode != 0:
+        print("INTENT STDOUT:\n", p.stdout)
+        print("INTENT STDERR:\n", p.stderr)
+        raise RuntimeError("silver_extract failed for intent config")
+
+    # Assert chunk metadata exists
+    chunk_meta_files = list(silver_tmp.rglob("_metadata_chunk_*.json"))
+    assert chunk_meta_files, "Expected at least one intent chunk metadata file"
