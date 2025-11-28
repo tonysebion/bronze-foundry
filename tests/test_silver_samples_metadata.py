@@ -42,7 +42,10 @@ def _load_expected_silver_config(config_path: Path) -> Dict[str, object]:
     natural_keys = silver_cfg.get("natural_keys") or []
     primary_keys = silver_cfg.get("primary_keys") or natural_keys
     silver_cfg["primary_keys"] = list(primary_keys)
-    silver_cfg.setdefault("order_column", None)
+    change_ts_column = silver_cfg.get("change_ts_column")
+    event_ts_column = silver_cfg.get("event_ts_column")
+    order_column = silver_cfg.get("order_column") or change_ts_column or event_ts_column
+    silver_cfg["order_column"] = order_column
     silver_cfg.setdefault("parquet_compression", "snappy")
     silver_cfg.setdefault("normalization", DEFAULT_NORMALIZATION.copy())
     silver_cfg.setdefault("error_handling", DEFAULT_ERROR_HANDLING.copy())
