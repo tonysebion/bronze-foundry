@@ -9,7 +9,7 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Mapping, cast
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import pandas as pd
 
@@ -350,9 +350,10 @@ class SilverPromotionService:
             run_date = run_context.run_date
         else:
             cfg = self._select_config()
+            if cfg is None:
+                self.parser.error("No configuration available for the requested source")
             run_date = self._resolve_run_date()
-            # _select_config returns a plain dict, so pass it directly
-            run_context = self._build_run_context(cast(Dict[str, Any], cfg), run_date)
+            run_context = self._build_run_context(cfg, run_date)
 
         # cfg is always a dict (either from RunContext or load_configs), so
         # use it directly as a dict view
