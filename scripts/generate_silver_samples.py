@@ -1,4 +1,15 @@
-"""Generate Silver artifacts for every Bronze sample partition."""
+"""Generate Silver artifacts for every Bronze sample partition with hierarchical structure.
+
+Silver samples now use a hierarchical directory structure matching Bronze:
+  sampledata/silver_samples/
+    {pattern_folder}/
+      silver_model={model}/
+        domain={domain}/
+          entity={entity}/
+            v{version}/
+              load_date={date}/
+                {artifacts}
+"""
 
 from __future__ import annotations
 
@@ -8,21 +19,36 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List
+from typing import Any, Dict, Iterable, List
 
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BRONZE_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "bronze_samples"
-# Silver artifacts now land under sampledata/silver_samples for easy reuse
 SILVER_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "silver_samples"
 CONFIGS_DIR = REPO_ROOT / "docs" / "examples" / "configs" / "patterns"
+
+# Mapping from silver entity_kind + history_mode to silver_model name
+SILVER_MODEL_MAP = {
+    ("state", "scd2"): "scd_type_2",
+    ("state", "scd1"): "scd_type_1",
+    ("state", None): "scd_type_1",
+    ("events", "incremental"): "incremental_merge",
+    ("events", None): "incremental_merge",
+    ("snapshot", None): "periodic_snapshot",
+    ("hybrid", "incremental"): "incremental_merge",
+    ("hybrid", "cumulative"): "full_merge_dedupe",
+}
 
 
 @dataclass(frozen=True)
 class PatternConfig:
     path: Path
     match_dirs: tuple[str, ...] | None
+    pattern_folder: str
+    silver_model: str
+    domain: str
+    entity: str
 
 
 # Ensure project root on sys.path when executed as standalone script
@@ -31,7 +57,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-def _find_brone_partitions() -> Iterable[Dict[str, object]]:
+def _find_bronze_partitions() -> Iterable[Dict[str, Any]]:
+    """Find all Bronze partitions with CSV files."""
     seen: set[str] = set()
     # Accept any partition directory containing at least one CSV even if metadata file absent
     for dir_path in BRONZE_SAMPLE_ROOT.rglob("dt=*"):
@@ -47,36 +74,24 @@ def _find_brone_partitions() -> Iterable[Dict[str, object]]:
             continue
         pattern = pattern_part.split("=", 1)[1]
         run_date = dt_part.split("=", 1)[1]
-        suffix_parts = []
-        for part in rel_parts:
-            if part in (pattern_part, dt_part):
-                continue
-            if part.startswith("system=") or part.startswith("table="):
-                continue
-            suffix_parts.append(part.replace("=", "-"))
+
         chunk_dir = csv_files[0].parent
-        extra_parts = chunk_dir.relative_to(dir_path).parts
-        for part in extra_parts:
-            suffix_parts.append(part.replace("=", "-"))
-        suffix = "_".join(suffix_parts)
-        label = f"{pattern}_{run_date}"
-        if suffix:
-            label = f"{label}_{suffix}"
         key = f"{pattern}|{run_date}|{chunk_dir}"
         if key in seen:
             continue
         seen.add(key)
+
         sample = {
             "pattern": pattern,
             "run_date": run_date,
-            "label": label,
             "dir": chunk_dir,
             "file": csv_files[0],
         }
         yield sample
 
 
-def _pattern_from_config(cfg: Dict[str, object]) -> str | None:
+def _pattern_from_config(cfg: Dict[str, Any]) -> str | None:
+    """Extract pattern folder name from config."""
     bronze = cfg.get("bronze", {})
     options = bronze.get("options", {}) or {}
     pattern_folder = options.get("pattern_folder") or bronze.get("pattern_folder")
@@ -85,44 +100,113 @@ def _pattern_from_config(cfg: Dict[str, object]) -> str | None:
     return cfg.get("pattern")
 
 
+def _silver_model_from_config(cfg: Dict[str, Any]) -> str:
+    """Derive silver_model from config silver section."""
+    silver = cfg.get("silver", {})
+    if not isinstance(silver, dict):
+        silver = {}
+
+    # Check if explicit model specified
+    if "model" in silver:
+        return str(silver["model"])
+
+    # Otherwise derive from entity_kind + history_mode
+    entity_kind = silver.get("entity_kind", "state")
+    history_mode = silver.get("history_mode")
+
+    key = (entity_kind, history_mode)
+    return SILVER_MODEL_MAP.get(key, "scd_type_1")
+
+
 def _discover_pattern_configs() -> Dict[str, List[PatternConfig]]:
+    """Discover and parse all pattern config files."""
     configs: Dict[str, List[PatternConfig]] = {}
     if not CONFIGS_DIR.is_dir():
         raise FileNotFoundError(f"Patterns directory {CONFIGS_DIR} not found")
+
     for path in sorted(CONFIGS_DIR.glob("pattern*.yaml")):
         if not path.is_file():
             continue
+
         cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
         pattern = _pattern_from_config(cfg)
         if not pattern:
             continue
+
         bronze = cfg.get("bronze", {})
+        if not isinstance(bronze, dict):
+            bronze = {}
         options = bronze.get("options", {}) or {}
+        if not isinstance(options, dict):
+            options = {}
         match_dir = options.get("match_dir")
+        match_dirs: tuple[str, ...] | None = None
         if isinstance(match_dir, str):
-            match_dirs: tuple[str, ...] = (match_dir,)
+            match_dirs = (match_dir,)
         elif isinstance(match_dir, (list, tuple)):
             match_dirs = tuple(match_dir)
-        else:
-            match_dirs = None
+
+        silver_model = _silver_model_from_config(cfg)
+        domain = cfg.get("domain", "default")
+        entity = cfg.get("entity", "dataset")
+
         configs.setdefault(pattern, []).append(
-            PatternConfig(path=path, match_dirs=match_dirs)
+            PatternConfig(
+                path=path,
+                match_dirs=match_dirs,
+                pattern_folder=pattern,
+                silver_model=silver_model,
+                domain=domain,
+                entity=entity,
+            )
         )
     return configs
 
 
-def _silver_label_from_partition(partition: Dict[str, object], config_path: Path) -> str:
-    label_parts = [partition["pattern"], config_path.stem, partition["run_date"]]
-    dir_name = partition["dir"].name
-    dt_label = f"dt={partition['run_date']}"
-    if dir_name and dir_name != dt_label:
-        label_parts.append(dir_name)
-    return "_".join(label_parts)
+# Removed _build_silver_hierarchy - silver_extract.py builds the path internally
+
+
+def _write_pattern_readme(
+    pattern_dir: Path,
+    pattern_folder: str,
+    silver_model: str,
+) -> None:
+    """Write README for pattern directory."""
+    readme = pattern_dir / "README.md"
+    content = f"""# Silver Samples - {pattern_folder}
+
+## Overview
+Silver artifacts derived from Bronze `{pattern_folder}` samples.
+
+## Structure
+```
+{pattern_folder}/
+  silver_model={silver_model}/
+    domain={{domain}}/
+      entity={{entity}}/
+        v{{version}}/
+          load_date={{YYYY-MM-DD}}/
+            {{artifacts: current.parquet, history.parquet, etc.}}
+```
+
+## Silver Model
+- **Model Type**: `{silver_model}`
+- Derived from Bronze pattern and silver configuration
+
+## Files
+- `intent.yaml` - Original config used to generate these samples
+- `_metadata.json` - Batch metadata (record counts, timestamps)
+- `*.parquet` / `*.csv` - Silver artifacts
+
+## Generation
+Generated by: `python scripts/generate_silver_samples.py`
+"""
+    readme.write_text(content, encoding="utf-8")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate Silver samples derived from the Bronze fixtures"
+        description="Generate Silver samples with hierarchical structure matching Bronze"
     )
     parser.add_argument(
         "--formats",
@@ -137,53 +221,64 @@ def _run_cli(cmd: list[str]) -> None:
     subprocess.run([sys.executable, *cmd], check=True, cwd=REPO_ROOT)
 
 
-def _write_label_readme(
-    label_dir: Path, partition: Dict[str, object], config_path: Path
-) -> None:
-    readme = label_dir / "README.md"
-    content = f"""# Silver samples ({label_dir.name})
-
-Derived from Bronze partition `{partition['dir']}` using config `{config_path.name}`.
-"""
-    readme.write_text(content, encoding="utf-8")
-
-
 def _generate_for_partition(
-    partition: Dict[str, object],
+    partition: Dict[str, Any],
     config: PatternConfig,
     enable_parquet: bool,
     enable_csv: bool,
 ) -> None:
-    dir_name = partition["dir"].name
+    """Generate Silver artifacts for a single Bronze partition."""
+    partition_dir = partition["dir"]
+    if not isinstance(partition_dir, Path):
+        partition_dir = Path(str(partition_dir))
+    dir_name = partition_dir.name
     if config.match_dirs and dir_name not in config.match_dirs:
         return
-    config_path = config.path
-    silver_label = _silver_label_from_partition(partition, config_path)
-    silver_base = SILVER_SAMPLE_ROOT / silver_label
+
+    run_date = str(partition["run_date"])
+
+    # Build Silver base at the pattern/silver_model level
+    # silver_extract.py will add domain/entity/v1/load_date internally
+    silver_base = (
+        SILVER_SAMPLE_ROOT
+        / config.pattern_folder
+        / f"silver_model={config.silver_model}"
+    )
     silver_base.mkdir(parents=True, exist_ok=True)
+
     cmd = [
         "silver_extract.py",
         "--config",
-        str(config_path),
+        str(config.path),
         "--bronze-path",
-        str(partition["dir"]),
+        str(partition_dir),
         "--date",
-        partition["run_date"],
+        run_date,
         "--silver-base",
-        str(silver_base),
+        str(silver_base),  # Pass silver_model level, CLI will add rest
     ]
+
     if enable_parquet:
         cmd.append("--write-parquet")
     else:
         cmd.append("--no-write-parquet")
+
     if enable_csv:
         cmd.append("--write-csv")
     else:
         cmd.append("--no-write-csv")
+
+    print(f"Generating: {config.pattern_folder}/silver_model={config.silver_model} for {run_date}")
     _run_cli(cmd)
-    intent_dest = silver_base / "intent.yaml"
-    shutil.copy(config_path, intent_dest)
-    _write_label_readme(silver_base, partition, config_path)
+
+    # Copy config to pattern root for reference
+    pattern_root = SILVER_SAMPLE_ROOT / config.pattern_folder
+    intent_dest = pattern_root / f"intent_{config.path.stem}.yaml"
+    shutil.copy(config.path, intent_dest)
+
+    # Write pattern-level README once per pattern
+    if not (pattern_root / "README.md").exists():
+        _write_pattern_readme(pattern_root, config.pattern_folder, config.silver_model)
 
 
 def main() -> None:
@@ -191,25 +286,35 @@ def main() -> None:
     enable_parquet = args.formats in {"parquet", "both"}
     enable_csv = args.formats in {"csv", "both"}
 
-    partitions = list(_find_brone_partitions())
+    partitions = list(_find_bronze_partitions())
     if not partitions:
         raise RuntimeError("No Bronze partitions found; generate Bronze samples first.")
 
     if SILVER_SAMPLE_ROOT.exists():
         shutil.rmtree(SILVER_SAMPLE_ROOT)
     SILVER_SAMPLE_ROOT.mkdir(parents=True, exist_ok=True)
+
     pattern_configs = _discover_pattern_configs()
+    generated_count = 0
+
     for partition in partitions:
         configs = pattern_configs.get(partition["pattern"])
         if not configs:
-            raise ValueError(
-                f"No pattern configs found for pattern '{partition['pattern']}'"
-            )
+            print(f"⚠ No pattern configs found for pattern '{partition['pattern']}' - skipping")
+            continue
+
         for config_variant in configs:
             _generate_for_partition(
                 partition, config_variant, enable_parquet, enable_csv
             )
-    print(f"Silver samples materialized under {SILVER_SAMPLE_ROOT}")
+            generated_count += 1
+
+    print(f"\n✅ Generated {generated_count} Silver sample(s) under {SILVER_SAMPLE_ROOT}")
+    print(f"\nDirectory structure now matches Bronze hierarchy:")
+    print(f"  {SILVER_SAMPLE_ROOT}/")
+    print(f"    {{pattern_folder}}/")
+    print(f"      silver_model={{model}}/")
+    print(f"        domain={{domain}}/...")
 
 
 if __name__ == "__main__":
