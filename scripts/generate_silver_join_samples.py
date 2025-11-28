@@ -42,7 +42,7 @@ def _gather_silver_assets() -> list[Path]:
     return sorted(assets)
 
 
-def _load_metadata(asset: Path) -> dict[str, object]:
+def _load_metadata(asset: Path) -> Dict[str, Any]:
     metadata_path = asset / "_metadata.json"
     return json.loads(metadata_path.read_text(encoding="utf-8"))
 

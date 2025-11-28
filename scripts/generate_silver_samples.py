@@ -19,7 +19,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, cast
 
 import yaml
 
@@ -107,8 +107,9 @@ def _pattern_from_config(cfg: Dict[str, Any]) -> str | None:
     options = bronze.get("options", {}) or {}
     pattern_folder = options.get("pattern_folder") or bronze.get("pattern_folder")
     if pattern_folder:
-        return pattern_folder
-    return cfg.get("pattern")
+        return str(pattern_folder)
+    val = cfg.get("pattern")
+    return str(val) if val is not None else None
 
 
 def _silver_model_from_config(cfg: Dict[str, Any]) -> str:

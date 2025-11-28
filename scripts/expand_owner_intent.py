@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import textwrap
+from typing import Any, Dict, Optional
 
 import yaml
 
@@ -12,7 +13,7 @@ DEFAULT_BRONZE_BASE = Path("sampledata") / "bronze"
 DEFAULT_SILVER_BASE = Path("./silver")
 
 
-def resolve_paths(dataset: dict, env: str | None) -> dict:
+def resolve_paths(dataset: Dict[str, Any], env: Optional[str]) -> Dict[str, str]:
     bronze_base = DEFAULT_BRONZE_BASE
     silver_base = DEFAULT_SILVER_BASE
     if env:
@@ -46,12 +47,12 @@ def resolve_paths(dataset: dict, env: str | None) -> dict:
     }
 
 
-def load_intent(path: Path) -> dict:
+def load_intent(path: Path) -> Dict[str, Any]:
     with path.open(encoding="utf-8") as handle:
         return yaml.safe_load(handle)
 
 
-def persist_resolved(path: Path, data: dict) -> None:
+def persist_resolved(path: Path, data: Dict[str, Any]) -> None:
     with path.open("w", encoding="utf-8") as handle:
         yaml.safe_dump(data, handle, sort_keys=False)
 

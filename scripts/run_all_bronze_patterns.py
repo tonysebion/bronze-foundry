@@ -18,7 +18,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Any, Dict
 
 import yaml
 
@@ -58,7 +58,7 @@ PATTERN_CONFIGS = [
 ]
 
 
-def _extract_path_pattern_from_config(cfg: dict[str, object]) -> str:
+def _extract_path_pattern_from_config(cfg: Dict[str, Any]) -> str:
     bronze_cfg = cfg.get("bronze", {})
     if "path_pattern" in bronze_cfg:
         return bronze_cfg["path_pattern"]
@@ -170,7 +170,7 @@ def rewrite_config(
     return str(temp_config)
 
 
-def process_run(task: dict[str, object]) -> tuple[str, str, bool]:
+def process_run(task: Dict[str, Any]) -> tuple[str, str, bool]:
     config_path = task["config_path"]
     run_date = task["run_date"]
     temp_path = task["temp_path"]
@@ -229,17 +229,11 @@ def main() -> int:
         ):
             return 1
 
-    pattern_runs: list[dict[str, object]] = []
+    pattern_runs: list[Dict[str, Any]] = []
     for entry in PATTERN_CONFIGS:
         config_path = entry["config"]
         run_dates = _discover_run_dates(REPO_ROOT / config_path, None)
-        pattern_runs.append(
-            {
-                "config": config_path,
-                "run_dates": run_dates,
-                "pattern": entry.get("pattern"),
-            }
-        )
+        pattern_runs.append({"config": config_path, "run_dates": run_dates, "pattern": entry.get("pattern")})
 
     total_runs = sum(len(entry["run_dates"]) for entry in pattern_runs)
     print(f"Configs to run: {len(pattern_runs)} ({total_runs} Bronze runs)")
@@ -249,7 +243,7 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
-        tasks: list[dict[str, object]] = []
+        tasks: list[Dict[str, Any]] = []
         run_counter = 0
         for entry in pattern_runs:
             for run_date in entry["run_dates"]:
