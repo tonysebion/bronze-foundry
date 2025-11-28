@@ -22,6 +22,7 @@ import yaml
 import tempfile
 import shutil
 from pathlib import Path
+import concurrent.futures
 
 # All pattern configurations with their appropriate run dates
 PATTERN_CONFIGS = [
@@ -52,6 +53,29 @@ def run_command(cmd, description):
         if e.stderr:
             print("STDERR:", e.stderr.strip())
         return False
+
+
+def process_run(task):
+    """Process a single run task."""
+    config_path = task['config_path']
+    run_date = task['run_date']
+    run_count = task['run_count']
+    temp_path = task['temp_path']
+    output_base = task['output_base']
+    total_runs = task['total_runs']
+
+    config_name = Path(config_path).name
+    description = f"[{run_count}/{total_runs}] Bronze extraction: {config_name} ({run_date})"
+
+    actual_config_path = fix_file_example_config(config_path, run_date, temp_path, output_base)
+
+    success = run_command(
+        [sys.executable, "bronze_extract.py",
+         "--config", actual_config_path,
+         "--date", run_date],
+        description
+    )
+    return (config_name, run_date, success)
 
 
 def get_available_dates():
@@ -153,29 +177,32 @@ def main():
 
     # Run Bronze extraction for each pattern config and its dates
     total_runs = sum(len(dates) for _, dates in updated_configs)
-    run_count = 0
-    results = []
+    print(f"Total runs: {total_runs}")
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
+        tasks = []
+        run_count = 0
         for config_path, run_dates in updated_configs:
-            config_name = Path(config_path).name
-
             for run_date in run_dates:
                 run_count += 1
-                description = f"[{run_count}/{total_runs}] Bronze extraction: {config_name} ({run_date})"
+                tasks.append({
+                    'config_path': config_path,
+                    'run_date': run_date,
+                    'run_count': run_count,
+                    'temp_path': temp_path,
+                    'output_base': output_base,
+                    'total_runs': total_runs
+                })
 
-                # Fix configs to use correct dates and output directory
-                actual_config_path = fix_file_example_config(config_path, run_date, temp_path, output_base)
-
-                success = run_command(
-                    [sys.executable, "bronze_extract.py",
-                     "--config", actual_config_path,
-                     "--date", run_date],
-                    description
-                )
-                results.append((config_name, run_date, success))
+        # Run in parallel
+        results = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(process_run, task) for task in tasks]
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result()
+                results.append(result)
 
     # Summary
     print(f"\n{'='*60}")
