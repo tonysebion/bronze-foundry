@@ -7,7 +7,7 @@ to demonstrate how a custom extractor would be wired.
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import date
 
-from extractors.base import BaseExtractor
+from core.extractors.base import BaseExtractor
 
 
 class SalesforceExampleExtractor(BaseExtractor):
