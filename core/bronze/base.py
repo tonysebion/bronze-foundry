@@ -64,9 +64,10 @@ def emit_bronze_metadata(
     cursor: Optional[str],
     created_files: List[Path],
 ) -> Path:
+    run_date_str = run_date.date().isoformat()
     metadata_payload = {
         "batch_timestamp": datetime.utcnow().isoformat() + "Z",
-        "run_date": run_date.isoformat(),
+        "run_date": run_date_str,
         "system": system,
         "table": table,
         "partition_path": relative_path,
@@ -84,7 +85,7 @@ def emit_bronze_metadata(
     checksum_metadata = {
         "system": system,
         "table": table,
-        "run_date": run_date.isoformat(),
+        "run_date": run_date_str,
         "config_name": reference_mode and reference_mode.get("config_name"),
         "schema": schema_snapshot,
         "stats": {
