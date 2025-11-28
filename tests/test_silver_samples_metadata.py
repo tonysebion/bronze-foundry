@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from typing import Any, Dict, List, cast
 
 import pytest
 import yaml
 
-from core.patterns import LoadPattern
 from core.silver.models import SilverModel
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +28,8 @@ def _load_expected_silver_config(config_path: Path) -> Dict[str, Any]:
     cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     silver_cfg = dict(cfg.get("silver", {}))
     bronze_cfg = cfg.get("bronze", {}) or {}
+    bronze_options = bronze_cfg.get("options", {}) or {}
+    silver_cfg.setdefault("load_pattern", bronze_options.get("load_pattern", "full"))
     source = cfg.get("source")
     if source:
         domain_value = source["system"]
@@ -109,17 +109,6 @@ def _expected_artifact_names(
     return [artifact_names[key] for key in mapping[model]]
 
 
-def _load_pattern_from_bronze_path(bronze_path: str) -> str:
-    match = re.search(r"pattern=LoadPattern\\.([^/\\\\]+)", bronze_path)
-    if match:
-        token = match.group(1)
-        try:
-            return LoadPattern[token].value
-        except KeyError:
-            return token.lower()
-    return LoadPattern.FULL.value
-
-
 def _extract_load_date(metadata_path: Path) -> str:
     relative_parts = metadata_path.relative_to(SILVER_ROOT).parts
     for part in relative_parts:
@@ -147,7 +136,7 @@ def test_silver_metadata_matches_config(silver_metadata_files: List[Path]) -> No
         expected_cfg = _load_expected_silver_config(config_path)
 
         bronze_path = metadata["bronze_path"]
-        assert metadata["load_pattern"] == _load_pattern_from_bronze_path(bronze_path)
+        assert metadata["load_pattern"] == expected_cfg["load_pattern"]
         assert metadata["dataset_id"] == expected_cfg["dataset_id"]
         assert metadata["entity_kind"] == expected_cfg["entity_kind"]
         assert metadata["history_mode"] == expected_cfg["history_mode"]
