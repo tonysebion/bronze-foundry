@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, cast
 
 import pytest
 import yaml
 
+from core.patterns import LoadPattern
 from core.silver.models import SilverModel
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +29,7 @@ def _load_expected_silver_config(config_path: Path) -> Dict[str, Any]:
         raise FileNotFoundError(f"Config not found at {config_path}")
     cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     silver_cfg = dict(cfg.get("silver", {}))
+    bronze_cfg = cfg.get("bronze", {}) or {}
     source = cfg.get("source")
     if source:
         domain_value = source["system"]
