@@ -13,9 +13,40 @@ Usage:
     python run_tests.py --help             # Show all options
 """
 
-import sys
-import subprocess
 import argparse
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parent
+
+
+def _ensure_venv_python():
+    """Re-run the script under `.venv` python so pytest inherits the project virtualenv."""
+    if os.name == "nt":
+        candidate = ROOT_DIR / ".venv" / "Scripts" / "python.exe"
+    else:
+        candidate = ROOT_DIR / ".venv" / "bin" / "python"
+
+    if candidate.exists():
+        candidate = candidate.resolve()
+        current = Path(sys.executable).resolve()
+        if current != candidate:
+            print(f"Re-launching tests under virtual environment: {candidate}")
+            os.execv(str(candidate), [str(candidate)] + sys.argv)
+
+
+def _ensure_pythonioencoding():
+    """Default PYTHONIOENCODING to UTF-8 if it is not already set."""
+    if os.environ.get("PYTHONIOENCODING") != "utf-8":
+        os.environ["PYTHONIOENCODING"] = "utf-8"
+
+
+def _prepare_environment():
+    """Make sure the process uses the expected encoding and virtualenv before doing anything else."""
+    _ensure_pythonioencoding()
+    _ensure_venv_python()
 
 
 def run_command(cmd: list, description: str) -> bool:
@@ -37,6 +68,7 @@ def run_command(cmd: list, description: str) -> bool:
 
 
 def main():
+    _prepare_environment()
     parser = argparse.ArgumentParser(
         description="Run medallion-foundry tests and quality checks"
     )

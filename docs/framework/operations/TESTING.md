@@ -15,6 +15,10 @@ python run_tests.py --coverage
 python run_tests.py --all-checks
 ```
 
+The runner now re-launches itself under `.venv` (when it exists) and defaults
+`PYTHONIOENCODING` to `utf-8`, so you can type the commands above without
+manually activating the virtual environment or exporting the encoding each time.
+
 ## Test Categories
 
 Tests are marked with categories for selective execution:
