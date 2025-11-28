@@ -11,6 +11,7 @@ bronze:
   options:
     format: csv
     load_pattern: cdc
+    pattern_folder: pattern2_cdc_events
     max_rows_per_file: 150000
     partitioning_strategy: batch_id
     reference_mode:

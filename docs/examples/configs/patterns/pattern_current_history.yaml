@@ -11,6 +11,7 @@ bronze:
   options:
     format: csv
     load_pattern: current_history
+    pattern_folder: pattern3_scd_state
     max_rows_per_file: 200000
     partitioning_strategy: date
 

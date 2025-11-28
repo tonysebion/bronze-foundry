@@ -11,7 +11,7 @@ bronze:
   options:
     format: csv
     load_pattern: cdc
-    pattern_folder: hybrid_cdc_cumulative
+    pattern_folder: pattern5_hybrid_cdc_cumulative
     delta_mode: cumulative
 
 silver:

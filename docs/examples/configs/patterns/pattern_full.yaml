@@ -11,6 +11,7 @@ bronze:
   options:
     format: csv
     load_pattern: full
+    pattern_folder: pattern1_full_events
     max_rows_per_file: 250000
     partitioning_strategy: date
 

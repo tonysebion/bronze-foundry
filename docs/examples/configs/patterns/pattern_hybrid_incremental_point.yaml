@@ -11,7 +11,7 @@ bronze:
   options:
     format: csv
     load_pattern: cdc
-    pattern_folder: hybrid_incremental_point
+    pattern_folder: pattern6_hybrid_incremental_point
     delta_mode: point_in_time
     partitioning_strategy: timestamp
 
