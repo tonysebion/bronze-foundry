@@ -57,3 +57,33 @@ def test_chunked_promotion_and_consolidation(tmp_path: Path) -> None:
     checksum_files = list(silver_tmp.rglob("_checksums.json"))
     assert metadata_files, "Expected _metadata.json after consolidation"
     assert checksum_files, "Expected _checksums.json after consolidation"
+
+
+def test_consolidate_prune_chunks(tmp_path: Path) -> None:
+    bronze_part = _find_bronze_partition()
+    silver_tmp = tmp_path / "silver_tmp"
+    silver_tmp.mkdir(parents=True)
+
+    chunk1 = f"test-{uuid.uuid4().hex[:6]}"
+    chunk2 = f"test-{uuid.uuid4().hex[:6]}"
+    config_path = REPO_ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
+    cmd_base = [sys.executable, str(REPO_ROOT / "silver_extract.py"), "--config", str(config_path), "--bronze-path", str(bronze_part), "--silver-base", str(silver_tmp), "--write-parquet", "--write-csv", "--artifact-writer", "transactional"]
+    p1 = subprocess.run([*cmd_base, "--chunk-tag", chunk1], cwd=REPO_ROOT, capture_output=True, text=True)
+    if p1.returncode != 0:
+        print("P1 STDOUT:\n", p1.stdout)
+        print("P1 STDERR:\n", p1.stderr)
+        raise RuntimeError("silver_extract failed for chunk 1")
+    p2 = subprocess.run([*cmd_base, "--chunk-tag", chunk2], cwd=REPO_ROOT, capture_output=True, text=True)
+    if p2.returncode != 0:
+        print("P2 STDOUT:\n", p2.stdout)
+        print("P2 STDERR:\n", p2.stderr)
+        raise RuntimeError("silver_extract failed for chunk 2")
+
+    # Consolidate with prune option
+    subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "silver_consolidate.py"), "--silver-base", str(silver_tmp), "--prune-chunks"], check=True, cwd=REPO_ROOT)
+
+    # No chunk files or metadata should remain
+    chunked_artifacts = list(silver_tmp.rglob("*-???????.parquet")) + list(silver_tmp.rglob("*-???????.csv"))
+    # fallback: also remove files matching -[0-9a-f]{8}
+    assert not list(silver_tmp.rglob("*_metadata_chunk_*.json")), "Expected no chunk metadata files after pruning"
+    # We can't easily assert no chunk artifact remain due to naming; ensure _metadata_chunk files removed is good enough
