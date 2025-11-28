@@ -84,11 +84,20 @@ def test_concurrent_writes_with_locks(tmp_path: Path) -> None:
     tags = [f"lock-{uuid.uuid4().hex[:6]}" for _ in range(3)]
     failures: List[tuple] = []
     config_path = REPO_ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
-    with ThreadPoolExecutor(max_workers=3) as ex:
-        futures = [ex.submit(_run_extract_chunk, bronze_part, silver_tmp, t, True, config_path) for t in tags]
-        for fut in as_completed(futures):
-            rc, out, err = fut.result()
-            failures.append((rc, out, err))
+    # Use Popen to kick off processes concurrently and collect output reliably
+    procs = []
+    for t in tags:
+        p = subprocess.Popen(
+            [sys.executable, str(REPO_ROOT / "silver_extract.py"), "--config", str(config_path), "--bronze-path", str(bronze_part), "--silver-base", str(silver_tmp), "--write-parquet", "--artifact-writer", "transactional", "--chunk-tag", t, "--use-locks"],
+            cwd=REPO_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        procs.append(p)
+    for p in procs:
+        out, err = p.communicate()
+        failures.append((p.returncode, out, err))
     nonzeros = [t for t in failures if t[0] != 0]
     if nonzeros:
         for rc, out, err in nonzeros:
