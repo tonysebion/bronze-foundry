@@ -20,6 +20,7 @@ from core.io import write_batch_metadata
 CONFIG_DIR = REPO_ROOT / "docs" / "examples" / "configs"
 BASE_DIR = REPO_ROOT / "sampledata" / "source_samples"
 SAMPLE_BRONZE_SAMPLES = REPO_ROOT / "sampledata" / "bronze_samples"
+# Mirror the generated source_samples into sampledata/bronze_samples for quick lookups
 
 SAMPLE_START_DATE = date(2025, 11, 13)
 DAILY_DAYS = 28

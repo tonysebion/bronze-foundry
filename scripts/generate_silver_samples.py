@@ -14,6 +14,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BRONZE_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "bronze_samples"
+# Silver artifacts now land under sampledata/silver_samples for easy reuse
 SILVER_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "silver_samples"
 CONFIGS_DIR = REPO_ROOT / "docs" / "examples" / "configs" / "examples"
 
