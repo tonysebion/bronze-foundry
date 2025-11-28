@@ -673,7 +673,12 @@ class SilverPromotionService:
         )
 
     def _build_run_context(self, cfg: Dict[str, Any], run_date: dt.date) -> RunContext:
-        relative_path = build_relative_path(cfg, run_date)
+        cfg_dict: Dict[str, Any]
+        if isinstance(cfg, RootConfig):
+            cfg_dict = cfg.model_dump()
+        else:
+            cfg_dict = cfg
+        relative_path = build_relative_path(cfg_dict, run_date)
         local_output_dir = Path(
             cfg["source"]["run"].get("local_output_dir", "./output")
         )
