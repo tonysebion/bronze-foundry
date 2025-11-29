@@ -90,9 +90,9 @@ def _tail_after_dt(path_pattern: str) -> Path:
 
 def _discover_run_dates(
     config_path: Path, explicit_dates: Iterable[str] | None
-) -> list[str]:
+) -> list[dict]:
     if explicit_dates:
-        return list(explicit_dates)
+        return [{"run_date": date, "sample_path": None} for date in explicit_dates]
 
     cfg = yaml.safe_load(config_path.read_text())
     base_dir = _pattern_base_dir(_extract_path_pattern_from_config(cfg))
@@ -101,15 +101,43 @@ def _discover_run_dates(
     if not dt_dirs:
         raise ValueError(f"No dt directories under {base_dir}")
 
-    valid_dates: list[str] = []
+    valid_dates: list[dict] = []
     for dt_dir in dt_dirs:
         candidate = dt_dir / tail if tail.parts else dt_dir
-        if candidate.exists():
-            valid_dates.append(dt_dir.name.split("=", 1)[1])
+        sample_path = _resolve_sample_path(dt_dir, candidate)
+        if sample_path:
+            valid_dates.append(
+                {"run_date": dt_dir.name.split("=", 1)[1], "sample_path": sample_path}
+            )
     if not valid_dates:
         raise ValueError(f"No valid files were found for {config_path}")
 
     return valid_dates
+  
+
+def _resolve_sample_path(dt_dir: Path, candidate: Path) -> Path | None:
+    """Return a data file path for the given dt directory, preferring the candidate."""
+    if candidate.exists():
+        return candidate
+
+    # Try alternative extensions (csv <-> parquet) if candidate has a file name
+    if candidate.name:
+        for alt_ext in (".parquet", ".csv"):
+            try:
+                alt_path = candidate.with_suffix(alt_ext)
+            except ValueError:
+                continue
+            if alt_path.exists():
+                return alt_path
+
+    # Fallback to any parquet/csv inside the dt directory
+    for ext in ("parquet", "csv"):
+        for path in sorted(dt_dir.rglob(f"*.{ext}")):
+            if path.name.startswith("_"):
+                continue
+            return path
+
+    return None
 
 
 def _sync_doc_bronze_samples() -> None:
@@ -190,6 +218,7 @@ def process_run(task: Dict[str, Any]) -> tuple[str, str, bool]:
         temp_path,
         bronze_out,
         pattern_folder,
+        sample_path=task.get("sample_path"),
     )
 
     success = run_command(
