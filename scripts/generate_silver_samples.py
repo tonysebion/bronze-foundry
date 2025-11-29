@@ -14,14 +14,18 @@ Silver samples now use a hierarchical directory structure matching Bronze:
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, cast
 
 import yaml
+
+from core.config.dataset import DatasetConfig
+from core.polybase.polybase_generator import generate_polybase_setup
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BRONZE_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "bronze_samples"
@@ -108,6 +112,7 @@ class PatternConfig:
     silver_model: str
     domain: str
     entity: str
+    dataset: DatasetConfig
 
 
 # Ensure project root on sys.path when executed as standalone script
@@ -214,8 +219,15 @@ def _discover_pattern_configs() -> Dict[str, List[PatternConfig]]:
             match_dirs = tuple(match_dir)
 
         silver_model = _silver_model_from_config(cfg)
-        domain = cfg.get("domain", "default")
-        entity = cfg.get("entity", "dataset")
+
+        try:
+            dataset = DatasetConfig.from_dict(cfg)
+        except Exception as exc:
+            print(f"[WARN] Skipping config {path.name}: {exc}")
+            continue
+
+        domain_value = dataset.domain or dataset.system or "default"
+        entity_value = dataset.entity
 
         configs.setdefault(pattern, []).append(
             PatternConfig(
@@ -223,8 +235,9 @@ def _discover_pattern_configs() -> Dict[str, List[PatternConfig]]:
                 match_dirs=match_dirs,
                 pattern_folder=pattern,
                 silver_model=silver_model,
-                domain=domain,
-                entity=entity,
+                domain=domain_value,
+                entity=entity_value,
+                dataset=dataset,
             )
         )
     return configs
@@ -315,6 +328,87 @@ def _ensure_bronze_samples_present() -> None:
     """Generate Bronze samples when no partitions are detected."""
     print("[INFO] Bronze samples missing; generating via scripts/generate_sample_data.py")
     _run_cli(["scripts/generate_sample_data.py"])
+
+
+def _consolidate_silver_samples() -> None:
+    """Run consolidation to produce metadata/checksum manifests."""
+    if not SILVER_SAMPLE_ROOT.exists():
+        print(f"[WARN] Silver sample root {SILVER_SAMPLE_ROOT} missing; skipping consolidation")
+        return
+    print("[INFO] Consolidating Silver partitions and emitting metadata")
+    _run_cli(
+        [
+            "scripts/silver_consolidate.py",
+            "--silver-base",
+            str(SILVER_SAMPLE_ROOT),
+            "--prune-chunks",
+        ]
+    )
+
+
+def _write_polybase_configs(pattern_configs: Dict[str, List[PatternConfig]]) -> None:
+    """Write suggested Polybase configuration files for each dataset path."""
+    dataset_map: Dict[Path, tuple[str, str, DatasetConfig, str]] = {}
+    for configs in pattern_configs.values():
+        for config in configs:
+            dataset = config.dataset
+            domain_value = dataset.domain or dataset.system or config.domain
+            entity_value = dataset.entity
+            version = dataset.silver.version
+            dataset_root = (
+                SILVER_SAMPLE_ROOT
+                / f"sample={config.pattern_folder}"
+                / f"silver_model={config.silver_model}"
+                / f"domain={domain_value}"
+                / f"entity={entity_value}"
+                / f"v{version}"
+            )
+            if dataset_root in dataset_map:
+                continue
+            dataset_map[dataset_root] = (
+                config.pattern_folder,
+                config.silver_model,
+                dataset,
+                domain_value,
+            )
+
+    if not dataset_map:
+        return
+
+    base_location = f"/{SILVER_SAMPLE_ROOT.relative_to(REPO_ROOT).as_posix()}"
+    if not base_location.endswith("/"):
+        base_location += "/"
+
+    for dataset_root, (pattern_folder, silver_model, dataset, domain_value) in dataset_map.items():
+        if not dataset_root.exists():
+            continue
+
+        artifact_relative = dataset_root.relative_to(SILVER_SAMPLE_ROOT).as_posix()
+        polybase_setup = generate_polybase_setup(dataset)
+        if polybase_setup.external_data_source:
+            polybase_setup.external_data_source.location = base_location
+        for ext_table in polybase_setup.external_tables:
+            ext_table.artifact_name = artifact_relative
+
+        payload = {
+            "dataset_id": dataset.dataset_id,
+            "pattern": pattern_folder,
+            "silver_model": silver_model,
+            "domain": domain_value,
+            "entity": dataset.entity,
+            "version": dataset.silver.version,
+            "artifact_path": artifact_relative,
+            "data_source_location": base_location,
+            "polybase_setup": asdict(polybase_setup),
+        }
+        config_path = dataset_root / "_polybase.json"
+        content = json.dumps(payload, indent=2, sort_keys=True)
+        if config_path.exists():
+            existing = config_path.read_text(encoding="utf-8")
+            if existing == content:
+                continue
+        config_path.write_text(content, encoding="utf-8")
+        print(f"[INFO] Wrote polybase config to {config_path}")
 
 
 def _generate_for_partition(
@@ -462,6 +556,8 @@ def main() -> None:
             raise RuntimeError("One or more silver generation subprocesses failed")
 
     _promote_temp_samples()
+    _consolidate_silver_samples()
+    _write_polybase_configs(pattern_configs)
     print(
         f"\n[OK] Generated {generated_count} Silver sample(s) under {SILVER_SAMPLE_ROOT}"
     )
