@@ -4,7 +4,7 @@ import copy
 import logging
 from datetime import date as _date
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
@@ -226,3 +226,69 @@ def _load_intent_datasets(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     dataset = DatasetConfig.from_dict(raw)
     return [_build_dataset_runtime(dataset)]
+
+
+def load_config_with_env(
+    config_path: Path,
+    env_config_path: Optional[Path] = None
+) -> Tuple[DatasetConfig, Optional["EnvironmentConfig"]]:  # noqa: F821
+    """Load dataset config and optional environment config.
+
+    Args:
+        config_path: Path to pattern YAML file
+        env_config_path: Optional path to environment config directory
+            If not provided, looks for environments/ directory relative to config
+
+    Returns:
+        Tuple of (dataset_config, environment_config)
+
+    Example:
+        >>> dataset, env = load_config_with_env(Path("patterns/pattern_full.yaml"))
+        >>> if env:
+        ...     print(f"Using environment: {env.name}")
+    """
+    from core.config.environment import EnvironmentConfig
+
+    # Load the pattern config
+    with open(config_path, "r", encoding="utf-8") as f:
+        raw = yaml.safe_load(f)
+
+    if not isinstance(raw, dict):
+        raise ValueError("Config must be a YAML dictionary/object")
+
+    # Apply environment variable substitution
+    raw = apply_env_substitution(raw)
+
+    # Parse into DatasetConfig
+    if not is_new_intent_config(raw):
+        raise ValueError(
+            "load_config_with_env requires intent-style config. "
+            "Use load_config() for legacy configs."
+        )
+
+    dataset = DatasetConfig.from_dict(raw)
+
+    # Load environment config if referenced
+    env_config = None
+    env_name = raw.get("environment")
+
+    if env_name:
+        # Determine environment config directory
+        if env_config_path is None:
+            # Look for environments/ directory relative to config file
+            env_config_path = config_path.parent.parent / "environments"
+            if not env_config_path.exists():
+                # Try project root
+                env_config_path = Path("environments")
+
+        env_file = env_config_path / f"{env_name}.yaml"
+
+        if env_file.exists():
+            logger.info(f"Loading environment config: {env_file}")
+            env_config = EnvironmentConfig.from_yaml(env_file)
+        else:
+            logger.warning(
+                f"Environment '{env_name}' referenced in config but not found at {env_file}"
+            )
+
+    return dataset, env_config

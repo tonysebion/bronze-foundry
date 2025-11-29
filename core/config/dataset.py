@@ -330,6 +330,22 @@ class SilverIntent:
             data.get("load_batch_id_column"), "silver.load_batch_id_column"
         ) or "load_batch_id"
 
+        # Storage backend configuration
+        input_storage = data.get("input_storage", "local")
+        if input_storage not in {"local", "s3"}:
+            raise ValueError("silver.input_storage must be 'local' or 's3'")
+
+        output_storage = data.get("output_storage", "local")
+        if output_storage not in {"local", "s3"}:
+            raise ValueError("silver.output_storage must be 'local' or 's3'")
+
+        output_bucket = _require_optional_str(
+            data.get("output_bucket"), "silver.output_bucket"
+        )
+        output_prefix = data.get("output_prefix", "")
+        if output_prefix and not isinstance(output_prefix, str):
+            raise ValueError("silver.output_prefix must be a string")
+
         return cls(
             enabled=enabled,
             entity_kind=entity_kind,
@@ -354,6 +370,10 @@ class SilverIntent:
             record_time_column=record_time_column,
             record_time_partition=record_time_partition,
             load_batch_id_column=load_batch_id_column,
+            input_storage=input_storage,
+            output_storage=output_storage,
+            output_bucket=output_bucket,
+            output_prefix=output_prefix,
         )
 
 
