@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import sys
 from datetime import datetime, date, timedelta
+import argparse
 from pathlib import Path
 from random import Random
 from typing import Iterable, List, Dict, Any
@@ -94,6 +95,8 @@ FULL_ROW_COUNT = 1200
 CDC_ROW_COUNT = 800
 CURRENT_HISTORY_CURRENT = 500
 CURRENT_HISTORY_HISTORY = 1400
+LARGE_DEFAULT_ROW_COUNT = 250_000
+LARGE_DAYS = 60
 PATTERN_DIRS = {
     "full": "pattern1_full_events",
     "cdc": "pattern2_cdc_events",
@@ -192,12 +195,18 @@ def _write_chunk_files(
     return files
 
 
-def generate_full_snapshot(seed: int = 42, row_count: int = FULL_ROW_COUNT) -> None:
+def generate_full_snapshot(
+    seed: int = 42,
+    row_count: int = FULL_ROW_COUNT,
+    linear_growth: int = 50,
+    enable_updates: bool = False,
+) -> None:
     pattern_id = _pattern_dir("full")
     runtime = _get_runtime_values(pattern_id)
     formats = runtime["output_formats"]
     path_keys = _get_path_keys(pattern_id)
 
+    prev_day_order_ids: List[str] = []
     for day_offset, date_str in enumerate(FULL_DATES):
         rng = Random(seed + day_offset)
         base_dir = (
@@ -209,12 +218,23 @@ def generate_full_snapshot(seed: int = 42, row_count: int = FULL_ROW_COUNT) -> N
         )
         rows: List[Dict[str, object]] = []
         start = datetime.fromisoformat(f"{date_str}T00:00:00")
-        total_rows = row_count + day_offset * 50
-        for order_id in range(1, total_rows + 1):
-            order_time = start + timedelta(hours=order_id)
+        total_rows = row_count + day_offset * linear_growth
+        # If updates are enabled, keep some previous day order_ids and mutate a portion
+        # so the snapshot simulates updates across days. Also keep unique ids by adding new.
+        if enable_updates and prev_day_order_ids:
+            base_ids = prev_day_order_ids.copy()
+            keep_count = max(int(len(base_ids) * 0.9), 0)
+            keep_ids = rng.sample(base_ids, k=keep_count) if base_ids else []
+        else:
+            keep_ids = []
+        new_count = total_rows - len(keep_ids)
+        base_order_start = 1 + day_offset * (linear_growth + 1)
+        # Add kept orders first
+        for idx, oid in enumerate(keep_ids, start=1):
+            order_time = start + timedelta(hours=idx)
             rows.append(
                 {
-                    "order_id": f"ORD-{order_id + day_offset * 1000:05d}",
+                    "order_id": oid,
                     "customer_id": f"CUST-{rng.randint(1000, 9999)}",
                     "status": rng.choice(
                         ["new", "processing", "shipped", "delivered", "returned"]
@@ -224,6 +244,24 @@ def generate_full_snapshot(seed: int = 42, row_count: int = FULL_ROW_COUNT) -> N
                     "run_date": date_str,
                 }
             )
+
+        for order_id in range(1, new_count + 1):
+            order_time = start + timedelta(hours=order_id)
+            oid_num = base_order_start + order_id
+            oid = f"ORD-{oid_num:05d}"
+            rows.append(
+                {
+                    "order_id": oid,
+                    "customer_id": f"CUST-{rng.randint(1000, 9999)}",
+                    "status": rng.choice(
+                        ["new", "processing", "shipped", "delivered", "returned"]
+                    ),
+                    "order_total": round(rng.uniform(25.0, 500.0), 2),
+                    "updated_at": order_time.isoformat() + "Z",
+                    "run_date": date_str,
+                }
+            )
+        # Append sentinel malformed row for validation tests
         rows.append(
             {
                 "order_id": None,
@@ -412,13 +450,16 @@ def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
         start = datetime.fromisoformat(f"{date_str}T08:00:00")
 
         total_rows = row_count + day_offset * 60
+        # We deliberately weight deletes to a smaller fraction than inserts
+        # to simulate large datasets where deletes are a minority.
         for idx in range(1, total_rows + 1):
             change_time = start + timedelta(minutes=idx * 3)
             rows.append(
                 {
-                    "order_id": f"ORD-{rng.randint(1, 800):05d}",
+                    # We pick random orders from a larger range for variation
+                    "order_id": f"ORD-{rng.randint(1, max(800, total_rows)) :05d}",
                     "customer_id": f"CUST-{rng.randint(1000, 9999)}",
-                    "change_type": rng.choice(change_types),
+                    "change_type": rng.choices(change_types, weights=[0.7, 0.25, 0.05])[0],
                     "changed_at": change_time.isoformat() + "Z",
                     "status": rng.choice(["processing", "shipped", "cancelled"]),
                     "order_total": round(rng.uniform(10.0, 800.0), 2),
@@ -659,10 +700,62 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
 
 
 def main() -> None:
-    generate_full_snapshot()
-    generate_cdc()
-    generate_current_history()
-    generate_hybrid_combinations()
+    parser = argparse.ArgumentParser(
+        description="Generate Bronze source sample datasets with configurable scale and time ranges."
+    )
+    parser.add_argument("--days", type=int, default=DAILY_DAYS, help="Number of days to generate for each pattern.")
+    parser.add_argument(
+        "--start-date",
+        type=lambda s: date.fromisoformat(s),
+        default=SAMPLE_START_DATE,
+        help="Start date (YYYY-MM-DD)",
+    )
+    parser.add_argument("--full-row-count", type=int, default=FULL_ROW_COUNT, help="Initial full snapshot row count.")
+    parser.add_argument("--cdc-row-count", type=int, default=CDC_ROW_COUNT, help="Initial CDC row count.")
+    parser.add_argument(
+        "--current-rows",
+        type=int,
+        default=CURRENT_HISTORY_CURRENT,
+        help="Initial current rows for current-history pattern.",
+    )
+    parser.add_argument(
+        "--history-rows", type=int, default=CURRENT_HISTORY_HISTORY, help="Initial history rows for current-history pattern."
+    )
+    parser.add_argument(
+        "--linear-growth", type=int, default=50, help="Linear daily increment to simulate growth."
+    )
+    parser.add_argument(
+        "--enable-updates",
+        action="store_true",
+        help="Enable updates simulation for full snapshot pattern (mutate existing order_ids across days).",
+    )
+    parser.add_argument(
+        "--large",
+        action="store_true",
+        help=(
+            "Create a large dataset set (default 250k rows and 60 days). "
+            "This overrides per-row defaults unless explicitly passed."
+        ),
+    )
+    args = parser.parse_args()
+
+    global DAILY_DAYS, SAMPLE_START_DATE, FULL_DATES, CDC_DATES, CURRENT_HISTORY_DATES
+    if args.large:
+        args.full_row_count = args.full_row_count or LARGE_DEFAULT_ROW_COUNT
+        args.cdc_row_count = args.cdc_row_count or LARGE_DEFAULT_ROW_COUNT
+        args.days = args.days or LARGE_DAYS
+    # Set runtime variables
+    DAILY_DAYS = args.days
+    SAMPLE_START_DATE = args.start_date
+    FULL_DATES = _daily_schedule(SAMPLE_START_DATE, DAILY_DAYS)
+    CDC_DATES = _daily_schedule(SAMPLE_START_DATE, DAILY_DAYS)
+    CURRENT_HISTORY_DATES = _daily_schedule(SAMPLE_START_DATE, DAILY_DAYS)
+
+    print(f"Generating samples for {DAILY_DAYS} day(s) starting {SAMPLE_START_DATE}. Large={args.large}")
+    generate_full_snapshot(seed=42, row_count=args.full_row_count, linear_growth=args.linear_growth, enable_updates=args.enable_updates)
+    generate_cdc(seed=99, row_count=args.cdc_row_count)
+    generate_current_history(seed=7, current_rows=args.current_rows, history_rows=args.history_rows)
+    generate_hybrid_combinations(seed=123)
     print(f"Sample datasets written under {BASE_DIR}")
     _write_pattern_readmes()
     _sync_sampledata_bronze()
