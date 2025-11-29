@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import uuid
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import List
@@ -37,6 +38,7 @@ def _run_extract_chunk(bronze_part: Path, silver_tmp: Path, chunk_tag: str, use_
         "transactional",
         "--chunk-tag",
         chunk_tag,
+        "--verbose",
     ]
     if use_lock:
         cmd.append("--use-locks")
@@ -88,13 +90,13 @@ def test_concurrent_writes_with_locks(tmp_path: Path) -> None:
     )
     silver_tmp = tmp_path / "silver_tmp_locks"
     silver_tmp.mkdir(parents=True)
+    print(f"silver_tmp directory: {silver_tmp}")
 
     tags = [f"lock-{uuid.uuid4().hex[:6]}" for _ in range(3)]
     failures: List[tuple] = []
     config_path = REPO_ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
     # Use Popen to kick off processes concurrently and collect output reliably
-    procs = []
-    import time
+    # no blocking sleeps here; keep code straightforward
     # Ensure no stale lock files from previous runs
     for f in silver_tmp.rglob(".silver.lock"):
         try:
@@ -120,15 +122,41 @@ def test_concurrent_writes_with_locks(tmp_path: Path) -> None:
                     "--use-locks",
                     "--lock-timeout",
                     "10",
+                    "--verbose",
                 ]
                 stdout_path = silver_tmp / f"{t}.out"
                 stderr_path = silver_tmp / f"{t}.err"
+                status_path = silver_tmp / f"{t}.status"
+                # Run subprocess as Popen so we can poll and collect diagnostic info
                 with open(stdout_path, "w", encoding="utf-8") as outf, open(stderr_path, "w", encoding="utf-8") as errf:
-                    try:
-                        proc = subprocess.run(cmd, cwd=REPO_ROOT, stdout=outf, stderr=errf, text=True, timeout=180)
-                        rc = proc.returncode
-                    except subprocess.TimeoutExpired:
-                        rc = -1
+                    proc = subprocess.Popen(cmd, cwd=REPO_ROOT, stdout=outf, stderr=errf, text=True)
+                    rc = None
+                    start_ts = time.time()
+                    timeout = 180
+                    # Periodically poll the process, and record status / lock owner info
+                    while proc.poll() is None:
+                        elapsed = time.time() - start_ts
+                        # Write a simple status line so the test outputs can be tailed
+                        try:
+                            # Inspect lock file if it exists
+                            lock_file = silver_tmp / ".silver.lock"
+                            owner_info = ""
+                            if lock_file.exists():
+                                try:
+                                    owner_info = lock_file.read_text(encoding="utf-8").strip()
+                                except Exception:
+                                    owner_info = "<unreadable>"
+                            status_text = f"{t} running elapsed={elapsed:.1f}s owner={owner_info}\n"
+                            status_path.write_text(status_text, encoding="utf-8")
+                        except Exception:
+                            pass
+                        if elapsed > timeout:
+                            proc.kill()
+                            rc = -1
+                            break
+                        time.sleep(1)
+                    if rc is None:
+                        rc = proc.poll()
                 # read outputs for diagnostic
                 out = stdout_path.read_text(encoding="utf-8") if stdout_path.exists() else ""
                 err = stderr_path.read_text(encoding="utf-8") if stderr_path.exists() else ""
