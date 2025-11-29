@@ -112,6 +112,9 @@ Need proof the tooling works but don't have API credentials yet? Use the bundled
 # 0. (Once) prepare the sandbox data
 python scripts/generate_sample_data.py
 
+# To create a larger 2-month dataset with 250K rows/day (starts at 250K and grows linearly), run:
+python scripts/generate_sample_data.py --large --days 60 --full-row-count 250000 --cdc-row-count 250000 --linear-growth 2500 --enable-updates
+
 # 1. Run Bronze with the file-based config
 python bronze_extract.py --config docs/examples/configs/examples/file_example.yaml --date 2025-11-13
 

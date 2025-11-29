@@ -1,4 +1,16 @@
-"""Generate realistic Bronze sample datasets for testing load patterns."""
+"""Generate realistic Bronze sample datasets for testing load patterns.
+
+Usage examples:
+        # Default: small dataset for dev/tests
+        python scripts/generate_sample_data.py
+
+        # Large dataset: 250K starting rows and 60 days coverage
+        python scripts/generate_sample_data.py --large --days 60 --full-row-count 250000 --cdc-row-count 250000 --linear-growth 2500 --enable-updates
+
+This script supports fine-grained arguments for controlling the size and behavior of each pattern:
+    --days, --start-date, --full-row-count, --cdc-row-count, --current-rows, --history-rows,
+    --linear-growth, --enable-updates, --large
+"""
 
 from __future__ import annotations
 
