@@ -390,6 +390,7 @@ def _consolidate_silver_samples() -> None:
 
 def _write_polybase_configs(pattern_configs: Dict[str, List[PatternConfig]]) -> None:
     """Write suggested Polybase configuration files for each dataset path."""
+    generate_polybase_setup, _ = _get_polybase_generators()
     dataset_map: Dict[Path, tuple[str, str, DatasetConfig, str]] = {}
     for configs in pattern_configs.values():
         for config in configs:
@@ -455,11 +456,12 @@ def _write_polybase_configs(pattern_configs: Dict[str, List[PatternConfig]]) -> 
 
 
 def _render_polybase_ddl(
-    setup: PolybaseSetup,
-    dataset: DatasetConfig,
+    setup: "PolybaseSetup",
+    dataset: "DatasetConfig",
     artifact_relative: str,
 ) -> Dict[str, Any]:
     """Build DDL statements for Polybase setup and temporal helpers."""
+    _, generate_temporal_functions_sql = _get_polybase_generators()
     ddl: Dict[str, Any] = {}
     ddl["external_data_source"] = _split_lines(
         _external_data_source_sql(setup.external_data_source)
@@ -484,7 +486,7 @@ def _render_polybase_ddl(
     return ddl
 
 
-def _external_data_source_sql(eds: PolybaseExternalDataSource | None) -> str:
+def _external_data_source_sql(eds: "PolybaseExternalDataSource" | None) -> str:
     if not eds:
         return ""
     credential = (
@@ -500,7 +502,7 @@ def _external_data_source_sql(eds: PolybaseExternalDataSource | None) -> str:
     )
 
 
-def _external_file_format_sql(eff: PolybaseExternalFileFormat | None) -> str:
+def _external_file_format_sql(eff: "PolybaseExternalFileFormat" | None) -> str:
     if not eff:
         return ""
     compression = f",\n  COMPRESSION = '{eff.compression}'" if eff.compression else ""
@@ -514,10 +516,10 @@ def _external_file_format_sql(eff: PolybaseExternalFileFormat | None) -> str:
 
 
 def _external_table_sql(
-    ext_table: PolybaseExternalTable,
-    dataset: DatasetConfig,
+    ext_table: "PolybaseExternalTable",
+    dataset: "DatasetConfig",
     artifact_relative: str,
-    setup: PolybaseSetup,
+    setup: "PolybaseSetup",
 ) -> str:
     attributes = dataset.silver.attributes or []
     partition_cols = ext_table.partition_columns or []
