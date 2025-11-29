@@ -263,6 +263,119 @@ def test_pattern_cdc_change_type_present(pattern_key: str) -> None:
     assert len(has_change_type) > 0, f"{pattern_key}: No partitions have change_type column"
 
 
+# ============================================================================
+# HYBRID PATTERN-SPECIFIC TESTS (Patterns 5, 6, 7)
+# ============================================================================
+
+
+@pytest.mark.parametrize("pattern_key", ["pattern5"])
+def test_pattern5_hybrid_cdc_cumulative_scd2_columns(pattern_key: str) -> None:
+    """Pattern 5: Verify SCD Type 2 state tracking columns for cumulative history."""
+    silver_partitions = _find_silver_partitions(pattern_key)
+
+    if len(silver_partitions) == 0:
+        pytest.skip(f"{pattern_key}: No silver samples found")
+
+    # Pattern 5 should have SCD Type 2 tracking columns
+    required_scd2_cols = {"is_current", "effective_from", "effective_to"}
+
+    for partition in silver_partitions[:3]:  # Check first 3 partitions
+        df = _read_all_parquet(partition)
+        missing = required_scd2_cols - set(df.columns)
+        assert not missing, (
+            f"{pattern_key} partition {partition.name} missing SCD Type 2 columns: {missing}"
+        )
+
+        # Verify is_current has boolean-like values
+        if "is_current" in df.columns:
+            unique_vals = set(df["is_current"].unique())
+            assert unique_vals <= {0, 1, True, False}, (
+                f"is_current should contain only 0/1 or True/False, got {unique_vals}"
+            )
+
+
+@pytest.mark.parametrize("pattern_key", ["pattern6", "pattern7"])
+def test_pattern6_7_hybrid_point_snapshot_columns(pattern_key: str) -> None:
+    """Patterns 6 & 7: Verify point-in-time snapshot state columns."""
+    silver_partitions = _find_silver_partitions(pattern_key)
+
+    if len(silver_partitions) == 0:
+        pytest.skip(f"{pattern_key}: No silver samples found")
+
+    # Patterns 6 & 7 should have point-in-time effective date
+    required_point_cols = {"effective_from_dt"}
+
+    for partition in silver_partitions[:3]:  # Check first 3 partitions
+        df = _read_all_parquet(partition)
+        missing = required_point_cols - set(df.columns)
+        assert not missing, (
+            f"{pattern_key} partition {partition.name} missing point-in-time columns: {missing}"
+        )
+
+
+@pytest.mark.parametrize("pattern_key", ["pattern5"])
+def test_pattern5_scd2_current_state_validity(pattern_key: str) -> None:
+    """Pattern 5: Verify SCD Type 2 state validity (current records have no effective_to)."""
+    silver_partitions = _find_silver_partitions(pattern_key)
+
+    if len(silver_partitions) == 0:
+        pytest.skip(f"{pattern_key}: No silver samples found")
+
+    for partition in silver_partitions[:3]:  # Check first 3 partitions
+        df = _read_all_parquet(partition)
+
+        if "is_current" in df.columns and "effective_to" in df.columns:
+            # Current records should have null effective_to
+            current_records = df[df["is_current"] == 1]
+            null_effective_to = current_records["effective_to"].isna().sum()
+            total_current = len(current_records)
+
+            assert null_effective_to == total_current, (
+                f"{pattern_key}: {total_current - null_effective_to} current records "
+                f"have non-null effective_to (should be 0)"
+            )
+
+
+@pytest.mark.parametrize("pattern_key", ["pattern5"])
+def test_pattern5_has_delta_tag_for_tracking(pattern_key: str) -> None:
+    """Pattern 5: Verify delta_tag present for CDC tracking."""
+    silver_partitions = _find_silver_partitions(pattern_key)
+
+    if len(silver_partitions) == 0:
+        pytest.skip(f"{pattern_key}: No silver samples found")
+
+    has_delta_tag = False
+    for partition in silver_partitions:
+        df = _read_all_parquet(partition)
+        if "delta_tag" in df.columns:
+            unique_tags = df["delta_tag"].unique()
+            if len(unique_tags) > 0:
+                has_delta_tag = True
+                break
+
+    assert has_delta_tag, f"{pattern_key}: No partitions have delta_tag column"
+
+
+@pytest.mark.parametrize("pattern_key", ["pattern7"])
+def test_pattern7_includes_customer_id(pattern_key: str) -> None:
+    """Pattern 7: Verify customer_id is included in hybrid incremental cumulative."""
+    silver_partitions = _find_silver_partitions(pattern_key)
+
+    if len(silver_partitions) == 0:
+        pytest.skip(f"{pattern_key}: No silver samples found")
+
+    has_customer_id = False
+    for partition in silver_partitions:
+        df = _read_all_parquet(partition)
+        if "customer_id" in df.columns:
+            non_null_count = df["customer_id"].notna().sum()
+            if non_null_count > 0:
+                has_customer_id = True
+                break
+
+    assert has_customer_id, f"{pattern_key}: No partitions have customer_id column with values"
+
+
 @pytest.mark.parametrize("pattern_key", list(PATTERN_DEFINITIONS.keys()))
 def test_pattern_silver_partitions_have_metadata(pattern_key: str) -> None:
     """Verify silver partitions have metadata.json."""
