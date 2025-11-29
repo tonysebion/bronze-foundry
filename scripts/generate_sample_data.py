@@ -700,26 +700,27 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
 
 
 def main() -> None:
+    global DAILY_DAYS, SAMPLE_START_DATE, FULL_DATES, CDC_DATES, CURRENT_HISTORY_DATES
     parser = argparse.ArgumentParser(
         description="Generate Bronze source sample datasets with configurable scale and time ranges."
     )
-    parser.add_argument("--days", type=int, default=DAILY_DAYS, help="Number of days to generate for each pattern.")
+    parser.add_argument("--days", type=int, default=None, help="Number of days to generate for each pattern.")
     parser.add_argument(
         "--start-date",
         type=lambda s: date.fromisoformat(s),
-        default=SAMPLE_START_DATE,
+        default=None,
         help="Start date (YYYY-MM-DD)",
     )
-    parser.add_argument("--full-row-count", type=int, default=FULL_ROW_COUNT, help="Initial full snapshot row count.")
-    parser.add_argument("--cdc-row-count", type=int, default=CDC_ROW_COUNT, help="Initial CDC row count.")
+    parser.add_argument("--full-row-count", type=int, default=None, help="Initial full snapshot row count.")
+    parser.add_argument("--cdc-row-count", type=int, default=None, help="Initial CDC row count.")
     parser.add_argument(
         "--current-rows",
         type=int,
-        default=CURRENT_HISTORY_CURRENT,
+        default=None,
         help="Initial current rows for current-history pattern.",
     )
     parser.add_argument(
-        "--history-rows", type=int, default=CURRENT_HISTORY_HISTORY, help="Initial history rows for current-history pattern."
+        "--history-rows", type=int, default=None, help="Initial history rows for current-history pattern."
     )
     parser.add_argument(
         "--linear-growth", type=int, default=50, help="Linear daily increment to simulate growth."
@@ -740,10 +741,24 @@ def main() -> None:
     args = parser.parse_args()
 
     global DAILY_DAYS, SAMPLE_START_DATE, FULL_DATES, CDC_DATES, CURRENT_HISTORY_DATES
+    # Use defaults for any values that were omitted on cmdline
+    if args.days is None:
+        args.days = DAILY_DAYS
+    if args.start_date is None:
+        args.start_date = SAMPLE_START_DATE
+    if args.full_row_count is None:
+        args.full_row_count = FULL_ROW_COUNT
+    if args.cdc_row_count is None:
+        args.cdc_row_count = CDC_ROW_COUNT
+    if args.current_rows is None:
+        args.current_rows = CURRENT_HISTORY_CURRENT
+    if args.history_rows is None:
+        args.history_rows = CURRENT_HISTORY_HISTORY
+
     if args.large:
-        args.full_row_count = args.full_row_count or LARGE_DEFAULT_ROW_COUNT
-        args.cdc_row_count = args.cdc_row_count or LARGE_DEFAULT_ROW_COUNT
-        args.days = args.days or LARGE_DAYS
+        args.full_row_count = LARGE_DEFAULT_ROW_COUNT
+        args.cdc_row_count = LARGE_DEFAULT_ROW_COUNT
+        args.days = LARGE_DAYS
     # Set runtime variables
     DAILY_DAYS = args.days
     SAMPLE_START_DATE = args.start_date
