@@ -86,6 +86,7 @@ def test_concurrent_writes_with_locks(tmp_path: Path) -> None:
     config_path = REPO_ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
     # Use Popen to kick off processes concurrently and collect output reliably
     procs = []
+    import time
     for t in tags:
         p = subprocess.Popen(
             [sys.executable, str(REPO_ROOT / "silver_extract.py"), "--config", str(config_path), "--bronze-path", str(bronze_part), "--silver-base", str(silver_tmp), "--write-parquet", "--artifact-writer", "transactional", "--chunk-tag", t, "--use-locks"],
@@ -95,6 +96,8 @@ def test_concurrent_writes_with_locks(tmp_path: Path) -> None:
             text=True,
         )
         procs.append(p)
+        # stagger start to reduce lock contention & avoid excessive waiting
+        time.sleep(0.2)
     for p in procs:
         out, err = p.communicate()
         failures.append((p.returncode, out, err))
