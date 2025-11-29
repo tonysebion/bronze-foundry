@@ -56,7 +56,11 @@ def test_concurrent_writes_and_consolidation(tmp_path: Path) -> None:
     tags = [f"parallel-{uuid.uuid4().hex[:6]}" for _ in range(3)]
     failures: List[tuple] = []
     results_by_tag: dict = {}
-    config_path = REPO_ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
+    # Prefer a small CDC partition to keep locked concurrent writes quick and deterministic
+    config_path = REPO_ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_cdc.yaml"
+    small_cdc_part = REPO_ROOT / "sampledata" / "bronze_samples" / "sample=pattern2_cdc_events" / "system=retail_demo" / "table=orders" / "dt=2025-11-14"
+    if small_cdc_part.exists():
+        bronze_part = small_cdc_part
     with ThreadPoolExecutor(max_workers=3) as ex:
         futures = [ex.submit(_run_extract_chunk, bronze_part, silver_tmp, t, False, config_path) for t in tags]
         for fut in as_completed(futures):
@@ -94,7 +98,13 @@ def test_concurrent_writes_with_locks(tmp_path: Path) -> None:
 
     tags = [f"lock-{uuid.uuid4().hex[:6]}" for _ in range(3)]
     failures: List[tuple] = []
+    results_by_tag: dict = {}
+    # default to current_history; prefer small CDC sample if available
     config_path = REPO_ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
+    small_cdc_part = REPO_ROOT / "sampledata" / "bronze_samples" / "sample=pattern2_cdc_events" / "system=retail_demo" / "table=orders" / "dt=2025-11-14"
+    if small_cdc_part.exists():
+        bronze_part = small_cdc_part
+        config_path = REPO_ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_cdc.yaml"
     # Use Popen to kick off processes concurrently and collect output reliably
     # no blocking sleeps here; keep code straightforward
     # Ensure no stale lock files from previous runs
@@ -162,28 +172,70 @@ def test_concurrent_writes_with_locks(tmp_path: Path) -> None:
                 err = stderr_path.read_text(encoding="utf-8") if stderr_path.exists() else ""
                 return (rc, out, err, t)
 
+    # Spawn processes directly using Popen to avoid pytest/ThreadPoolExecutor signal interaction on Windows
+    procs = []
+    for t in tags:
+        stdout_path = silver_tmp / f"{t}.out"
+        stderr_path = silver_tmp / f"{t}.err"
+        # Ensure no leftover files
+        if stdout_path.exists():
+            stdout_path.unlink()
+        if stderr_path.exists():
+            stderr_path.unlink()
+        cmd = [
+            sys.executable,
+            str(REPO_ROOT / "silver_extract.py"),
+            "--config",
+            str(config_path),
+            "--bronze-path",
+            str(bronze_part),
+            "--silver-base",
+            str(silver_tmp),
+            "--write-parquet",
+            "--artifact-writer",
+            "transactional",
+            "--chunk-tag",
+            t,
+            "--use-locks",
+            "--lock-timeout",
+            "10",
+            "--verbose",
+        ]
+        outf = open(stdout_path, "w", encoding="utf-8")
+        errf = open(stderr_path, "w", encoding="utf-8")
+        proc = subprocess.Popen(cmd, cwd=REPO_ROOT, stdout=outf, stderr=errf, text=True)
+        procs.append((t, proc, outf, errf))
+
+    # Wait for processes with periodic status checks
+    start = time.time()
     overall_timeout = 600
-    with ThreadPoolExecutor(max_workers=3) as ex:
-        futures = [ex.submit(_run_locked_chunk, t) for t in tags]
-        try:
-            for fut in as_completed(futures, timeout=overall_timeout):
-                pass
-        except Exception as exc:
-            # If we hit a timeout or unexpected error, print diagnostic info
-            print(f"Timeout or error during concurrent lock test: {exc}")
-            for t in tags:
-                sfile = silver_tmp / f"{t}.status"
-                if sfile.exists():
-                    print(f"Status {t}:\n", sfile.read_text(encoding='utf-8'))
-            raise
-        # Collect results after futures have completed
-        for fut in futures:
-                rc, out, err, t = fut.result()
-                print(f"Process {t} RC={rc}")
-                print("STDOUT:\n", out[:2000])
-                print("STDERR:\n", err[:2000])
-                failures.append((rc, out, err))
-                results_by_tag[t] = (rc, out, err)
+    while True:
+        states = [(t, p.poll()) for t, p, _, _ in procs]
+        print("States:", states)
+        if all(s is not None for _, s in states):
+            break
+        if time.time() - start > overall_timeout:
+            print("Overall timeout reached; killing remaining processes")
+            for t, p, outf, errf in procs:
+                if p.poll() is None:
+                    p.kill()
+            break
+        time.sleep(1)
+
+    # Collect outputs
+    for t, p, outf, errf in procs:
+        outf.close()
+        errf.close()
+        stdout_path = silver_tmp / f"{t}.out"
+        stderr_path = silver_tmp / f"{t}.err"
+        out = stdout_path.read_text(encoding='utf-8') if stdout_path.exists() else ""
+        err = stderr_path.read_text(encoding='utf-8') if stderr_path.exists() else ""
+        rc = p.returncode
+        print(f"Process {t} RC={rc}")
+        print("STDOUT:\n", out[:2000])
+        print("STDERR:\n", err[:2000])
+        failures.append((rc, out, err))
+        results_by_tag[t] = (rc, out, err)
     nonzeros = [t for t in failures if t[0] != 0]
     if nonzeros:
         for rc, out, err in nonzeros:
