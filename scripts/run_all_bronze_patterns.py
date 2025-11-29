@@ -179,6 +179,10 @@ def rewrite_config(
 
         if sample_path:
             config["bronze"]["path_pattern"] = str(sample_path)
+            bronze_options = config["bronze"].setdefault("options", {})
+            extension = sample_path.suffix.lower().lstrip(".")
+            if extension:
+                bronze_options["format"] = extension
         else:
             config["bronze"]["path_pattern"] = re.sub(
                 r"dt=\d{4}-\d{2}-\d{2}",

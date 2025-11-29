@@ -789,6 +789,15 @@ def main() -> None:
         help="Row count for each hybrid delta partition (defaults to --cdc-row-count).",
     )
     parser.add_argument(
+        "--hybrid-days",
+        type=int,
+        default=None,
+        help=(
+            "Number of days to generate hybrid (delta/reference) pattern folders. "
+            "Defaults to --days so hybrid patterns cover the same date range as other patterns."
+        ),
+    )
+    parser.add_argument(
         "--linear-growth",
         type=int,
         default=DEFAULT_LINEAR_GROWTH,
@@ -843,10 +852,16 @@ def main() -> None:
         args.hybrid_reference_rows = args.full_row_count
     if args.hybrid_delta_rows is None:
         args.hybrid_delta_rows = max(1, args.cdc_row_count)
+    if args.hybrid_days is None:
+        # Default hybrid delta days to the overall requested days so patterns align
+        args.hybrid_days = args.days
     args.hybrid_reference_rows = max(1, args.hybrid_reference_rows)
     args.hybrid_delta_rows = max(1, args.hybrid_delta_rows)
     HYBRID_REFERENCE_ROWS = args.hybrid_reference_rows
     HYBRID_DELTA_ROWS_PER_DAY = args.hybrid_delta_rows
+    # Set the number of hybrid delta days (previously a fixed 11)
+    global HYBRID_DELTA_DAYS
+    HYBRID_DELTA_DAYS = max(1, args.hybrid_days)
     # Set runtime variables
     DAILY_DAYS = args.days
     SAMPLE_START_DATE = args.start_date
