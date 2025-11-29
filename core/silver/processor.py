@@ -310,6 +310,29 @@ class SilverProcessor:
         return df
 
     def _resolve_partition_columns(self, frames: Dict[str, pd.DataFrame]) -> List[str]:
+        # V1: Unified temporal configuration - use record_time_partition if available
+        if self.dataset.silver.record_time_partition:
+            partition_key = self.dataset.silver.record_time_partition
+            source_column = self.dataset.silver.record_time_column
+
+            if not source_column:
+                raise ValueError(
+                    "record_time_partition specified but record_time_column is missing"
+                )
+
+            for frame in frames.values():
+                if source_column not in frame.columns:
+                    raise ValueError(
+                        f"record_time_column '{source_column}' not found in Silver output"
+                    )
+                # Create partition column from record time (event_ts or change_ts)
+                frame[partition_key] = pd.to_datetime(
+                    frame[source_column], errors="coerce"
+                ).dt.date.astype(str)
+
+            return [partition_key]
+
+        # Legacy behavior: use partition_by if provided
         partition_by = self.dataset.silver.partition_by
         if partition_by:
             for frame in frames.values():
