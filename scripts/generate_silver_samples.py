@@ -319,6 +319,14 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Enable filesystem locking for each silver_extract subprocess (passes --use-locks to silver_extract)",
     )
+    chunking_group = parser.add_mutually_exclusive_group()
+    chunking_group.add_argument(
+        "--no-chunking",
+        dest="chunking",
+        action="store_false",
+        help="Generate Silver partitions directly instead of chunking and consolidating",
+    )
+    parser.set_defaults(chunking=True)
     return parser.parse_args()
 
 
@@ -522,8 +530,10 @@ def main() -> None:
                 stop = True
                 break
             # create a deterministic-ish unique chunk_tag per task
-            import uuid
-            chunk_tag = f"{partition['run_date']}-{uuid.uuid4().hex[:8]}"
+            chunk_tag = None
+            if args.chunking:
+                import uuid
+                chunk_tag = f"{partition['run_date']}-{uuid.uuid4().hex[:8]}"
             task_args = (partition, config_variant, enable_parquet, enable_csv, args.artifact_writer, chunk_tag, args.use_locks)
             task_list.append(task_args)
             generated_count += 1
@@ -558,7 +568,10 @@ def main() -> None:
             raise RuntimeError("One or more silver generation subprocesses failed")
 
     _promote_temp_samples()
-    _consolidate_silver_samples()
+    if args.chunking:
+        _consolidate_silver_samples()
+    else:
+        print("[INFO] Chunking disabled; skipping consolidation step")
     _write_polybase_configs(pattern_configs)
     print(
         f"\n[OK] Generated {generated_count} Silver sample(s) under {SILVER_SAMPLE_ROOT}"
