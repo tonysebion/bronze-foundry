@@ -530,9 +530,6 @@ def generate_current_history(
         chunk_path = base_dir / "current-history-part-0001.csv"
         chunk_files = _write_chunk_files(chunk_path, combined_rows)
 
-        # Add metadata files for Bronze layer
-        csv_files = [chunk_path]
-
         if day_offset == 1:
             skew_rows: List[Dict[str, object]] = []
             for idx in range(150):
