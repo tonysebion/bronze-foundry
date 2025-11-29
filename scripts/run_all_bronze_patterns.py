@@ -24,8 +24,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import boto3
-import yaml
+import boto3  # noqa: E402
+import yaml  # noqa: E402
 
 from core.config.loader import load_config_with_env
 from core.config.environment import EnvironmentConfig

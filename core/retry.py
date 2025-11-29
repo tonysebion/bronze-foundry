@@ -40,7 +40,11 @@ class RetryPolicy:
     backoff_multiplier: float = 2.0
     jitter: float = 0.2  # fraction of delay as jitter (0.0-1.0)
     retry_on_exceptions: Tuple[Type[BaseException], ...] = field(
-        default_factory=lambda: (TimeoutError, ConnectionError, OSError)
+        default_factory=lambda: (
+            TimeoutError,
+            ConnectionError,
+            OSError,
+        )
     )
     retry_if: Optional[Predicate] = None  # custom predicate
     # Optional callback to compute delay from an exception (e.g., Retry-After). If returns None, fall back to exponential.

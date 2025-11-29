@@ -11,8 +11,8 @@ import yaml
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.config.dataset import DatasetConfig
-from core.polybase import generate_polybase_setup, generate_temporal_functions_sql
+from core.config.dataset import DatasetConfig  # noqa: E402
+from core.polybase import generate_polybase_setup, generate_temporal_functions_sql  # noqa: E402
 
 
 def load_dataset_config(yaml_path: Path) -> DatasetConfig:
