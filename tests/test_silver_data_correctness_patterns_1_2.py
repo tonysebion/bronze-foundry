@@ -204,6 +204,7 @@ def test_pattern1_silver_partition_structure(tmp_path: Path) -> None:
     silver_df = _read_silver_parquet(silver_out, "events")
 
     # Verify partition columns exist in data
+    silver_cfg = cfg_data["silver"]
     partition_by = silver_cfg.get("partition_by", [])
     for partition_col in partition_by:
         assert partition_col in silver_df.columns, (
@@ -219,8 +220,6 @@ def test_pattern1_silver_business_metadata(tmp_path: Path) -> None:
     rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_extraction_config(
         config_path, run_date, tmp_path
     )
-
-    silver_cfg = cfg_data["silver"]
 
     _run_extraction(rewritten_cfg, run_date, tmp_path, "bronze")
     _run_extraction(rewritten_cfg, run_date, tmp_path, "silver")
