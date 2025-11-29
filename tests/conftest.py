@@ -1,5 +1,7 @@
 """Pytest configuration and fixtures."""
 
+import os
+import subprocess
 import pytest
 import sys
 from pathlib import Path
@@ -8,17 +10,34 @@ from pathlib import Path
 @pytest.fixture(scope="session", autouse=True)
 def ensure_sample_data_available() -> None:
     """Fail early if Bronze sample data is missing so tests don't run blind."""
-    root = Path("sampledata/source_samples")
-    if not root.exists():
-        pytest.exit(
-            "Bronze sample data missing; populate `sampledata/source_samples` "
-            "before running tests (e.g., `python scripts/generate_sample_data.py`)."
-        )
-    if not any(root.rglob("*.csv")):
-        pytest.exit(
-            "Bronze sample fixtures are empty; ensure `sampledata/source_samples` "
-            "contains generated data (e.g., run `python scripts/generate_sample_data.py`)."
-        )
+    project_root = Path(__file__).resolve().parents[1]
+    root = project_root / "sampledata" / "source_samples"
+
+    # If source_samples are missing, attempt to generate them automatically
+    if not root.exists() or not any(root.rglob("*.csv")):
+        # Skip attempting to generate if explicitly disabled using env var
+        if os.getenv("SKIP_SAMPLE_GENERATION"):
+            pytest.exit(
+                "Bronze sample data missing; populate `sampledata/source_samples` "
+                "before running tests (e.g., `python scripts/generate_sample_data.py`)."
+            )
+
+        gen_script = project_root / "scripts" / "generate_sample_data.py"
+        if gen_script.exists():
+            try:
+                print("Generating Bronze sample data using scripts/generate_sample_data.py ...")
+                subprocess.run([sys.executable, str(gen_script)], check=True, cwd=project_root)
+            except Exception as exc:  # noqa: BLE001 - we report to user rather than silently swallowing
+                pytest.exit(
+                    "Bronze sample data missing and automatic generation failed; "
+                    "populate `sampledata/source_samples` before running tests (e.g., `python scripts/generate_sample_data.py`).\n"
+                    f"Automatic generation error: {exc}"
+                )
+        else:
+            pytest.exit(
+                "Bronze sample data missing; populate `sampledata/source_samples` "
+                "before running tests (e.g., `python scripts/generate_sample_data.py`)."
+            )
 
 
 # Add the project root to the Python path
