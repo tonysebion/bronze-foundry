@@ -47,8 +47,8 @@ def find_chunk_partitions(base: Path) -> List[Path]:
 
     # Also consider directories containing chunk-templated artifact filenames
     # Accept any final '-<tag>' suffix before the extension so we can discover
-    # chunked artifacts even when tags aren't exactly 8 hex characters.
-    pattern = re.compile(r"-[^-.][^-]*\.(parquet|csv)$")
+    # chunked artifacts even when tags include hyphens like 'lock-xxxx'.
+    pattern = re.compile(r"-.+?\.(parquet|csv)$")
     for f in base.rglob("*.*"):
         if not f.is_file():
             continue
