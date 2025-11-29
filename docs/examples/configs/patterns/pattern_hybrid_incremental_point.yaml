@@ -1,8 +1,8 @@
-environment: dev
-pattern_id: pattern6_hybrid_incremental_point  # Unique identifier for tracing across source → bronze → silver
-domain: retail_demo
-system: retail_demo
-entity: orders
+environment: dev  # Hybrid incremental point-in-time scenario
+pattern_id: pattern6_hybrid_incremental_point
+domain: retail_demo  # Domain directory for Bronze/Silver samples
+system: retail_demo  # System identifier path component
+entity: orders  # Entity name referenced in metadata and path keys
 
 path_structure:
   sample_key: "sample"
@@ -26,24 +26,21 @@ bronze:
     partitioning_strategy: timestamp
     match_dir: delta
     output_formats:
-      - csv
+      # - csv
       - parquet
 
 silver:
   enabled: true
   entity_kind: derived_state
-  history_mode: latest_only
+  history_mode: latest_only  # Only emit current snapshot
   schema_mode: allow_new_columns
   natural_keys:
     - order_id
   change_ts_column: changed_at
   attributes:
     - status
-  partition_by: []
-  # IMPORTANT: latest_only (Pattern 6) stores CURRENT state only, not historical
-  # Therefore: NOT partitioned - single artifact represents current state snapshot
-  # Users query: "What's the current state of entity X?" - no partitioning needed
+  partition_by: []  # Not partitioned – latest-only current view
   delete_mode: ignore
-  record_time_column: "changed_at"  # Column with state change time
-  record_time_partition: null  # NO partitioning for current-state tables
-  load_batch_id_column: "load_batch_id"  # Standard column for batch tracking
+  record_time_column: "changed_at"
+  record_time_partition: null
+  load_batch_id_column: "load_batch_id"

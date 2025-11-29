@@ -1,8 +1,8 @@
-environment: dev
+environment: dev  # Pattern 3 simulates SCD Type 2 state + history
 pattern_id: pattern3_scd_state  # Unique identifier for tracing across source → bronze → silver
-domain: retail_demo
-system: retail_demo
-entity: orders
+domain: retail_demo  # Domain name repeated in both Bronze and Silver file paths
+system: retail_demo  # System folder label for Bronze partitions
+entity: orders  # Dataset/entity name used for metadata and directory names
 
 path_structure:
   sample_key: "sample"
@@ -14,7 +14,7 @@ path_structure:
   load_date_key: "load_date"
 
 bronze:
-  enabled: true
+  enabled: true  # Current/history mix demonstrating SCD Type 2
   source_type: file
   path_pattern: ./sampledata/source_samples/sample=pattern3_scd_state/system=retail_demo/table=orders/dt=2025-11-13/current-history-part-0001.csv
   partition_column: run_date
@@ -25,11 +25,11 @@ bronze:
     max_rows_per_file: 200000
     partitioning_strategy: date
     output_formats:
-      - csv
+      # - csv
       - parquet
 
 silver:
-  enabled: true
+  enabled: true  # Silver builds SCD2 history/current artifacts
   entity_kind: state
   history_mode: scd2
   delete_mode: tombstone_state
@@ -43,6 +43,6 @@ silver:
   partition_by:
     - effective_from_dt
   # V1 Unified temporal configuration: partition by record time (state change time), not load time
-  record_time_column: "updated_at"  # Column with state change time
-  record_time_partition: "effective_from_date"  # Partition key name for state change date
-  load_batch_id_column: "load_batch_id"  # Standard column for batch tracking
+  record_time_column: "updated_at"
+  record_time_partition: "effective_from_date"
+  load_batch_id_column: "load_batch_id"
