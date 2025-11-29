@@ -571,8 +571,43 @@ class DatasetConfig:
             raise ValueError("entity is required")
         environment = _require_optional_str(data.get("environment"), "environment")
         domain = _require_optional_str(data.get("domain"), "domain")
-        bronze_cfg = BronzeIntent.from_dict(data.get("bronze") or {})
-        silver_cfg = SilverIntent.from_dict(data.get("silver") or {})
+
+        # Handle top-level storage section (new format) or inline storage config (backward compat)
+        bronze_data = dict(data.get("bronze") or {})
+        silver_data = dict(data.get("silver") or {})
+
+        storage_config = data.get("storage")
+        if storage_config:
+            # New format: Apply storage section to bronze and silver configs
+            source_storage = storage_config.get("source", {})
+            bronze_storage = storage_config.get("bronze", {})
+            silver_storage = storage_config.get("silver", {})
+
+            # Map storage.source to bronze.source_storage/path_pattern
+            if "backend" in source_storage:
+                bronze_data.setdefault("source_storage", source_storage["backend"])
+            if "path" in source_storage:
+                bronze_data.setdefault("path_pattern", source_storage["path"])
+
+            # Map storage.bronze to bronze.output_storage/bucket/prefix
+            if "backend" in bronze_storage:
+                bronze_data.setdefault("output_storage", bronze_storage["backend"])
+            if "bucket" in bronze_storage:
+                bronze_data.setdefault("output_bucket", bronze_storage["bucket"])
+            if "prefix" in bronze_storage:
+                bronze_data.setdefault("output_prefix", bronze_storage["prefix"])
+
+            # Map storage.silver to silver.input_storage/output_storage/bucket/prefix
+            if "backend" in silver_storage:
+                silver_data.setdefault("input_storage", silver_storage["backend"])
+                silver_data.setdefault("output_storage", silver_storage["backend"])
+            if "bucket" in silver_storage:
+                silver_data.setdefault("output_bucket", silver_storage["bucket"])
+            if "prefix" in silver_storage:
+                silver_data.setdefault("output_prefix", silver_storage["prefix"])
+
+        bronze_cfg = BronzeIntent.from_dict(bronze_data)
+        silver_cfg = SilverIntent.from_dict(silver_data)
         polybase_cfg = PolybaseSetup.from_dict(data.get("polybase_setup"))
         return cls(
             system=system,
