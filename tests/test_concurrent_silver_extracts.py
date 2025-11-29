@@ -53,6 +53,7 @@ def test_concurrent_writes_and_consolidation(tmp_path: Path) -> None:
 
     tags = [f"parallel-{uuid.uuid4().hex[:6]}" for _ in range(3)]
     failures: List[tuple] = []
+    results_by_tag: dict = {}
     config_path = REPO_ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
     with ThreadPoolExecutor(max_workers=3) as ex:
         futures = [ex.submit(_run_extract_chunk, bronze_part, silver_tmp, t, False, config_path) for t in tags]
@@ -100,37 +101,48 @@ def test_concurrent_writes_with_locks(tmp_path: Path) -> None:
             f.unlink()
         except Exception:
             pass
-        def _run_locked_chunk(t: str):
-            cmd = [
-                sys.executable,
-                str(REPO_ROOT / "silver_extract.py"),
-                "--config",
-                str(config_path),
-                "--bronze-path",
-                str(bronze_part),
-                "--silver-base",
-                str(silver_tmp),
-                "--write-parquet",
-                "--artifact-writer",
-                "transactional",
-                "--chunk-tag",
-                t,
-                "--use-locks",
-                "--lock-timeout",
-                "10",
-                "--verbose",
-            ]
-            proc = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True)
-            return (proc.returncode, proc.stdout, proc.stderr, t)
 
-        with ThreadPoolExecutor(max_workers=3) as ex:
-            futures = [ex.submit(_run_locked_chunk, t) for t in tags]
+    def _run_locked_chunk(t: str):
+                cmd = [
+                    sys.executable,
+                    str(REPO_ROOT / "silver_extract.py"),
+                    "--config",
+                    str(config_path),
+                    "--bronze-path",
+                    str(bronze_part),
+                    "--silver-base",
+                    str(silver_tmp),
+                    "--write-parquet",
+                    "--artifact-writer",
+                    "transactional",
+                    "--chunk-tag",
+                    t,
+                    "--use-locks",
+                    "--lock-timeout",
+                    "10",
+                ]
+                stdout_path = silver_tmp / f"{t}.out"
+                stderr_path = silver_tmp / f"{t}.err"
+                with open(stdout_path, "w", encoding="utf-8") as outf, open(stderr_path, "w", encoding="utf-8") as errf:
+                    try:
+                        proc = subprocess.run(cmd, cwd=REPO_ROOT, stdout=outf, stderr=errf, text=True, timeout=180)
+                        rc = proc.returncode
+                    except subprocess.TimeoutExpired:
+                        rc = -1
+                # read outputs for diagnostic
+                out = stdout_path.read_text(encoding="utf-8") if stdout_path.exists() else ""
+                err = stderr_path.read_text(encoding="utf-8") if stderr_path.exists() else ""
+                return (rc, out, err, t)
+
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        futures = [ex.submit(_run_locked_chunk, t) for t in tags]
             for fut in as_completed(futures):
                 rc, out, err, t = fut.result()
                 print(f"Process {t} RC={rc}")
                 print("STDOUT:\n", out[:2000])
                 print("STDERR:\n", err[:2000])
                 failures.append((rc, out, err))
+                results_by_tag[t] = (rc, out, err)
     nonzeros = [t for t in failures if t[0] != 0]
     if nonzeros:
         for rc, out, err in nonzeros:
@@ -144,7 +156,13 @@ def test_concurrent_writes_with_locks(tmp_path: Path) -> None:
     # Confirm we produced at least one chunked artifact for each tag
     for t in tags:
         found_files = list(silver_tmp.rglob(f"*-{t}.parquet")) + list(silver_tmp.rglob(f"*-{t}.csv"))
-        assert found_files, f"No chunked artifact found for tag {t} under {silver_tmp}"
+        if not found_files:
+            # Diagnostic: print outputs if we have them
+            rc, out, err = results_by_tag.get(t, (None, "", ""))
+            print(f"Diagnostics for tag {t} RC={rc}")
+            print("Captured STDOUT:\n", out[:4000])
+            print("Captured STDERR:\n", err[:4000])
+        assert found_files, f"No chunked artifact found for tag {t} under {silver_tmp}; see diagnostics printed above"
     # If consolidation wrote metadata/checksums, assert their presence
     if list(silver_tmp.rglob("_metadata.json")):
         assert list(silver_tmp.rglob("_checksums.json")), "No checksums after consolidation"
