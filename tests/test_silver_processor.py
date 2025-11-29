@@ -252,3 +252,77 @@ def test_derived_event_processor(tmp_path):
     )
     assert events_df.shape[0] == 2
     assert set(events_df["change_type"]) == {"upsert", "update"}
+
+
+def test_deterministic_pipeline_run_at_idempotency(tmp_path):
+    """Verify that re-running the same Bronze partition produces identical Silver files.
+
+    This tests that pipeline_run_at is deterministic (based on run_date, not current time),
+    enabling byte-for-byte reproducible regeneration of Silver artifacts.
+    """
+    dataset = DatasetConfig.from_dict(
+        {
+            "system": "sales",
+            "entity": "transactions",
+            "bronze": {
+                "enabled": True,
+                "source_type": "file",
+                "path_pattern": "./docs/examples/data/transactions.csv",
+            },
+            "silver": {
+                "enabled": True,
+                "entity_kind": "event",
+                "input_mode": "append_log",
+                "natural_keys": ["transaction_id"],
+                "event_ts_column": "transaction_ts",
+                "change_ts_column": "transaction_ts",
+                "attributes": ["amount", "status"],
+                "partition_by": ["event_ts_dt"],
+            },
+        }
+    )
+
+    # Create Bronze data
+    bronze_path = _write_bronze(
+        tmp_path,
+        [
+            {
+                "transaction_id": "T001",
+                "transaction_ts": "2024-06-15T09:00:00Z",
+                "amount": 100.50,
+                "status": "completed",
+            },
+            {
+                "transaction_id": "T002",
+                "transaction_ts": "2024-06-15T10:30:00Z",
+                "amount": 250.75,
+                "status": "completed",
+            },
+        ],
+    )
+
+    run_date = date(2024, 6, 15)
+
+    # First run
+    silver_partition_1 = tmp_path / "silver_run1"
+    processor_1 = SilverProcessor(dataset, bronze_path, silver_partition_1, run_date)
+    result_1 = processor_1.run()
+
+    # Second run (should produce identical files)
+    silver_partition_2 = tmp_path / "silver_run2"
+    processor_2 = SilverProcessor(dataset, bronze_path, silver_partition_2, run_date)
+    result_2 = processor_2.run()
+
+    # Compare outputs
+    assert len(result_1.outputs["events"]) == len(result_2.outputs["events"])
+
+    # Read and compare data
+    df1 = pd.concat(pd.read_parquet(path) for path in result_1.outputs["events"])
+    df2 = pd.concat(pd.read_parquet(path) for path in result_2.outputs["events"])
+
+    # Verify pipeline_run_at is consistent across runs
+    assert df1["pipeline_run_at"].iloc[0] == df2["pipeline_run_at"].iloc[0]
+    assert df1["pipeline_run_at"].iloc[0] == pd.Timestamp(run_date)
+
+    # Verify data is identical (byte-for-byte reproducible)
+    pd.testing.assert_frame_equal(df1.reset_index(drop=True), df2.reset_index(drop=True))
