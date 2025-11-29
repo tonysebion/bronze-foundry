@@ -9,6 +9,8 @@ from pathlib import Path
 from random import Random
 from typing import Iterable, List, Dict, Any
 import shutil
+
+import pandas as pd
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -147,15 +149,24 @@ HYBRID_COMBOS = [
 ]
 
 
-def _write_csv(path: Path, rows: Iterable[Dict[str, object]]) -> None:
-    rows = list(rows)
-    if not rows:
-        return
+def _write_chunk_files(path: Path, rows: Iterable[Dict[str, object]]) -> List[Path]:
+    """Write CSV and Parquet copies of the chunk and return their paths."""
+    rows_list = list(rows)
+    if not rows_list:
+        return []
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Write CSV
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=rows[0].keys())
+        writer = csv.DictWriter(handle, fieldnames=rows_list[0].keys())
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows(rows_list)
+
+    # Write Parquet
+    df = pd.DataFrame(rows_list)
+    parquet_path = path.with_suffix(".parquet")
+    df.to_parquet(parquet_path, index=False)
+
+    return [path, parquet_path]
 
 
 def generate_full_snapshot(seed: int = 42, row_count: int = FULL_ROW_COUNT) -> None:
@@ -202,12 +213,9 @@ def generate_full_snapshot(seed: int = 42, row_count: int = FULL_ROW_COUNT) -> N
         )
 
         chunk_path = base_dir / "full-part-0001.csv"
-        _write_csv(chunk_path, rows)
+        chunk_files = _write_chunk_files(chunk_path, rows)
         total_records = len(rows)
         chunk_count = 1
-
-        # Add metadata files for Bronze layer
-        csv_files = [chunk_path]
 
         if day_offset == 1:
             schema_rows: List[Dict[str, object]] = []
@@ -225,8 +233,7 @@ def generate_full_snapshot(seed: int = 42, row_count: int = FULL_ROW_COUNT) -> N
                     }
                 )
             schema_chunk = base_dir / "full-part-0002.csv"
-            _write_csv(schema_chunk, schema_rows)
-            csv_files.append(schema_chunk)
+            chunk_files.extend(_write_chunk_files(schema_chunk, schema_rows))
             total_records += len(schema_rows)
             chunk_count += 1
 
@@ -238,7 +245,7 @@ def generate_full_snapshot(seed: int = 42, row_count: int = FULL_ROW_COUNT) -> N
         )
         write_checksum_manifest(
             out_dir=base_dir,
-            files=csv_files,
+            files=chunk_files,
             load_pattern=runtime["load_pattern"],
         )
 
@@ -262,7 +269,7 @@ def _write_hybrid_reference(
             }
         )
     chunk_path = base_dir / "reference-part-0001.csv"
-    _write_csv(chunk_path, rows)
+    _write_chunk_files(chunk_path, rows)
     _write_reference_metadata(base_dir, date_str, rows, delta_mode, delta_patterns)
 
 
@@ -278,7 +285,7 @@ def _write_hybrid_delta(
 ) -> None:
     base_dir.mkdir(parents=True, exist_ok=True)
     chunk_path = base_dir / "delta-part-0001.csv"
-    _write_csv(chunk_path, rows)
+    _write_chunk_files(chunk_path, rows)
     _write_delta_metadata(
         base_dir, date_str, rows, delta_mode, [delta_pattern], reference_run_date
     )
@@ -404,12 +411,9 @@ def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
         )
 
         chunk_path = base_dir / "cdc-part-0001.csv"
-        _write_csv(chunk_path, rows)
+        chunk_files = _write_chunk_files(chunk_path, rows)
         total_records = len(rows)
         chunk_count = 1
-
-        # Add metadata files for Bronze layer
-        csv_files = [chunk_path]
 
         if day_offset == 1:
             schema_rows: List[Dict[str, object]] = []
@@ -428,8 +432,7 @@ def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
                     }
                 )
             schema_chunk = base_dir / "cdc-part-0002.csv"
-            _write_csv(schema_chunk, schema_rows)
-            csv_files.append(schema_chunk)
+            chunk_files.extend(_write_chunk_files(schema_chunk, schema_rows))
             total_records += len(schema_rows)
             chunk_count += 1
 
@@ -441,7 +444,7 @@ def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
         )
         write_checksum_manifest(
             out_dir=base_dir,
-            files=csv_files,
+            files=chunk_files,
             load_pattern=runtime["load_pattern"],
         )
 
@@ -525,7 +528,7 @@ def generate_current_history(
         total_records = len(combined_rows)
         chunk_count = 1
         chunk_path = base_dir / "current-history-part-0001.csv"
-        _write_csv(chunk_path, combined_rows)
+        chunk_files = _write_chunk_files(chunk_path, combined_rows)
 
         # Add metadata files for Bronze layer
         csv_files = [chunk_path]
@@ -555,8 +558,7 @@ def generate_current_history(
                     }
                 )
             skew_chunk = base_dir / "current-history-part-0002.csv"
-            _write_csv(skew_chunk, skew_rows)
-            csv_files.append(skew_chunk)
+            chunk_files.extend(_write_chunk_files(skew_chunk, skew_rows))
             total_records += len(skew_rows)
             chunk_count += 1
 
@@ -568,7 +570,7 @@ def generate_current_history(
         )
         write_checksum_manifest(
             out_dir=base_dir,
-            files=csv_files,
+            files=chunk_files,
             load_pattern=runtime["load_pattern"],
         )
 
