@@ -2,15 +2,16 @@
 Comprehensive data correctness validation for ALL patterns (1-7).
 
 Validates all sample files across all patterns to ensure:
-- Data presence and integrity
+- Silver sample data presence and integrity
 - Natural key consistency
 - Timestamp handling
 - Change type preservation for CDC patterns
 - Partition structure correctness
 - Metadata completeness
 
-Current sample coverage: ~28-29 partitions per pattern × 7 patterns = ~200 total samples
-Each sample contains 50-1200+ records across ~750,000+ total records
+Coverage: ~28-30 partitions per pattern × 7 patterns = ~200 total silver partitions
+Each partition contains nested event_date subdirectories with 50-1200+ records
+Total: ~750,000+ records across all patterns
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ import pandas as pd
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-BRONZE_ROOT = REPO_ROOT / "sampledata" / "bronze_samples"
+SOURCE_ROOT = REPO_ROOT / "sampledata" / "source_samples"
 SILVER_ROOT = REPO_ROOT / "sampledata" / "silver_samples"
 
 PATTERN_DEFINITIONS = {
@@ -37,19 +38,19 @@ PATTERN_DEFINITIONS = {
 }
 
 
-def _find_bronze_partitions(pattern_key: str) -> List[Path]:
-    """Find all bronze dt=YYYY-MM-DD partitions for a pattern."""
+def _find_source_partitions(pattern_key: str) -> List[Path]:
+    """Find all source dt=YYYY-MM-DD partitions for a pattern (CSV files)."""
     pattern_folder = PATTERN_DEFINITIONS[pattern_key]["folder"]
-    pattern_path = BRONZE_ROOT / f"sample={pattern_folder}"
+    pattern_path = SOURCE_ROOT / f"sample={pattern_folder}"
 
     # Check if pattern path exists
     if not pattern_path.exists():
         return []
 
     partitions = set()
-    for parquet_file in sorted(pattern_path.rglob("*.parquet")):
+    for csv_file in sorted(pattern_path.rglob("*.csv")):
         # Find the dt=YYYY-MM-DD parent directory
-        path = parquet_file.parent
+        path = csv_file.parent
         while path != pattern_path and "dt=" not in path.name:
             path = path.parent
         if "dt=" in path.name and path != pattern_path:
@@ -113,53 +114,46 @@ def _read_metadata(directory: Path) -> Dict[str, Any]:
 
 def test_all_patterns_samples_exist() -> None:
     """Verify at least some patterns have sample data."""
-    patterns_with_bronze = []
+    patterns_with_source = []
     patterns_with_silver = []
 
     for pattern_key in PATTERN_DEFINITIONS:
-        bronze = _find_bronze_partitions(pattern_key)
+        source = _find_source_partitions(pattern_key)
         silver = _find_silver_partitions(pattern_key)
 
-        if len(bronze) > 0:
-            patterns_with_bronze.append(pattern_key)
+        if len(source) > 0:
+            patterns_with_source.append(pattern_key)
         if len(silver) > 0:
             patterns_with_silver.append(pattern_key)
 
     # Require at least some patterns to have both
-    assert len(patterns_with_bronze) > 0, "No patterns have bronze samples"
+    assert len(patterns_with_source) > 0, "No patterns have source samples"
     assert len(patterns_with_silver) > 0, "No patterns have silver samples"
 
 
 def test_sample_coverage_summary() -> None:
     """Print summary of all sample data available."""
     summary = {}
-    total_bronze_records = 0
     total_silver_records = 0
-    total_partitions = 0
+    total_silver_partitions = 0
 
     for pattern_key in PATTERN_DEFINITIONS:
         pattern_def = PATTERN_DEFINITIONS[pattern_key]
-        bronze_partitions = _find_bronze_partitions(pattern_key)
         silver_partitions = _find_silver_partitions(pattern_key)
 
-        bronze_records = sum(len(_read_all_parquet(p)) for p in bronze_partitions)
         silver_records = sum(len(_read_all_parquet(p)) for p in silver_partitions)
 
         summary[pattern_key] = {
             "name": pattern_def["name"],
-            "bronze_partitions": len(bronze_partitions),
             "silver_partitions": len(silver_partitions),
-            "bronze_records": bronze_records,
             "silver_records": silver_records,
         }
 
-        total_bronze_records += bronze_records
         total_silver_records += silver_records
-        total_partitions += len(bronze_partitions) + len(silver_partitions)
+        total_silver_partitions += len(silver_partitions)
 
     # Verify minimum coverage (allowing for partial sample data)
-    assert total_partitions > 50, f"Expected >50 partitions, got {total_partitions}"
-    assert total_bronze_records > 1000, f"Expected >1k bronze records, got {total_bronze_records}"
+    assert total_silver_partitions > 50, f"Expected >50 silver partitions, got {total_silver_partitions}"
     assert total_silver_records > 1000, f"Expected >1k silver records, got {total_silver_records}"
 
     # Write summary
@@ -177,27 +171,6 @@ def test_sample_coverage_summary() -> None:
 # ============================================================================
 # PATTERN-SPECIFIC TESTS (Parametrized)
 # ============================================================================
-
-
-@pytest.mark.parametrize("pattern_key", list(PATTERN_DEFINITIONS.keys()))
-def test_pattern_bronze_has_data(pattern_key: str) -> None:
-    """Verify pattern bronze samples have records."""
-    bronze_partitions = _find_bronze_partitions(pattern_key)
-
-    # Some patterns may not have bronze samples yet
-    if len(bronze_partitions) == 0:
-        pytest.skip(f"{pattern_key}: No bronze samples found")
-
-    assert len(bronze_partitions) > 0, f"{pattern_key}: Expected bronze partitions"
-
-    # Verify partitions have data (allow some empty partitions for now)
-    non_empty_partitions = []
-    for partition in bronze_partitions:
-        df = _read_all_parquet(partition)
-        if len(df) > 0:
-            non_empty_partitions.append(partition)
-
-    assert len(non_empty_partitions) > 0, f"{pattern_key}: All bronze partitions are empty"
 
 
 @pytest.mark.parametrize("pattern_key", list(PATTERN_DEFINITIONS.keys()))
