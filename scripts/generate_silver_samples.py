@@ -39,6 +39,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 BRONZE_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "bronze_samples"
+SOURCE_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "source_samples"
 SILVER_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "silver_samples"
 TEMP_SILVER_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "silver_samples_tmp"
 CONFIGS_DIR = REPO_ROOT / "docs" / "examples" / "configs" / "patterns"
@@ -155,7 +156,7 @@ class PatternConfig:
 
 
 def _find_bronze_partitions() -> Iterable[Dict[str, Any]]:
-    """Find all Bronze partitions with CSV files.
+    """Find all Bronze partitions containing Bronze data files (CSV/Parquet).
 
     Now looks for sample= prefixes in Bronze structure.
     """
@@ -164,8 +165,10 @@ def _find_bronze_partitions() -> Iterable[Dict[str, Any]]:
     for dir_path in BRONZE_SAMPLE_ROOT.rglob("dt=*"):
         if not dir_path.is_dir():
             continue
-        csv_files = sorted(dir_path.rglob("*.csv"))
-        if not csv_files:
+        data_files: List[Path] = []
+        for pattern in ("*.csv", "*.parquet"):
+            data_files.extend(sorted(dir_path.rglob(pattern)))
+        if not data_files:
             continue
         rel_parts = dir_path.relative_to(BRONZE_SAMPLE_ROOT).parts
 
@@ -179,7 +182,7 @@ def _find_bronze_partitions() -> Iterable[Dict[str, Any]]:
         pattern = sample_part.split("=", 1)[1]
         run_date = dt_part.split("=", 1)[1]
 
-        chunk_dir = csv_files[0].parent
+        chunk_dir = data_files[0].parent
         key = f"{pattern}|{run_date}|{chunk_dir}"
         if key in seen:
             continue
@@ -189,7 +192,7 @@ def _find_bronze_partitions() -> Iterable[Dict[str, Any]]:
             "pattern": pattern,
             "run_date": run_date,
             "dir": chunk_dir,
-            "file": csv_files[0],
+            "file": data_files[0],
         }
         yield sample
 
@@ -374,7 +377,17 @@ def _run_cli(cmd: list[str]) -> None:
 
 def _ensure_bronze_samples_present() -> None:
     """Generate Bronze samples when no partitions are detected."""
-    print("[INFO] Bronze samples missing; generating via scripts/generate_sample_data.py")
+    if SOURCE_SAMPLE_ROOT.exists():
+        print(
+            "[INFO] Bronze samples missing; "
+            "source samples already exist so running scripts/run_all_bronze_patterns.py"
+        )
+        _run_cli(["scripts/run_all_bronze_patterns.py", "--skip-sample-generation"])
+        return
+    print(
+        "[INFO] Bronze samples missing; "
+        "source samples absent so running scripts/generate_sample_data.py"
+    )
     _run_cli(["scripts/generate_sample_data.py"])
 
 
