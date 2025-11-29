@@ -10,12 +10,10 @@ This test suite validates that:
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Set, cast
+from typing import Any, Dict, cast
 
 import pandas as pd
 import pytest
@@ -198,8 +196,6 @@ def test_pattern1_silver_partition_structure(tmp_path: Path) -> None:
     rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_extraction_config(
         config_path, run_date, tmp_path
     )
-
-    silver_cfg = cfg_data["silver"]
 
     _run_extraction(rewritten_cfg, run_date, tmp_path, "bronze")
     _run_extraction(rewritten_cfg, run_date, tmp_path, "silver")
