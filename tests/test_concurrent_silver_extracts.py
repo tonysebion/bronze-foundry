@@ -111,6 +111,7 @@ def test_concurrent_writes_with_locks(tmp_path: Path) -> None:
                 "--use-locks",
                 "--lock-timeout",
                 "10",
+                "--verbose",
             ]
             proc = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True)
             return (proc.returncode, proc.stdout, proc.stderr, t)
