@@ -240,7 +240,8 @@ def generate_temporal_functions_sql(
             f"    AND {partition_col} <= @end_date\n"
             f"    ORDER BY {partition_col} DESC;\n"
             f"\n"
-            f"-- Usage: SELECT * FROM [{schema_name}].[get_{ext_table.table_name}_for_date_range]('2025-11-01', '2025-11-13')\n"
+            f"-- Usage: SELECT * FROM [{schema_name}].[get_{ext_table.table_name}_for_date_range]("
+            f"'2025-11-01', '2025-11-13')\n"
         )
         functions.append(range_sql)
 

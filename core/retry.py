@@ -16,7 +16,15 @@ import asyncio
 import random
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Tuple, Type, TypeVar, Awaitable
+from typing import (
+    Any,
+    Callable,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Awaitable,
+)
 
 from core.exceptions import RetryExhaustedError
 

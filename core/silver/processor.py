@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, cast, TYPE_CHECKING
 
 import pandas as pd
-import fsspec
 
 from core.config.dataset import (
     DatasetConfig,

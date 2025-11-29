@@ -46,9 +46,9 @@ class BenchmarkResult:
 
     def print_summary(self) -> None:
         summary = self.summary()
-        print(f"\n{'='*60}")
+        print("\n" + "=" * 60)
         print(f"Benchmark: {summary['name']}")
-        print(f"{'='*60}")
+        print("=" * 60)
         print(f"Iterations:    {summary['iterations']}")
         print(f"Mean:          {summary['mean_seconds']:.4f}s")
         print(f"Median:        {summary['median_seconds']:.4f}s")
@@ -60,7 +60,7 @@ class BenchmarkResult:
             print("\nMetadata:")
             for key, value in self.metadata.items():
                 print(f"  {key}: {value}")
-        print(f"{'='*60}\n")
+        print("=" * 60 + "\n")
 
 
 def benchmark_api_pagination_sync(iterations: int = 5) -> BenchmarkResult:

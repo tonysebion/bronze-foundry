@@ -23,9 +23,9 @@ from pathlib import Path
 
 def run_command(cmd, description):
     """Run a command and return success status."""
-    print(f"\n{'='*60}")
+    print("\n" + "=" * 60)
     print(f"🔄 {description}")
-    print(f"{'='*60}")
+    print("=" * 60)
     print(f"Command: {' '.join(cmd)}")
 
     try:
@@ -118,9 +118,9 @@ def main():
     if args.interactive:
         input("\nPress Enter to continue to customization guide...")
 
-        print(f"\n{'='*60}")
+        print("\n" + "=" * 60)
         print("🎨 Customization Guide")
-        print(f"{'='*60}")
+        print("=" * 60)
 
         print("\n1. 📋 Choose your starting config:")
         print("   API sources: docs/examples/configs/examples/api_example.yaml")

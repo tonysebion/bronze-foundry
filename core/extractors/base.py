@@ -14,8 +14,8 @@ class BaseExtractor(ABC):
 
     @abstractmethod
     def fetch_records(
-      self,
-      cfg: Dict[str, Any],
-      run_date: date,
+        self,
+        cfg: Dict[str, Any],
+        run_date: date,
     ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-      ...
+        ...
