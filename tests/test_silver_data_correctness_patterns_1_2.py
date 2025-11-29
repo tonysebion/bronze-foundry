@@ -107,7 +107,7 @@ def test_pattern1_source_to_bronze_preserves_rows(
     if not source_path.exists():
         pytest.skip(f"Source data not found for {run_date}")
 
-    rewritten_cfg, bronze_out, _, cfg_data = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, _, _ = _rewrite_extraction_config(config_path, run_date, tmp_path)
 
     source_df = _read_source_csv(source_path)
     assert len(source_df) > 0, f"Source data empty for {run_date}"
@@ -142,6 +142,7 @@ def test_pattern1_bronze_timestamp_parsing(tmp_path: Path) -> None:
     _run_extraction(rewritten_cfg, run_date, "bronze")
 
     bronze_partition = _collect_bronze_partition(bronze_out)
+    del source_df  # Variable needed only for test setup
     bronze_df = _read_bronze_parquet(bronze_partition)
 
     # Extract event_date from updated_at timestamp
