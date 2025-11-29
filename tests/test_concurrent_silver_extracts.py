@@ -136,7 +136,7 @@ def test_concurrent_writes_with_locks(tmp_path: Path) -> None:
 
     with ThreadPoolExecutor(max_workers=3) as ex:
         futures = [ex.submit(_run_locked_chunk, t) for t in tags]
-            for fut in as_completed(futures):
+        for fut in as_completed(futures):
                 rc, out, err, t = fut.result()
                 print(f"Process {t} RC={rc}")
                 print("STDOUT:\n", out[:2000])
