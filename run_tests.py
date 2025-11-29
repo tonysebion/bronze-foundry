@@ -62,10 +62,10 @@ def _prepare_environment():
 
 def run_command(cmd: list, description: str) -> bool:
     """Run a command and return True if successful."""
-    print(f"\n{'='*80}")
+    print("\n" + "=" * 80)
     print(f"Running: {description}")
     print(f"Command: {' '.join(cmd)}")
-    print(f"{'='*80}\n")
+    print("=" * 80 + "\n")
 
     result = subprocess.run(cmd)
     success = result.returncode == 0
@@ -178,9 +178,9 @@ def main():
         results.append(run_command(black_cmd, "Code Formatting (black)"))
 
     # Print summary
-    print(f"\n{'='*80}")
+    print("\n" + "=" * 80)
     print("TEST SUMMARY")
-    print(f"{'='*80}")
+    print("=" * 80)
 
     passed = sum(results)
     total = len(results)

@@ -58,9 +58,9 @@ def print_migration_report(config_path: Path) -> None:
     """
     is_valid, errors = validate_config_file(config_path)
 
-    print(f"\n{'='*70}")
+    print("\n" + "=" * 70)
     print(f"Config Migration Report: {config_path}")
-    print(f"{'='*70}\n")
+    print("=" * 70 + "\n")
 
     if is_valid:
         print("✅ Config is valid and ready for typed Pydantic models!")

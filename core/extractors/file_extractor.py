@@ -4,7 +4,6 @@ Supports reading from local filesystem, S3, and other storage backends
 using the fsspec streaming interface.
 """
 
-import csv
 import json
 import logging
 from pathlib import Path

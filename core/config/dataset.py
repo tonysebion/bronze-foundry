@@ -586,7 +586,7 @@ def is_new_intent_config(raw: Dict[str, Any]) -> bool:
     return isinstance(raw, dict) and "system" in raw and "entity" in raw and "bronze" in raw and "silver" in raw
 
 
-### Compatibility helpers ######################################################
+# Compatibility helpers
 
 logger = logging.getLogger(__name__)
 

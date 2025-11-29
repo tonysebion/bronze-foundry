@@ -179,7 +179,7 @@ def test_file_reading(env_config):
             # Prefer parquet, fallback to CSV
             if parquet_file:
                 print(f"[OK] Found parquet file: {parquet_file}")
-                print(f"   Attempting to read first few rows...")
+                print("   Attempting to read first few rows...")
 
                 try:
                     import pandas as pd
@@ -193,7 +193,7 @@ def test_file_reading(env_config):
                         print(f"   Columns: {', '.join(df.columns[:5])}")
                         if len(df.columns) > 5:
                             print(f"            ... and {len(df.columns) - 5} more")
-                        print(f"   First 3 rows:")
+                        print("   First 3 rows:")
                         print(df.head(3).to_string(max_colwidth=30))
                     print()
                 except ImportError:
@@ -202,11 +202,11 @@ def test_file_reading(env_config):
 
             elif csv_file:
                 print(f"[OK] Found CSV file (no parquet available): {csv_file}")
-                print(f"   Attempting to read first few lines...")
+                print("   Attempting to read first few lines...")
 
                 with fs.open(csv_file, "r") as f:
                     lines = [f.readline() for _ in range(5)]
-                    print(f"   First 5 lines:")
+                    print("   First 5 lines:")
                     for i, line in enumerate(lines, 1):
                         print(f"     {i}: {line.strip()[:80]}")
                 print()
