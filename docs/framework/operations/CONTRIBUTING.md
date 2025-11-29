@@ -79,6 +79,9 @@ git checkout -b fix/issue-description
 # Run all quality checks
 python run_tests.py --all-checks
 
+# Run tests with linting enabled
+python run_tests.py --with-lint
+
 # Run only tests
 python run_tests.py --coverage
 
@@ -150,7 +153,13 @@ isort core extractors tests bronze_extract.py
 #### Linting
 
 ```bash
-# Run linter
+# Run linting alongside pytest
+python run_tests.py --with-lint
+
+# Run linting only
+python run_tests.py --ruff
+
+# Or directly with ruff
 ruff check core extractors tests bronze_extract.py
 
 # Fix common issues automatically

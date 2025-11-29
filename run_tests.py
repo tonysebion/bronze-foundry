@@ -85,6 +85,12 @@ def main():
     parser.add_argument("--mypy", action="store_true", help="Run mypy type checking")
     parser.add_argument("--ruff", action="store_true", help="Run ruff linting")
     parser.add_argument(
+        "--with-lint",
+        "--lint",
+        action="store_true",
+        help="Run tests together with ruff linting for a single command",
+    )
+    parser.add_argument(
         "--black-check", action="store_true", help="Check code formatting with black"
     )
     parser.add_argument(
@@ -101,7 +107,7 @@ def main():
     # Determine what to run
     run_tests = True
     run_mypy = args.mypy or args.all_checks
-    run_ruff = args.ruff or args.all_checks
+    run_ruff = args.ruff or args.with_lint or args.all_checks
     run_black = args.black_check or args.all_checks
 
     # Run tests

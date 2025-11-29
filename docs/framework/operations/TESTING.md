@@ -8,6 +8,9 @@ This document explains how to run tests and quality checks for medallion-foundry
 # Run all tests
 python run_tests.py
 
+# Run tests with linting included (pytest + ruff)
+python run_tests.py --with-lint
+
 # Run all tests with coverage
 python run_tests.py --coverage
 
@@ -131,8 +134,13 @@ Configuration in `mypy.ini`.
 
 ### Linting (ruff)
 
+Run linting together with pytest via `--with-lint`, or keep lint runs separate when you only need static checks.
+
 ```bash
-# Run linting
+# Run linting alongside tests
+python run_tests.py --with-lint
+
+# Run linting only
 python run_tests.py --ruff
 
 # Or directly with ruff
