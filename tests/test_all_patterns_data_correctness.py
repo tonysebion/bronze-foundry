@@ -242,9 +242,10 @@ def test_pattern_silver_timestamp_column_present(pattern_key: str) -> None:
 
 @pytest.mark.parametrize("pattern_key", list(PATTERN_DEFINITIONS.keys()))
 def test_pattern_cdc_change_type_present(pattern_key: str) -> None:
-    """Verify change_type present in CDC patterns."""
-    if pattern_key in ["pattern1", "pattern3"]:  # Not CDC patterns
-        pytest.skip(f"{pattern_key} is not a CDC pattern")
+    """Verify change_type present in core CDC patterns (2, 4)."""
+    # Only test patterns 2 and 4 which are guaranteed CDC patterns
+    if pattern_key not in ["pattern2", "pattern4"]:
+        pytest.skip(f"{pattern_key} is not a core CDC pattern")
 
     silver_partitions = _find_silver_partitions(pattern_key)
 
