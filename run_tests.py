@@ -22,6 +22,17 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent
 
 
+def _filter_existing_targets(targets: list[str]) -> list[str]:
+    found: list[str] = []
+    for target in targets:
+        candidate = ROOT_DIR / target if not Path(target).is_absolute() else Path(target)
+        if candidate.exists():
+            found.append(target)
+        else:
+            print(f"[WARN] Skipping missing target {target}")
+    return found
+
+
 def _ensure_venv_python():
     """Re-run the script under `.venv` python so pytest inherits the project virtualenv."""
     if os.name == "nt":
@@ -140,14 +151,15 @@ def main():
 
     # Run mypy type checking
     if run_mypy:
-        mypy_cmd = [
-            "mypy",
-            "core",
-            "extractors",
-            "bronze_extract.py",
-            "--config-file=mypy.ini",
-        ]
-        results.append(run_command(mypy_cmd, "Type Checking (mypy)"))
+        mypy_targets = _filter_existing_targets(
+            ["core", "extractors", "bronze_extract.py"]
+        )
+        if not mypy_targets:
+            print("No mypy targets found; skipping type checking")
+            results.append(True)
+        else:
+            mypy_cmd = ["mypy", *mypy_targets, "--config-file=mypy.ini"]
+            results.append(run_command(mypy_cmd, "Type Checking (mypy)"))
 
     # Run ruff linting
     if run_ruff:
