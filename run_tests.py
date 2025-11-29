@@ -80,19 +80,11 @@ def run_command(cmd: list, description: str) -> bool:
 
 def main():
     _prepare_environment()
-    parser = argparse.ArgumentParser(
-        description="Run medallion-foundry tests and quality checks"
-    )
+    parser = argparse.ArgumentParser(description="Run medallion-foundry tests and quality checks")
     parser.add_argument("--unit", action="store_true", help="Run only unit tests")
-    parser.add_argument(
-        "--integration", action="store_true", help="Run only integration tests"
-    )
-    parser.add_argument(
-        "--coverage", action="store_true", help="Run tests with coverage report"
-    )
-    parser.add_argument(
-        "--html-coverage", action="store_true", help="Generate HTML coverage report"
-    )
+    parser.add_argument("--integration", action="store_true", help="Run only integration tests")
+    parser.add_argument("--coverage", action="store_true", help="Run tests with coverage report")
+    parser.add_argument("--html-coverage", action="store_true", help="Generate HTML coverage report")
     parser.add_argument("--mypy", action="store_true", help="Run mypy type checking")
     parser.add_argument("--ruff", action="store_true", help="Run ruff linting")
     parser.add_argument(
@@ -101,9 +93,7 @@ def main():
         action="store_true",
         help="Run tests together with ruff linting for a single command",
     )
-    parser.add_argument(
-        "--black-check", action="store_true", help="Check code formatting with black"
-    )
+    parser.add_argument("--black-check", action="store_true", help="Check code formatting with black")
     parser.add_argument(
         "--all-checks",
         action="store_true",
@@ -151,9 +141,7 @@ def main():
 
     # Run mypy type checking
     if run_mypy:
-        mypy_targets = _filter_existing_targets(
-            ["core", "extractors", "bronze_extract.py"]
-        )
+        mypy_targets = _filter_existing_targets(["core", "extractors", "bronze_extract.py"])
         if not mypy_targets:
             print("No mypy targets found; skipping type checking")
             results.append(True)

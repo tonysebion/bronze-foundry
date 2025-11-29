@@ -127,6 +127,7 @@ def test_s3_connection(env_config):
         print(f"[ERROR] Failed to connect to S3: {e}")
         print()
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -154,20 +155,20 @@ def test_file_reading(env_config):
             csv_file = None
 
             for item in items:
-                if item.endswith('.parquet'):
+                if item.endswith(".parquet"):
                     parquet_file = item
                     break
-                elif item.endswith('.csv'):
+                elif item.endswith(".csv"):
                     csv_file = item
 
                 # Check subdirectories
                 try:
                     subitems = fs.ls(item, detail=False)
                     for subitem in subitems:
-                        if subitem.endswith('.parquet'):
+                        if subitem.endswith(".parquet"):
                             parquet_file = subitem
                             break
-                        elif subitem.endswith('.csv') and not csv_file:
+                        elif subitem.endswith(".csv") and not csv_file:
                             csv_file = subitem
                 except:
                     pass
@@ -183,8 +184,9 @@ def test_file_reading(env_config):
                 try:
                     import pandas as pd
                     import io
+
                     # Read parquet file into memory buffer for pandas
-                    with fs.open(parquet_file, 'rb') as f:
+                    with fs.open(parquet_file, "rb") as f:
                         buffer = io.BytesIO(f.read())
                         df = pd.read_parquet(buffer)
                         print(f"   Shape: {df.shape[0]} rows, {df.shape[1]} columns")
@@ -202,7 +204,7 @@ def test_file_reading(env_config):
                 print(f"[OK] Found CSV file (no parquet available): {csv_file}")
                 print(f"   Attempting to read first few lines...")
 
-                with fs.open(csv_file, 'r') as f:
+                with fs.open(csv_file, "r") as f:
                     lines = [f.readline() for _ in range(5)]
                     print(f"   First 5 lines:")
                     for i, line in enumerate(lines, 1):
@@ -219,6 +221,7 @@ def test_file_reading(env_config):
     except Exception as e:
         print(f"[ERROR] Failed to read file: {e}")
         import traceback
+
         traceback.print_exc()
         print()
 

@@ -4,6 +4,33 @@ domain: retail_demo  # Logical business domain inside sampledata/ hierarchy
 system: retail_demo  # Logical system label repeated under system= folders
 entity: orders  # Entity/table driving Bronze/Silver paths
 
+storage:
+  source:
+    backend: s3
+    bucket: mdf
+    prefix: source_samples/
+  bronze:
+    backend: s3
+    bucket: mdf
+    prefix: bronze_samples/
+  silver:
+    backend: s3
+    bucket: mdf
+    prefix: silver_samples/
+
+# To use local filesystem instead of S3, change each backend to "local"
+# and point the prefixes at local directories, e.g.:
+# storage:
+#   source:
+#     backend: local
+#     prefix: ./sampledata/source_samples/
+#   bronze:
+#     backend: local
+#     prefix: sampledata/bronze_samples/
+#   silver:
+#     backend: local
+#     prefix: sampledata/silver_samples/
+
 path_structure:
   sample_key: "sample"  # Bronze folder representing pattern id hierarchy
   system_key: "system"
@@ -16,7 +43,7 @@ path_structure:
 bronze:
   enabled: true  # CDC delta snapshots that append to history
   source_type: file
-  path_pattern: ./sampledata/source_samples/sample=pattern2_cdc_events/system=retail_demo/table=orders/dt=2025-11-13/cdc-part-0001.csv
+  path_pattern: sample=pattern2_cdc_events/system=retail_demo/table=orders/dt=2025-11-13/cdc-part-0001.csv
   partition_column: run_date
   options:
     format: csv

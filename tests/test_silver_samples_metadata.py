@@ -87,9 +87,7 @@ def _find_intent_config(label_dir: Path) -> Path:
     raise FileNotFoundError(f"No intent config found under {label_dir}")
 
 
-def _expected_artifact_names(
-    model: SilverModel, silver_cfg: Dict[str, Any]
-) -> List[str]:
+def _expected_artifact_names(model: SilverModel, silver_cfg: Dict[str, Any]) -> List[str]:
     artifact_names: Dict[str, str] = {
         "full_snapshot": str(silver_cfg["full_output_name"]),
         "cdc": str(silver_cfg["cdc_output_name"]),
@@ -117,9 +115,7 @@ def _extract_load_date(metadata_path: Path) -> str:
 @pytest.fixture(scope="module")
 def silver_metadata_files() -> List[Path]:
     if not SILVER_ROOT.exists():
-        pytest.skip(
-            "Silver samples are missing; run scripts/generate_silver_samples.py"
-        )
+        pytest.skip("Silver samples are missing; run scripts/generate_silver_samples.py")
     return list(SILVER_ROOT.rglob("_metadata.json"))
 
 

@@ -60,9 +60,7 @@ DEFAULT_SILVER_BASE = Path("sampledata") / "silver_samples"
 def _require_list_of_strings(values: Any, field_name: str) -> List[str]:
     if values is None:
         return []
-    if not isinstance(values, list) or any(
-        not isinstance(item, str) for item in values
-    ):
+    if not isinstance(values, list) or any(not isinstance(item, str) for item in values):
         raise ValueError(f"{field_name} must be a list of strings")
     return [item.strip() for item in values if item and item.strip()]
 
@@ -108,21 +106,11 @@ class BronzeIntent:
         enabled = bool(data.get("enabled", True))
         source_type = data.get("source_type", "file")
         if source_type not in {"db", "file", "api", "custom"}:
-            raise ValueError(
-                "bronze.source_type must be one of {'db', 'file', 'api', 'custom'}"
-            )
-        connection_name = _require_optional_str(
-            data.get("connection_name"), "bronze.connection_name"
-        )
-        source_query = _require_optional_str(
-            data.get("source_query"), "bronze.source_query"
-        )
-        path_pattern = _require_optional_str(
-            data.get("path_pattern"), "bronze.path_pattern"
-        )
-        partition_column = _require_optional_str(
-            data.get("partition_column"), "bronze.partition_column"
-        )
+            raise ValueError("bronze.source_type must be one of {'db', 'file', 'api', 'custom'}")
+        connection_name = _require_optional_str(data.get("connection_name"), "bronze.connection_name")
+        source_query = _require_optional_str(data.get("source_query"), "bronze.source_query")
+        path_pattern = _require_optional_str(data.get("path_pattern"), "bronze.path_pattern")
+        partition_column = _require_optional_str(data.get("partition_column"), "bronze.partition_column")
         options = data.get("options") or {}
         if options and not isinstance(options, dict):
             raise ValueError("bronze.options must be a dictionary when provided")
@@ -136,9 +124,7 @@ class BronzeIntent:
         if output_storage not in {"local", "s3"}:
             raise ValueError("bronze.output_storage must be 'local' or 's3'")
 
-        output_bucket = _require_optional_str(
-            data.get("output_bucket"), "bronze.output_bucket"
-        )
+        output_bucket = _require_optional_str(data.get("output_bucket"), "bronze.output_bucket")
         output_prefix = data.get("output_prefix", "")
         if output_prefix and not isinstance(output_prefix, str):
             raise ValueError("bronze.output_prefix must be a string")
@@ -150,12 +136,8 @@ class BronzeIntent:
             source_query=source_query,
             path_pattern=path_pattern,
             partition_column=partition_column,
-            owner_team=_require_optional_str(
-                data.get("owner_team"), "bronze.owner_team"
-            ),
-            owner_contact=_require_optional_str(
-                data.get("owner_contact"), "bronze.owner_contact"
-            ),
+            owner_team=_require_optional_str(data.get("owner_team"), "bronze.owner_team"),
+            owner_contact=_require_optional_str(data.get("owner_contact"), "bronze.owner_contact"),
             options=options,
             source_storage=source_storage,
             output_storage=output_storage,
@@ -207,10 +189,7 @@ class SilverIntent:
         try:
             entity_kind = EntityKind(entity_kind_raw)
         except ValueError as exc:
-            raise ValueError(
-                "silver.entity_kind must be one of "
-                f"{[kind.value for kind in EntityKind]}"
-            ) from exc
+            raise ValueError("silver.entity_kind must be one of " f"{[kind.value for kind in EntityKind]}") from exc
 
         history_mode = data.get("history_mode")
         history_value = None
@@ -219,8 +198,7 @@ class SilverIntent:
                 history_value = HistoryMode(history_mode)
             except ValueError as exc:
                 raise ValueError(
-                    "silver.history_mode must be one of "
-                    f"{[mode.value for mode in HistoryMode]}"
+                    "silver.history_mode must be one of " f"{[mode.value for mode in HistoryMode]}"
                 ) from exc
         elif entity_kind.is_state_like:
             history_value = HistoryMode.SCD2
@@ -231,21 +209,14 @@ class SilverIntent:
             try:
                 input_value = InputMode(input_mode)
             except ValueError as exc:
-                raise ValueError(
-                    "silver.input_mode must be one of "
-                    f"{[mode.value for mode in InputMode]}"
-                ) from exc
+                raise ValueError("silver.input_mode must be one of " f"{[mode.value for mode in InputMode]}") from exc
         elif entity_kind.is_event_like:
             input_value = InputMode.APPEND_LOG
 
         if entity_kind.is_event_like and history_mode:
-            raise ValueError(
-                "silver.history_mode is only valid for state-like and derived_state entity kinds"
-            )
+            raise ValueError("silver.history_mode is only valid for state-like and derived_state entity kinds")
         if entity_kind.is_state_like and input_mode:
-            raise ValueError(
-                "silver.input_mode is not valid when entity_kind is state-like"
-            )
+            raise ValueError("silver.input_mode is not valid when entity_kind is state-like")
         if entity_kind.is_state_like and history_value is None:
             history_value = HistoryMode.SCD2
         if entity_kind.is_event_like and input_value is None:
@@ -255,57 +226,31 @@ class SilverIntent:
         try:
             delete_mode = DeleteMode(delete_mode_raw)
         except ValueError as exc:
-            raise ValueError(
-                "silver.delete_mode must be one of "
-                f"{[mode.value for mode in DeleteMode]}"
-            ) from exc
+            raise ValueError("silver.delete_mode must be one of " f"{[mode.value for mode in DeleteMode]}") from exc
 
         schema_mode_raw = data.get("schema_mode", SchemaMode.STRICT.value)
         try:
             schema_mode = SchemaMode(schema_mode_raw)
         except ValueError as exc:
-            raise ValueError(
-                "silver.schema_mode must be one of "
-                f"{[mode.value for mode in SchemaMode]}"
-            ) from exc
+            raise ValueError("silver.schema_mode must be one of " f"{[mode.value for mode in SchemaMode]}") from exc
 
-        natural_keys = _require_list_of_strings(
-            data.get("natural_keys"), "silver.natural_keys"
-        )
+        natural_keys = _require_list_of_strings(data.get("natural_keys"), "silver.natural_keys")
         if not natural_keys:
             raise ValueError("silver.natural_keys must include at least one column")
 
-        event_ts_column = _require_optional_str(
-            data.get("event_ts_column"), "silver.event_ts_column"
-        )
-        change_ts_column = _require_optional_str(
-            data.get("change_ts_column"), "silver.change_ts_column"
-        )
+        event_ts_column = _require_optional_str(data.get("event_ts_column"), "silver.event_ts_column")
+        change_ts_column = _require_optional_str(data.get("change_ts_column"), "silver.change_ts_column")
 
         if entity_kind.is_event_like and not event_ts_column:
-            raise ValueError(
-                "silver.event_ts_column is required for event or derived_event entities"
-            )
+            raise ValueError("silver.event_ts_column is required for event or derived_event entities")
         if entity_kind.is_state_like and not change_ts_column:
-            raise ValueError(
-                "silver.change_ts_column is required for state or derived_state entities"
-            )
+            raise ValueError("silver.change_ts_column is required for state or derived_state entities")
 
-        attributes = _require_list_of_strings(
-            data.get("attributes"), "silver.attributes"
-        )
-        partition_by = _require_list_of_strings(
-            data.get("partition_by"), "silver.partition_by"
-        )
-        require_checksum = _require_bool(
-            data.get("require_checksum"), "silver.require_checksum", False
-        )
-        semantic_owner = _require_optional_str(
-            data.get("semantic_owner"), "silver.semantic_owner"
-        )
-        semantic_contact = _require_optional_str(
-            data.get("semantic_contact"), "silver.semantic_contact"
-        )
+        attributes = _require_list_of_strings(data.get("attributes"), "silver.attributes")
+        partition_by = _require_list_of_strings(data.get("partition_by"), "silver.partition_by")
+        require_checksum = _require_bool(data.get("require_checksum"), "silver.require_checksum", False)
+        semantic_owner = _require_optional_str(data.get("semantic_owner"), "silver.semantic_owner")
+        semantic_contact = _require_optional_str(data.get("semantic_contact"), "silver.semantic_contact")
         output_dir = _require_optional_str(data.get("output_dir"), "silver.output_dir")
         version_raw = data.get("version", 1)
         if not isinstance(version_raw, int) or version_raw <= 0:
@@ -314,21 +259,15 @@ class SilverIntent:
         if not isinstance(load_partition_name, str):
             raise ValueError("silver.load_partition_name must be a string")
         include_pattern_folder = bool(data.get("include_pattern_folder", False))
-        write_parquet = _require_bool(
-            data.get("write_parquet"), "silver.write_parquet", True
-        )
+        write_parquet = _require_bool(data.get("write_parquet"), "silver.write_parquet", True)
         write_csv = _require_bool(data.get("write_csv"), "silver.write_csv", False)
 
         # Unified temporal configuration
-        record_time_column = _require_optional_str(
-            data.get("record_time_column"), "silver.record_time_column"
+        record_time_column = _require_optional_str(data.get("record_time_column"), "silver.record_time_column")
+        record_time_partition = _require_optional_str(data.get("record_time_partition"), "silver.record_time_partition")
+        load_batch_id_column = (
+            _require_optional_str(data.get("load_batch_id_column"), "silver.load_batch_id_column") or "load_batch_id"
         )
-        record_time_partition = _require_optional_str(
-            data.get("record_time_partition"), "silver.record_time_partition"
-        )
-        load_batch_id_column = _require_optional_str(
-            data.get("load_batch_id_column"), "silver.load_batch_id_column"
-        ) or "load_batch_id"
 
         # Storage backend configuration
         input_storage = data.get("input_storage", "local")
@@ -339,9 +278,7 @@ class SilverIntent:
         if output_storage not in {"local", "s3"}:
             raise ValueError("silver.output_storage must be 'local' or 's3'")
 
-        output_bucket = _require_optional_str(
-            data.get("output_bucket"), "silver.output_bucket"
-        )
+        output_bucket = _require_optional_str(data.get("output_bucket"), "silver.output_bucket")
         output_prefix = data.get("output_prefix", "")
         if output_prefix and not isinstance(output_prefix, str):
             raise ValueError("silver.output_prefix must be a string")
@@ -380,6 +317,7 @@ class SilverIntent:
 @dataclass
 class PolybaseExternalDataSource:
     """Polybase external data source configuration for cloud storage."""
+
     name: str
     data_source_type: str  # e.g., "HADOOP", "BLOB_STORAGE"
     location: str  # e.g., "wasbs://container@account.blob.core.windows.net/path"
@@ -389,17 +327,14 @@ class PolybaseExternalDataSource:
     def from_dict(cls, data: Dict[str, Any]) -> "PolybaseExternalDataSource":
         if not isinstance(data, dict):
             raise ValueError("polybase_setup.external_data_source must be a dictionary")
-        name = _require_optional_str(
-            data.get("name"), "polybase_setup.external_data_source.name"
-        )
+        name = _require_optional_str(data.get("name"), "polybase_setup.external_data_source.name")
         if not name:
             raise ValueError("polybase_setup.external_data_source.name is required")
-        data_source_type = _require_optional_str(
-            data.get("data_source_type"), "polybase_setup.external_data_source.data_source_type"
-        ) or "HADOOP"
-        location = _require_optional_str(
-            data.get("location"), "polybase_setup.external_data_source.location"
+        data_source_type = (
+            _require_optional_str(data.get("data_source_type"), "polybase_setup.external_data_source.data_source_type")
+            or "HADOOP"
         )
+        location = _require_optional_str(data.get("location"), "polybase_setup.external_data_source.location")
         if not location:
             raise ValueError("polybase_setup.external_data_source.location is required")
         credential_name = _require_optional_str(
@@ -416,6 +351,7 @@ class PolybaseExternalDataSource:
 @dataclass
 class PolybaseExternalFileFormat:
     """Polybase external file format configuration."""
+
     name: str
     format_type: str  # e.g., "PARQUET", "DELIMITEDTEXT"
     compression: Optional[str] = None  # e.g., "SNAPPY", "GZIP"
@@ -424,17 +360,14 @@ class PolybaseExternalFileFormat:
     def from_dict(cls, data: Dict[str, Any]) -> "PolybaseExternalFileFormat":
         if not isinstance(data, dict):
             raise ValueError("polybase_setup.external_file_format must be a dictionary")
-        name = _require_optional_str(
-            data.get("name"), "polybase_setup.external_file_format.name"
-        )
+        name = _require_optional_str(data.get("name"), "polybase_setup.external_file_format.name")
         if not name:
             raise ValueError("polybase_setup.external_file_format.name is required")
-        format_type = _require_optional_str(
-            data.get("format_type"), "polybase_setup.external_file_format.format_type"
-        ) or "PARQUET"
-        compression = _require_optional_str(
-            data.get("compression"), "polybase_setup.external_file_format.compression"
+        format_type = (
+            _require_optional_str(data.get("format_type"), "polybase_setup.external_file_format.format_type")
+            or "PARQUET"
         )
+        compression = _require_optional_str(data.get("compression"), "polybase_setup.external_file_format.compression")
         return cls(
             name=name,
             format_type=format_type,
@@ -445,6 +378,7 @@ class PolybaseExternalFileFormat:
 @dataclass
 class PolybaseExternalTable:
     """Polybase external table configuration for a single artifact/model."""
+
     artifact_name: str  # e.g., "orders_events", "orders_state"
     schema_name: str  # e.g., "dbo", "silver"
     table_name: str  # e.g., "fact_orders", "dim_orders"
@@ -457,25 +391,21 @@ class PolybaseExternalTable:
     def from_dict(cls, data: Dict[str, Any]) -> "PolybaseExternalTable":
         if not isinstance(data, dict):
             raise ValueError("polybase_setup.external_tables item must be a dictionary")
-        artifact_name = _require_optional_str(
-            data.get("artifact_name"), "polybase_setup.external_tables.artifact_name"
-        )
+        artifact_name = _require_optional_str(data.get("artifact_name"), "polybase_setup.external_tables.artifact_name")
         if not artifact_name:
             raise ValueError("polybase_setup.external_tables.artifact_name is required")
-        schema_name = _require_optional_str(
-            data.get("schema_name"), "polybase_setup.external_tables.schema_name"
-        ) or "dbo"
-        table_name = _require_optional_str(
-            data.get("table_name"), "polybase_setup.external_tables.table_name"
+        schema_name = (
+            _require_optional_str(data.get("schema_name"), "polybase_setup.external_tables.schema_name") or "dbo"
         )
+        table_name = _require_optional_str(data.get("table_name"), "polybase_setup.external_tables.table_name")
         if not table_name:
             raise ValueError("polybase_setup.external_tables.table_name is required")
         partition_columns = _require_list_of_strings(
             data.get("partition_columns"), "polybase_setup.external_tables.partition_columns"
         )
-        reject_type = _require_optional_str(
-            data.get("reject_type"), "polybase_setup.external_tables.reject_type"
-        ) or "VALUE"
+        reject_type = (
+            _require_optional_str(data.get("reject_type"), "polybase_setup.external_tables.reject_type") or "VALUE"
+        )
         reject_value = data.get("reject_value", 0)
         if not isinstance(reject_value, int):
             raise ValueError("polybase_setup.external_tables.reject_value must be an integer")
@@ -496,6 +426,7 @@ class PolybaseExternalTable:
 @dataclass
 class PolybaseSetup:
     """Complete Polybase setup configuration for SQL Server external tables."""
+
     enabled: bool = True
     external_data_source: Optional[PolybaseExternalDataSource] = None
     external_file_format: Optional[PolybaseExternalFileFormat] = None
@@ -511,9 +442,7 @@ class PolybaseSetup:
         if not isinstance(data, dict):
             raise ValueError("polybase_setup must be a dictionary")
 
-        enabled = _require_bool(
-            data.get("enabled"), "polybase_setup.enabled", True
-        )
+        enabled = _require_bool(data.get("enabled"), "polybase_setup.enabled", True)
 
         external_data_source = None
         eds_data = data.get("external_data_source")
@@ -532,12 +461,8 @@ class PolybaseSetup:
         for et_data in et_list:
             external_tables.append(PolybaseExternalTable.from_dict(et_data))
 
-        trino_enabled = _require_bool(
-            data.get("trino_enabled"), "polybase_setup.trino_enabled", False
-        )
-        iceberg_enabled = _require_bool(
-            data.get("iceberg_enabled"), "polybase_setup.iceberg_enabled", False
-        )
+        trino_enabled = _require_bool(data.get("trino_enabled"), "polybase_setup.trino_enabled", False)
+        iceberg_enabled = _require_bool(data.get("iceberg_enabled"), "polybase_setup.iceberg_enabled", False)
 
         return cls(
             enabled=enabled,
@@ -658,13 +583,7 @@ class DatasetConfig:
 
 
 def is_new_intent_config(raw: Dict[str, Any]) -> bool:
-    return (
-        isinstance(raw, dict)
-        and "system" in raw
-        and "entity" in raw
-        and "bronze" in raw
-        and "silver" in raw
-    )
+    return isinstance(raw, dict) and "system" in raw and "entity" in raw and "bronze" in raw and "silver" in raw
 
 
 ### Compatibility helpers ######################################################
@@ -713,9 +632,7 @@ def dataset_to_runtime_config(dataset: DatasetConfig) -> Dict[str, Any]:
 
     if dataset.bronze.source_type == "file":
         if not dataset.bronze.path_pattern:
-            raise ValueError(
-                f"{dataset.dataset_id} bronze.path_pattern must be provided for file sources"
-            )
+            raise ValueError(f"{dataset.dataset_id} bronze.path_pattern must be provided for file sources")
         file_cfg: Dict[str, Any] = {
             "path": dataset.bronze.path_pattern,
             "format": dataset.bronze.options.get("format", "csv"),
@@ -730,9 +647,7 @@ def dataset_to_runtime_config(dataset: DatasetConfig) -> Dict[str, Any]:
                 f"{dataset.dataset_id} bronze.connection_name (or db.conn_str_env) is required for db sources"
             )
         if not dataset.bronze.source_query and not db_cfg.get("base_query"):
-            raise ValueError(
-                f"{dataset.dataset_id} bronze.source_query is required for db sources"
-            )
+            raise ValueError(f"{dataset.dataset_id} bronze.source_query is required for db sources")
         source_cfg["db"] = {
             "conn_str_env": conn,
             "base_query": dataset.bronze.source_query or db_cfg.get("base_query"),
@@ -751,9 +666,7 @@ def dataset_to_runtime_config(dataset: DatasetConfig) -> Dict[str, Any]:
     elif dataset.bronze.source_type == "custom":
         custom_cfg = dataset.bronze.options.get("custom_extractor", {})
         if not custom_cfg:
-            raise ValueError(
-                f"{dataset.dataset_id} requires bronze.options.custom_extractor for custom sources"
-            )
+            raise ValueError(f"{dataset.dataset_id} requires bronze.options.custom_extractor for custom sources")
         source_cfg["custom_extractor"] = custom_cfg
 
     partitioning = {"use_dt_partition": True, "partition_strategy": "date"}
@@ -787,9 +700,7 @@ def dataset_to_runtime_config(dataset: DatasetConfig) -> Dict[str, Any]:
     }
 
     order_column = (
-        dataset.silver.change_ts_column
-        if dataset.silver.entity_kind.is_state_like
-        else dataset.silver.event_ts_column
+        dataset.silver.change_ts_column if dataset.silver.entity_kind.is_state_like else dataset.silver.event_ts_column
     )
 
     from core.silver.models import SilverModel
@@ -851,9 +762,7 @@ def legacy_to_dataset(cfg: Dict[str, Any]) -> Optional[DatasetConfig]:
         system = source["system"]
         entity = source["table"]
     except Exception as exc:  # pragma: no cover - defensive
-        logger.debug(
-            "Legacy config missing required keys for dataset conversion: %s", exc
-        )
+        logger.debug("Legacy config missing required keys for dataset conversion: %s", exc)
         return None
 
     source_type = source.get("type", "file")
@@ -914,11 +823,7 @@ def legacy_to_dataset(cfg: Dict[str, Any]) -> Optional[DatasetConfig]:
     input_mode = None
     if entity_kind.is_event_like:
         load_pattern = run_cfg.get("load_pattern", LoadPattern.FULL.value)
-        input_mode = (
-            InputMode.REPLACE_DAILY
-            if load_pattern == LoadPattern.FULL.value
-            else InputMode.APPEND_LOG
-        )
+        input_mode = InputMode.REPLACE_DAILY if load_pattern == LoadPattern.FULL.value else InputMode.APPEND_LOG
 
     if not order_column:
         if entity_kind.is_state_like:
@@ -930,9 +835,7 @@ def legacy_to_dataset(cfg: Dict[str, Any]) -> Optional[DatasetConfig]:
             code="CFG_NEW_ORDER",
         )
 
-    write_parquet = _require_bool(
-        silver_raw.get("write_parquet"), "silver.write_parquet", True
-    )
+    write_parquet = _require_bool(silver_raw.get("write_parquet"), "silver.write_parquet", True)
     write_csv = _require_bool(silver_raw.get("write_csv"), "silver.write_csv", False)
     silver_intent = SilverIntent(
         enabled=True,

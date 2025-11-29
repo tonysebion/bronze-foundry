@@ -33,7 +33,20 @@ def test_chunked_promotion_and_consolidation(tmp_path: Path) -> None:
     chunk2 = f"test-{uuid.uuid4().hex[:6]}"
 
     config_path = REPO_ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
-    cmd_base = [sys.executable, str(REPO_ROOT / "silver_extract.py"), "--config", str(config_path), "--bronze-path", str(bronze_part), "--silver-base", str(silver_tmp), "--write-parquet", "--write-csv", "--artifact-writer", "transactional"]
+    cmd_base = [
+        sys.executable,
+        str(REPO_ROOT / "silver_extract.py"),
+        "--config",
+        str(config_path),
+        "--bronze-path",
+        str(bronze_part),
+        "--silver-base",
+        str(silver_tmp),
+        "--write-parquet",
+        "--write-csv",
+        "--artifact-writer",
+        "transactional",
+    ]
     p1 = subprocess.run([*cmd_base, "--chunk-tag", chunk1], cwd=REPO_ROOT, capture_output=True, text=True)
     if p1.returncode != 0:
         print("P1 STDOUT:\n", p1.stdout)
@@ -50,7 +63,11 @@ def test_chunked_promotion_and_consolidation(tmp_path: Path) -> None:
     assert chunk_meta_files, "Expected at least one chunk metadata file"
 
     # Consolidate
-    subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "silver_consolidate.py"), "--silver-base", str(silver_tmp)], check=True, cwd=REPO_ROOT)
+    subprocess.run(
+        [sys.executable, str(REPO_ROOT / "scripts" / "silver_consolidate.py"), "--silver-base", str(silver_tmp)],
+        check=True,
+        cwd=REPO_ROOT,
+    )
 
     # After consolidation, expect final _metadata.json and _checksums.json in some partition
     metadata_files = list(silver_tmp.rglob("_metadata.json"))
@@ -67,7 +84,20 @@ def test_consolidate_prune_chunks(tmp_path: Path) -> None:
     chunk1 = f"test-{uuid.uuid4().hex[:6]}"
     chunk2 = f"test-{uuid.uuid4().hex[:6]}"
     config_path = REPO_ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
-    cmd_base = [sys.executable, str(REPO_ROOT / "silver_extract.py"), "--config", str(config_path), "--bronze-path", str(bronze_part), "--silver-base", str(silver_tmp), "--write-parquet", "--write-csv", "--artifact-writer", "transactional"]
+    cmd_base = [
+        sys.executable,
+        str(REPO_ROOT / "silver_extract.py"),
+        "--config",
+        str(config_path),
+        "--bronze-path",
+        str(bronze_part),
+        "--silver-base",
+        str(silver_tmp),
+        "--write-parquet",
+        "--write-csv",
+        "--artifact-writer",
+        "transactional",
+    ]
     p1 = subprocess.run([*cmd_base, "--chunk-tag", chunk1], cwd=REPO_ROOT, capture_output=True, text=True)
     if p1.returncode != 0:
         print("P1 STDOUT:\n", p1.stdout)
@@ -80,7 +110,17 @@ def test_consolidate_prune_chunks(tmp_path: Path) -> None:
         raise RuntimeError("silver_extract failed for chunk 2")
 
     # Consolidate with prune option
-    subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "silver_consolidate.py"), "--silver-base", str(silver_tmp), "--prune-chunks"], check=True, cwd=REPO_ROOT)
+    subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts" / "silver_consolidate.py"),
+            "--silver-base",
+            str(silver_tmp),
+            "--prune-chunks",
+        ],
+        check=True,
+        cwd=REPO_ROOT,
+    )
 
     # No chunk metadata should remain
     assert not list(silver_tmp.rglob("*_metadata_chunk_*.json")), "Expected no chunk metadata files after pruning"
@@ -125,10 +165,24 @@ def test_intent_chunk_metadata_written(tmp_path: Path) -> None:
     cfg_file.write_text(yaml.safe_dump(config), encoding="utf-8")
 
     chunk_tag = f"intent-test-{uuid.uuid4().hex[:6]}"
-    cmd_base = [sys.executable, str(REPO_ROOT / "silver_extract.py"), "--config", str(cfg_file), "--bronze-path", str(bronze_part), "--silver-base", str(silver_tmp), "--write-parquet", "--artifact-writer", "transactional"]
+    cmd_base = [
+        sys.executable,
+        str(REPO_ROOT / "silver_extract.py"),
+        "--config",
+        str(cfg_file),
+        "--bronze-path",
+        str(bronze_part),
+        "--silver-base",
+        str(silver_tmp),
+        "--write-parquet",
+        "--artifact-writer",
+        "transactional",
+    ]
     p = subprocess.run([*cmd_base, "--chunk-tag", chunk_tag], cwd=REPO_ROOT, capture_output=True, text=True)
     if p.returncode != 0:
-        raise RuntimeError(f"silver_extract failed for intent config: returncode={p.returncode}\nSTDOUT:\n{p.stdout}\nSTDERR:\n{p.stderr}")
+        raise RuntimeError(
+            f"silver_extract failed for intent config: returncode={p.returncode}\nSTDOUT:\n{p.stdout}\nSTDERR:\n{p.stderr}"
+        )
 
     # Assert chunk metadata exists
     chunk_meta_files = list(silver_tmp.rglob("_metadata_chunk_*.json"))

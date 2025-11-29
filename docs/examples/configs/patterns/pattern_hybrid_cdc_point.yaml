@@ -4,6 +4,22 @@ domain: retail_demo  # Domain name mirrored in Silver metadata paths
 system: retail_demo  # System folder name used under Bronze sample data
 entity: orders  # Entity/table that this pattern represents
 
+storage:
+  source:
+    backend: s3
+    bucket: mdf
+    prefix: source_samples/
+  bronze:
+    backend: s3
+    bucket: mdf
+    prefix: bronze_samples/
+  silver:
+    backend: s3
+    bucket: mdf
+    prefix: silver_samples/
+
+# Switch back to local by changing each backend to "local" and the prefixes to ./sampledata/source_samples/, sampledata/bronze_samples/, and sampledata/silver_samples/
+
 path_structure:
   sample_key: "sample"  # Folder prefix that groups pattern-specific samples
   system_key: "system"
@@ -16,7 +32,7 @@ path_structure:
 bronze:
   enabled: true
   source_type: file
-  path_pattern: ./sampledata/source_samples/sample=pattern4_hybrid_cdc_point/system=retail_demo/table=orders/dt=2025-11-24/delta/delta-part-0001.csv
+  path_pattern: sample=pattern4_hybrid_cdc_point/system=retail_demo/table=orders/dt=2025-11-24/delta/delta-part-0001.csv
   partition_column: run_date
   options:
     format: csv

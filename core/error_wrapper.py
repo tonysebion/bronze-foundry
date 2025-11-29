@@ -100,9 +100,7 @@ def wrap_extraction_error(
     return wrapper
 
 
-def wrap_requests_exception(
-    exc: Exception, operation: str = "api_request"
-) -> ExtractionError:
+def wrap_requests_exception(exc: Exception, operation: str = "api_request") -> ExtractionError:
     """Convert requests library exceptions to ExtractionError.
 
     Args:
@@ -129,9 +127,7 @@ def wrap_requests_exception(
                 original_error=exc,
             )
         elif isinstance(exc, requests.exceptions.HTTPError):
-            status_code = getattr(
-                getattr(exc, "response", None), "status_code", "unknown"
-            )
+            status_code = getattr(getattr(exc, "response", None), "status_code", "unknown")
             if status_code in (401, 403):
                 return AuthenticationError(
                     f"Authentication failed (HTTP {status_code})",
@@ -153,9 +149,7 @@ def wrap_requests_exception(
     )
 
 
-def wrap_boto3_exception(
-    exc: Exception, operation: str, bucket: Optional[str] = None
-) -> StorageError:
+def wrap_boto3_exception(exc: Exception, operation: str, bucket: Optional[str] = None) -> StorageError:
     """Convert boto3/botocore exceptions to StorageError.
 
     Args:
@@ -171,9 +165,7 @@ def wrap_boto3_exception(
 
         if isinstance(exc, ClientError):
             error_code = exc.response.get("Error", {}).get("Code", "Unknown")
-            status_code = exc.response.get("ResponseMetadata", {}).get(
-                "HTTPStatusCode", 0
-            )
+            status_code = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 0)
             return StorageError(
                 f"S3 operation failed: {error_code} (HTTP {status_code})",
                 backend_type="s3",
@@ -201,9 +193,7 @@ def wrap_boto3_exception(
     )
 
 
-def wrap_azure_exception(
-    exc: Exception, operation: str, container: Optional[str] = None
-) -> StorageError:
+def wrap_azure_exception(exc: Exception, operation: str, container: Optional[str] = None) -> StorageError:
     """Convert Azure SDK exceptions to StorageError.
 
     Args:

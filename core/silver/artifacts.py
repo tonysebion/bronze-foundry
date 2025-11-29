@@ -18,9 +18,7 @@ def build_current_view(
     order_column: str | None,
 ) -> pd.DataFrame:
     if not primary_keys or any(pk not in df.columns for pk in primary_keys):
-        logger.warning(
-            "Primary keys missing or not present in data; using entire dataset for current view"
-        )
+        logger.warning("Primary keys missing or not present in data; using entire dataset for current view")
         return df
 
     working = df.copy()
@@ -28,9 +26,7 @@ def build_current_view(
         working = working.sort_values(order_column)
     else:
         working = working.reset_index()
-    return working.drop_duplicates(subset=primary_keys, keep="last").drop(
-        columns=["index"], errors="ignore"
-    )
+    return working.drop_duplicates(subset=primary_keys, keep="last").drop(columns=["index"], errors="ignore")
 
 
 def apply_schema_settings(df: pd.DataFrame, schema_cfg: Dict[str, Any]) -> pd.DataFrame:
@@ -47,9 +43,7 @@ def apply_schema_settings(df: pd.DataFrame, schema_cfg: Dict[str, Any]) -> pd.Da
     if column_order:
         missing_order_cols = [col for col in column_order if col not in result.columns]
         if missing_order_cols:
-            logger.warning(
-                "schema.column_order missing columns: %s", missing_order_cols
-            )
+            logger.warning("schema.column_order missing columns: %s", missing_order_cols)
         ordered = [col for col in column_order if col in result.columns]
         remaining = [col for col in result.columns if col not in ordered]
         result = result[ordered + remaining]
@@ -57,9 +51,7 @@ def apply_schema_settings(df: pd.DataFrame, schema_cfg: Dict[str, Any]) -> pd.Da
     return result
 
 
-def normalize_dataframe(
-    df: pd.DataFrame, normalization_cfg: Dict[str, Any]
-) -> pd.DataFrame:
+def normalize_dataframe(df: pd.DataFrame, normalization_cfg: Dict[str, Any]) -> pd.DataFrame:
     trim_strings = normalization_cfg.get("trim_strings", False)
     empty_as_null = normalization_cfg.get("empty_strings_as_null", False)
 
@@ -68,13 +60,9 @@ def normalize_dataframe(
         object_cols = result.select_dtypes(include="object").columns
         for col in object_cols:
             if trim_strings:
-                result[col] = result[col].apply(
-                    lambda val: val.strip() if isinstance(val, str) else val
-                )
+                result[col] = result[col].apply(lambda val: val.strip() if isinstance(val, str) else val)
             if empty_as_null:
-                result[col] = result[col].apply(
-                    lambda val: None if isinstance(val, str) and val == "" else val
-                )
+                result[col] = result[col].apply(lambda val: None if isinstance(val, str) and val == "" else val)
     return result
 
 
@@ -82,18 +70,14 @@ def _sanitize_partition_value(value: Any) -> str:
     return re.sub(r"[^0-9A-Za-z._-]", "_", str(value))
 
 
-def partition_dataframe(
-    df: pd.DataFrame, partition_columns: List[str]
-) -> List[Tuple[List[str], pd.DataFrame]]:
+def partition_dataframe(df: pd.DataFrame, partition_columns: List[str]) -> List[Tuple[List[str], pd.DataFrame]]:
     if not partition_columns:
         return [([], df)]
 
     partitions: List[Tuple[List[str], pd.DataFrame]] = [([], df)]
     for column in partition_columns:
         if column not in df.columns:
-            logger.warning(
-                "Partition column '%s' not found; skipping this column", column
-            )
+            logger.warning("Partition column '%s' not found; skipping this column", column)
             continue
         new_partitions: List[Tuple[List[str], pd.DataFrame]] = []
         for path_parts, subset in partitions:
@@ -114,16 +98,12 @@ def handle_error_rows(
 ) -> pd.DataFrame:
     if not error_cfg.get("enabled") or not primary_keys:
         if error_cfg.get("enabled") and not primary_keys:
-            logger.warning(
-                "Error handling enabled but no primary_keys specified; skipping validation"
-            )
+            logger.warning("Error handling enabled but no primary_keys specified; skipping validation")
         return df
 
     missing_cols = [col for col in primary_keys if col not in df.columns]
     if missing_cols:
-        logger.warning(
-            "Primary key columns %s not found; skipping error handling", missing_cols
-        )
+        logger.warning("Primary key columns %s not found; skipping error handling", missing_cols)
         return df
 
     invalid_mask = df[primary_keys].isnull().any(axis=1)
@@ -143,12 +123,8 @@ def handle_error_rows(
     max_records = error_cfg.get("max_bad_records", 0)
     max_percent = error_cfg.get("max_bad_percent", 0.0)
 
-    if (max_records == 0 and invalid_count > 0) or (
-        invalid_count > max_records and percent > max_percent
-    ):
-        raise ValueError(
-            f"Error threshold exceeded for {dataset_name}: {invalid_count} invalid rows ({percent:.2f}%)"
-        )
+    if (max_records == 0 and invalid_count > 0) or (invalid_count > max_records and percent > max_percent):
+        raise ValueError(f"Error threshold exceeded for {dataset_name}: {invalid_count} invalid rows ({percent:.2f}%)")
 
     return df.loc[~invalid_mask].copy()
 
@@ -246,9 +222,7 @@ class DatasetWriter:
         self.parquet_compression = parquet_compression
 
     def write_dataset(self, dataset_name: str, dataset_df: pd.DataFrame) -> List[Path]:
-        partitions = partition_dataframe(dataset_df, self.partition_columns) or [
-            ([], dataset_df)
-        ]
+        partitions = partition_dataframe(dataset_df, self.partition_columns) or [([], dataset_df)]
         written_files: List[Path] = []
 
         for path_parts, partition_df in partitions:
@@ -278,13 +252,9 @@ class DatasetWriter:
 
         return written_files
 
-    def write_dataset_chunk(
-        self, dataset_name: str, dataset_df: pd.DataFrame, chunk_tag: str
-    ) -> List[Path]:
+    def write_dataset_chunk(self, dataset_name: str, dataset_df: pd.DataFrame, chunk_tag: str) -> List[Path]:
         """Write a chunk of a dataset with partition/error policies, suffixing filenames."""
-        partitions = partition_dataframe(dataset_df, self.partition_columns) or [
-            ([], dataset_df)
-        ]
+        partitions = partition_dataframe(dataset_df, self.partition_columns) or [([], dataset_df)]
         written_files: List[Path] = []
         for path_parts, partition_df in partitions:
             target_dir = self.base_dir
@@ -342,9 +312,7 @@ class SilverModelPlanner:
                 continue
             target_name = self.artifact_names.get(label, label)
             if chunk_tag:
-                outputs[target_name] = self.writer.write_dataset_chunk(
-                    target_name, dataset_df, chunk_tag
-                )
+                outputs[target_name] = self.writer.write_dataset_chunk(target_name, dataset_df, chunk_tag)
             else:
                 outputs[target_name] = self.writer.write_dataset(target_name, dataset_df)
 
@@ -376,21 +344,16 @@ class SilverModelPlanner:
         if not self.order_column:
             raise ValueError("order_column is required for deduplicated Silver models")
         if self.order_column not in df.columns:
-            raise ValueError(
-                f"order_column '{self.order_column}' not found in Bronze data"
-            )
+            raise ValueError(f"order_column '{self.order_column}' not found in Bronze data")
         return build_current_view(df, self.primary_keys, self.order_column)
 
-    def _build_history_frame(
-        self, df: pd.DataFrame, current_df: pd.DataFrame
-    ) -> pd.DataFrame:
+    def _build_history_frame(self, df: pd.DataFrame, current_df: pd.DataFrame) -> pd.DataFrame:
         history = df.copy()
         if not self.primary_keys or not self.order_column:
             return history
 
         current_index = {
-            (tuple(row[pk] for pk in self.primary_keys), row[self.order_column])
-            for _, row in current_df.iterrows()
+            (tuple(row[pk] for pk in self.primary_keys), row[self.order_column]) for _, row in current_df.iterrows()
         }
 
         def mark_current(row: pd.Series) -> int:
@@ -425,7 +388,5 @@ def write_silver_outputs(
         write_csv=write_csv,
         parquet_compression=parquet_compression,
     )
-    planner = SilverModelPlanner(
-        writer, primary_keys, order_column, artifact_names, silver_model
-    )
+    planner = SilverModelPlanner(writer, primary_keys, order_column, artifact_names, silver_model)
     return planner.render(df, chunk_tag=chunk_tag)

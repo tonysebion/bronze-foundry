@@ -30,9 +30,7 @@ class SilverModel(str, Enum):
         for member in cls:
             if member.value == canonical:
                 return member
-        raise ValueError(
-            f"Invalid silver.model '{raw}'. Valid options: {', '.join(cls.choices())}"
-        )
+        raise ValueError(f"Invalid silver.model '{raw}'. Valid options: {', '.join(cls.choices())}")
 
     @classmethod
     def default_for_load_pattern(cls, pattern: LoadPattern) -> "SilverModel":

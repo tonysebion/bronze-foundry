@@ -34,9 +34,7 @@ def _run_extraction(config_path: Path, run_date: str, extraction_type: str) -> N
     )
 
 
-def _rewrite_extraction_config(
-    original: Path, run_date: str, tmp_dir: Path
-) -> tuple[Path, Path, Path, Dict[str, Any]]:
+def _rewrite_extraction_config(original: Path, run_date: str, tmp_dir: Path) -> tuple[Path, Path, Path, Dict[str, Any]]:
     """Rewrite config to use temp directories for extraction."""
     cfg = cast(Dict[str, Any], yaml.safe_load(original.read_text()))
 
@@ -113,7 +111,9 @@ def test_pattern1_polybase_query_events_by_date(tmp_path: Path) -> None:
 
     # Validate required columns are present
     required_cols = {"order_id", "status", "updated_at"}
-    assert required_cols <= set(query_result.columns), f"Missing columns in query result: {required_cols - set(query_result.columns)}"
+    assert required_cols <= set(
+        query_result.columns
+    ), f"Missing columns in query result: {required_cols - set(query_result.columns)}"
 
 
 def test_pattern1_polybase_query_events_date_range(tmp_path: Path) -> None:
@@ -137,9 +137,7 @@ def test_pattern1_polybase_query_events_date_range(tmp_path: Path) -> None:
     start_date = pd.to_datetime("2025-11-13").date()
     end_date = pd.to_datetime("2025-11-20").date()
 
-    query_result = silver_df[
-        (silver_df["event_date"] >= start_date) & (silver_df["event_date"] <= end_date)
-    ]
+    query_result = silver_df[(silver_df["event_date"] >= start_date) & (silver_df["event_date"] <= end_date)]
 
     # Validate results
     assert len(query_result) > 0, f"Query returned no rows for date range [{start_date}, {end_date}]"
@@ -192,14 +190,14 @@ def test_pattern1_polybase_combined_predicates(tmp_path: Path) -> None:
 
     # Simulate Polybase query with multiple predicates
     target_date = pd.to_datetime("2025-11-15").date()
-    sample_order = silver_df[silver_df["event_date"] == target_date]["order_id"].iloc[0] if len(
-        silver_df[silver_df["event_date"] == target_date]
-    ) > 0 else None
+    sample_order = (
+        silver_df[silver_df["event_date"] == target_date]["order_id"].iloc[0]
+        if len(silver_df[silver_df["event_date"] == target_date]) > 0
+        else None
+    )
 
     if sample_order:
-        query_result = silver_df[
-            (silver_df["event_date"] == target_date) & (silver_df["order_id"] == sample_order)
-        ]
+        query_result = silver_df[(silver_df["event_date"] == target_date) & (silver_df["order_id"] == sample_order)]
 
         assert len(query_result) >= 1
         assert all(query_result["event_date"] == target_date)
@@ -261,16 +259,15 @@ def test_pattern3_polybase_query_state_as_of(tmp_path: Path) -> None:
     target_date = pd.to_datetime("2025-11-15").date()
 
     # Simulate point-in-time query
-    silver_df["from_date"] = pd.to_datetime(silver_df.get("effective_from_date", silver_df.get("effective_from_dt"))).dt.date
-    silver_df["to_date"] = (
-        pd.to_datetime(silver_df.get("effective_to_dt", silver_df.get("effective_to_date")))
-        .dt.date
-        .where(pd.notna(silver_df.get("effective_to_dt", silver_df.get("effective_to_date"))), None)
-    )
+    silver_df["from_date"] = pd.to_datetime(
+        silver_df.get("effective_from_date", silver_df.get("effective_from_dt"))
+    ).dt.date
+    silver_df["to_date"] = pd.to_datetime(
+        silver_df.get("effective_to_dt", silver_df.get("effective_to_date"))
+    ).dt.date.where(pd.notna(silver_df.get("effective_to_dt", silver_df.get("effective_to_date"))), None)
 
     query_result = silver_df[
-        (silver_df["from_date"] <= target_date) &
-        ((silver_df["to_date"].isna()) | (silver_df["to_date"] > target_date))
+        (silver_df["from_date"] <= target_date) & ((silver_df["to_date"].isna()) | (silver_df["to_date"] > target_date))
     ]
 
     # Validate: one record per entity as of target date
@@ -293,7 +290,9 @@ def test_pattern1_silver_attribute_values_match_source(tmp_path: Path) -> None:
     """
     config_path = CONFIGS_ROOT / "patterns" / "pattern_full.yaml"
     run_date = "2025-11-13"
-    source_path = SOURCE_ROOT / f"sample=pattern1_full_events/system=retail_demo/table=orders/dt={run_date}/full-part-0001.csv"
+    source_path = (
+        SOURCE_ROOT / f"sample=pattern1_full_events/system=retail_demo/table=orders/dt={run_date}/full-part-0001.csv"
+    )
 
     if not source_path.exists():
         pytest.skip(f"Source data not found for {run_date}")
@@ -320,8 +319,7 @@ def test_pattern1_silver_attribute_values_match_source(tmp_path: Path) -> None:
 
         # Validate key attributes match
         assert silver_row["status"] == src_row["status"], (
-            f"Status mismatch for {order_id}: "
-            f"source={src_row['status']}, silver={silver_row['status']}"
+            f"Status mismatch for {order_id}: " f"source={src_row['status']}, silver={silver_row['status']}"
         )
 
         # Validate timestamp is present and parseable
@@ -338,7 +336,9 @@ def test_pattern2_silver_cdc_events_match_source(tmp_path: Path) -> None:
     """
     config_path = CONFIGS_ROOT / "patterns" / "pattern_cdc.yaml"
     run_date = "2025-11-13"
-    source_path = SOURCE_ROOT / f"sample=pattern2_cdc_events/system=retail_demo/table=orders/dt={run_date}/cdc-part-0001.csv"
+    source_path = (
+        SOURCE_ROOT / f"sample=pattern2_cdc_events/system=retail_demo/table=orders/dt={run_date}/cdc-part-0001.csv"
+    )
 
     if not source_path.exists():
         pytest.skip(f"Source data not found for {run_date}")
@@ -357,8 +357,7 @@ def test_pattern2_silver_cdc_events_match_source(tmp_path: Path) -> None:
         silver_change_types = set(silver_df["change_type"].unique())
 
         assert source_change_types <= silver_change_types, (
-            f"Silver missing change_type values: "
-            f"source={source_change_types}, silver={silver_change_types}"
+            f"Silver missing change_type values: " f"source={source_change_types}, silver={silver_change_types}"
         )
 
         # Validate counts per change type match
@@ -369,8 +368,7 @@ def test_pattern2_silver_cdc_events_match_source(tmp_path: Path) -> None:
             assert change_type in silver_counts, f"Change type '{change_type}' missing from Silver"
             # Allow some variance (10%) due to potential filtering
             assert silver_counts[change_type] >= int(count * 0.9), (
-                f"Change type '{change_type}' count mismatch: "
-                f"source={count}, silver={silver_counts[change_type]}"
+                f"Change type '{change_type}' count mismatch: " f"source={count}, silver={silver_counts[change_type]}"
             )
 
 

@@ -13,19 +13,19 @@ storage:
   # SOURCE: Where to read source files from
   source:
     backend: s3  # "local" or "s3"
-    bucket: source_data  # For S3: bucket name or reference from environment config
+    bucket: mdf  # For S3: bucket name or reference from environment config
     prefix: source_samples/  # Base path prefix within bucket (or base directory for local)
 
   # BRONZE: Where to write Bronze chunks
   bronze:
     backend: s3  # "local" or "s3"
-    bucket: bronze_data  # For S3: bucket name or reference from environment config
+    bucket: mdf  # For S3: bucket name or reference from environment config
     prefix: bronze_samples/  # Path prefix within bucket (or base directory for local)
 
   # SILVER: Where to read Bronze and write Silver artifacts
   silver:
     backend: s3  # "local" or "s3"
-    bucket: silver_data  # For S3: bucket name or reference from environment config
+    bucket: mdf  # For S3: bucket name or reference from environment config
     prefix: silver_samples/  # Path prefix within bucket (or base directory for local)
 
 # To switch back to local filesystem, change all backends to "local" and update prefixes:
@@ -60,7 +60,7 @@ bronze:
 
   partition_column: run_date  # Column Bronze uses for partitioning metadata
   options:
-    format: csv  # Source sample format (used when regenerating)
+    format: parquet  # Source sample format (used when regenerating)
     load_pattern: full  # Load pattern label exposed via metadata
     pattern_folder: pattern1_full_events  # Directory under bronze_samples
     max_rows_per_file: 250000  # Approximate file size threshold

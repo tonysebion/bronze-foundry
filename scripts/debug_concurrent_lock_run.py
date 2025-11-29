@@ -17,19 +17,37 @@ bronze = str(
 silver_tmp = str(ROOT / "output" / "silver_tmp_test")
 os.makedirs(silver_tmp, exist_ok=True)
 config = str(ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml")
-procs=[]
+procs = []
 for i in range(3):
-    tag=f'tag{i}'
-    cmd=[sys.executable,str(ROOT/'silver_extract.py'),'--config',config,'--bronze-path',bronze,'--silver-base',silver_tmp,'--write-parquet','--artifact-writer','transactional','--chunk-tag',tag,'--use-locks','--verbose','--lock-timeout','10']
-    p=subprocess.Popen(cmd,cwd=ROOT,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
-    procs.append((tag,p))
+    tag = f"tag{i}"
+    cmd = [
+        sys.executable,
+        str(ROOT / "silver_extract.py"),
+        "--config",
+        config,
+        "--bronze-path",
+        bronze,
+        "--silver-base",
+        silver_tmp,
+        "--write-parquet",
+        "--artifact-writer",
+        "transactional",
+        "--chunk-tag",
+        tag,
+        "--use-locks",
+        "--verbose",
+        "--lock-timeout",
+        "10",
+    ]
+    p = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    procs.append((tag, p))
     time.sleep(0.2)
-for tag,p in procs:
+for tag, p in procs:
     try:
-        out,err=p.communicate(timeout=60)
+        out, err = p.communicate(timeout=60)
     except subprocess.TimeoutExpired:
         p.kill()
-        out,err=p.communicate()
-    print('TAG',tag,'RC',p.returncode)
-    print('STDOUT:',out[:2000])
-    print('STDERR:',err[:2000])
+        out, err = p.communicate()
+    print("TAG", tag, "RC", p.returncode)
+    print("STDOUT:", out[:2000])
+    print("STDERR:", err[:2000])

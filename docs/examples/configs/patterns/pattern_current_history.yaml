@@ -4,6 +4,23 @@ domain: retail_demo  # Domain name repeated in both Bronze and Silver file paths
 system: retail_demo  # System folder label for Bronze partitions
 entity: orders  # Dataset/entity name used for metadata and directory names
 
+storage:
+  source:
+    backend: s3
+    bucket: mdf
+    prefix: source_samples/
+  bronze:
+    backend: s3
+    bucket: mdf
+    prefix: bronze_samples/
+  silver:
+    backend: s3
+    bucket: mdf
+    prefix: silver_samples/
+
+# To flip everything back to local for debugging, change the backends above to "local" and update the prefixes
+# to ./sampledata/source_samples/, sampledata/bronze_samples/, and sampledata/silver_samples/ respectively.
+
 path_structure:
   sample_key: "sample"
   system_key: "system"
@@ -16,7 +33,7 @@ path_structure:
 bronze:
   enabled: true  # Current/history mix demonstrating SCD Type 2
   source_type: file
-  path_pattern: ./sampledata/source_samples/sample=pattern3_scd_state/system=retail_demo/table=orders/dt=2025-11-13/current-history-part-0001.csv
+  path_pattern: sample=pattern3_scd_state/system=retail_demo/table=orders/dt=2025-11-13/current-history-part-0001.csv
   partition_column: run_date
   options:
     format: csv

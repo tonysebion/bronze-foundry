@@ -63,9 +63,7 @@ def generate_create_external_file_format_sql(polybase_setup) -> str:
     return sql
 
 
-def generate_create_external_table_sql(
-    polybase_setup, dataset_config: DatasetConfig
-) -> str:
+def generate_create_external_table_sql(polybase_setup, dataset_config: DatasetConfig) -> str:
     """Generate SQL for CREATE EXTERNAL TABLE."""
     if not polybase_setup.external_tables:
         return ""
@@ -158,9 +156,7 @@ def generate_full_ddl(dataset_config: DatasetConfig) -> str:
     return ddl
 
 
-def process_yaml_files(
-    yaml_paths: List[Path], output_dir: Optional[Path] = None
-) -> None:
+def process_yaml_files(yaml_paths: List[Path], output_dir: Optional[Path] = None) -> None:
     """Process multiple YAML files and generate DDL for each."""
     for yaml_path in yaml_paths:
         if not yaml_path.exists():

@@ -52,9 +52,7 @@ def bronze_samples_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return dest
 
 
-def _build_sample_path(
-    bronze_dir: Path, cfg: Dict[str, Any], run_date: str, config_path: Path
-) -> Path:
+def _build_sample_path(bronze_dir: Path, cfg: Dict[str, Any], run_date: str, config_path: Path) -> Path:
     bronze_options = cfg.get("bronze", {}).get("options", {})
     tail_parts: list[str]
     if "source" in cfg:
@@ -97,17 +95,13 @@ def _rewrite_config(
     silver_out = (tmp_dir / f"silver_out_{run_date}").resolve()
 
     if "source" in cfg:
-        cfg["source"]["file"]["path"] = str(
-            _build_sample_path(bronze_dir, cfg, run_date, original)
-        )
+        cfg["source"]["file"]["path"] = str(_build_sample_path(bronze_dir, cfg, run_date, original))
         cfg["source"]["run"]["local_output_dir"] = str(bronze_out)
         cfg.setdefault("silver", {})
         cfg["silver"]["output_dir"] = str(silver_out)
     else:
         cfg.setdefault("bronze", {})
-        cfg["bronze"]["path_pattern"] = str(
-            _build_sample_path(bronze_dir, cfg, run_date, original)
-        )
+        cfg["bronze"]["path_pattern"] = str(_build_sample_path(bronze_dir, cfg, run_date, original))
         bronze_options = cfg["bronze"].setdefault("options", {})
         bronze_options["local_output_dir"] = str(bronze_out)
         cfg.setdefault("silver", {})
@@ -136,9 +130,7 @@ def _read_metadata(metadata_path: Path) -> Dict[str, Any]:
 def _read_bronze_parquet(bronze_partition: Path) -> pd.DataFrame:
     parquet_files = list(bronze_partition.glob("*.parquet"))
     assert parquet_files, f"No Parquet artifacts found under {bronze_partition}"
-    return pd.concat(
-        (pd.read_parquet(path) for path in parquet_files), ignore_index=True
-    )
+    return pd.concat((pd.read_parquet(path) for path in parquet_files), ignore_index=True)
 
 
 def _source_csv_path_from_cfg(cfg: Dict[str, Any]) -> Path:
@@ -167,12 +159,7 @@ def _reference_csv_path(delta_source: Path) -> Path:
     run_date_str = dt_dir.name.split("=", 1)[1]
     delta_date = date.fromisoformat(run_date_str)
     reference_date = _reference_date_for_delta(delta_date)
-    return (
-        pattern_root
-        / f"dt={reference_date.isoformat()}"
-        / "reference"
-        / "reference-part-0001.csv"
-    )
+    return pattern_root / f"dt={reference_date.isoformat()}" / "reference" / "reference-part-0001.csv"
 
 
 def _expected_hybrid_delta_tags(run_date: str) -> set[str]:
@@ -255,9 +242,7 @@ def test_bronze_to_silver_end_to_end(
             config_path, bronze_samples_dir, tmp_path, run_date
         )
 
-        _run_cli(
-            ["bronze_extract.py", "--config", str(rewritten_cfg), "--date", run_date]
-        )
+        _run_cli(["bronze_extract.py", "--config", str(rewritten_cfg), "--date", run_date])
 
         bronze_partition = _collect_bronze_partition(bronze_out)
         metadata = _read_metadata(bronze_partition / "_metadata.json")
@@ -265,46 +250,24 @@ def test_bronze_to_silver_end_to_end(
         assert metadata["record_count"] > 0
         if pattern_dir == "hybrid_incremental_cumulative":
             bronze_df = _read_bronze_parquet(bronze_partition)
-            assert {"delta_tag", "change_type"} <= set(
-                bronze_df.columns
-            ), "Hybrid samples must emit delta metadata"
+            assert {"delta_tag", "change_type"} <= set(bronze_df.columns), "Hybrid samples must emit delta metadata"
             source_path = _source_csv_path_from_cfg(cfg_data)
             source_df = pd.read_csv(source_path)
-            assert set(source_df.columns) <= set(
-                bronze_df.columns
-            ), "Bronze schema should include source columns"
-            bronze_tag_counts = (
-                bronze_df["delta_tag"].dropna().astype(str).value_counts().to_dict()
-            )
-            source_tag_counts = (
-                source_df["delta_tag"].dropna().astype(str).value_counts().to_dict()
-            )
-            assert (
-                bronze_tag_counts == source_tag_counts
-            ), "Per-tag row counts must match source"
-            bronze_change_counts = (
-                bronze_df["change_type"].dropna().astype(str).value_counts().to_dict()
-            )
-            source_change_counts = (
-                source_df["change_type"].dropna().astype(str).value_counts().to_dict()
-            )
-            assert (
-                bronze_change_counts == source_change_counts
-            ), "Change-type counts must survive the Bronze layer"
+            assert set(source_df.columns) <= set(bronze_df.columns), "Bronze schema should include source columns"
+            bronze_tag_counts = bronze_df["delta_tag"].dropna().astype(str).value_counts().to_dict()
+            source_tag_counts = source_df["delta_tag"].dropna().astype(str).value_counts().to_dict()
+            assert bronze_tag_counts == source_tag_counts, "Per-tag row counts must match source"
+            bronze_change_counts = bronze_df["change_type"].dropna().astype(str).value_counts().to_dict()
+            source_change_counts = source_df["change_type"].dropna().astype(str).value_counts().to_dict()
+            assert bronze_change_counts == source_change_counts, "Change-type counts must survive the Bronze layer"
             reference_path = _reference_csv_path(source_path)
             if reference_path.exists():
                 reference_df = pd.read_csv(reference_path)
                 delta_ids = {str(value) for value in source_df["order_id"].dropna()}
-                reference_ids = {
-                    str(value) for value in reference_df["order_id"].dropna()
-                }
-                assert not delta_ids.intersection(
-                    reference_ids
-                ), "Delta records should not duplicate reference IDs"
+                reference_ids = {str(value) for value in reference_df["order_id"].dropna()}
+                assert not delta_ids.intersection(reference_ids), "Delta records should not duplicate reference IDs"
             expected_tags = _expected_hybrid_delta_tags(run_date)
-            assert (
-                expected_tags
-            ), "Expected at least one cumulative delta tag for this run_date"
+            assert expected_tags, "Expected at least one cumulative delta tag for this run_date"
             actual_tags = {str(tag) for tag in bronze_df["delta_tag"].dropna()}
             missing_tags = expected_tags - actual_tags
             assert not missing_tags, f"Bronze is missing cumulative tags for {run_date}: {sorted(missing_tags)}"
@@ -314,14 +277,10 @@ def test_bronze_to_silver_end_to_end(
                 "update",
             } <= change_types, "Hybrid Bronze output should contain insert/update ops"
 
-        _run_cli(
-            ["silver_extract.py", "--config", str(rewritten_cfg), "--date", run_date]
-        )
+        _run_cli(["silver_extract.py", "--config", str(rewritten_cfg), "--date", run_date])
 
     silver_cfg = cast(Dict[str, Any], cfg_data.get("silver", {}))
-    source_cfg = (
-        cast(Dict[str, Any], cfg_data["source"]) if "source" in cfg_data else None
-    )
+    source_cfg = cast(Dict[str, Any], cfg_data["source"]) if "source" in cfg_data else None
     base_silver = Path(silver_cfg["output_dir"])
     if source_cfg:
         domain = silver_cfg.get("domain", source_cfg["system"])
@@ -331,9 +290,7 @@ def test_bronze_to_silver_end_to_end(
         entity = silver_cfg.get("entity", cfg_data.get("entity"))
     version = silver_cfg.get("version", 1)
     load_part = silver_cfg.get("load_partition_name", "load_date")
-    base_path = (
-        base_silver / f"domain={domain}" / f"entity={entity}" / f"v{version}"
-    )
+    base_path = base_silver / f"domain={domain}" / f"entity={entity}" / f"v{version}"
     if silver_cfg.get("include_pattern_folder"):
         base_path = base_path / f"pattern={pattern_dir}"
     base_path = base_path / f"{load_part}={run_date}"
@@ -350,9 +307,7 @@ def test_bronze_to_silver_end_to_end(
         assert len(df) > 0, f"{parquet_file} should contain rows"
 
 
-def test_silver_require_checksum_succeeds(
-    tmp_path: Path, bronze_samples_dir: Path
-) -> None:
+def test_silver_require_checksum_succeeds(tmp_path: Path, bronze_samples_dir: Path) -> None:
     config_path = Path("docs/examples/configs/examples/file_example.yaml")
     run_date = "2025-11-13"
 
@@ -367,14 +322,10 @@ def test_silver_require_checksum_succeeds(
     # Should succeed because manifest remains intact
     _run_cli(["silver_extract.py", "--config", str(rewritten_cfg), "--date", run_date])
 
-    assert any(
-        silver_out.rglob("*.parquet")
-    ), "Silver output should exist when manifest is present"
+    assert any(silver_out.rglob("*.parquet")), "Silver output should exist when manifest is present"
 
 
-def test_silver_require_checksum_missing_manifest(
-    tmp_path: Path, bronze_samples_dir: Path
-) -> None:
+def test_silver_require_checksum_missing_manifest(tmp_path: Path, bronze_samples_dir: Path) -> None:
     config_path = Path("docs/examples/configs/examples/file_example.yaml")
     run_date = "2025-11-14"
 
@@ -391,10 +342,6 @@ def test_silver_require_checksum_missing_manifest(
     checksum_path.unlink()
 
     with pytest.raises(subprocess.CalledProcessError):
-        _run_cli(
-            ["silver_extract.py", "--config", str(rewritten_cfg), "--date", run_date]
-        )
+        _run_cli(["silver_extract.py", "--config", str(rewritten_cfg), "--date", run_date])
 
-    assert not any(
-        silver_out.rglob("*.parquet")
-    ), "Silver output should not be created when checksum is missing"
+    assert not any(silver_out.rglob("*.parquet")), "Silver output should not be created when checksum is missing"

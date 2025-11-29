@@ -4,6 +4,22 @@ domain: retail_demo  # Domain path reused in Bronze/Silver hierarchies
 system: retail_demo  # System folder name used within the sample tree
 entity: orders  # Entity/table name present in metadata and directories
 
+storage:
+  source:
+    backend: s3
+    bucket: mdf
+    prefix: source_samples/
+  bronze:
+    backend: s3
+    bucket: mdf
+    prefix: bronze_samples/
+  silver:
+    backend: s3
+    bucket: mdf
+    prefix: silver_samples/
+
+# To swap back to local storage, change each backend to "local" and adjust the prefixes to local directories.
+
 path_structure:
   sample_key: "sample"
   system_key: "system"
@@ -16,7 +32,7 @@ path_structure:
 bronze:
   enabled: true
   source_type: file
-  path_pattern: ./sampledata/source_samples/sample=pattern7_hybrid_incremental_cumulative/system=retail_demo/table=orders/dt=2025-11-24/delta/delta-part-0001.csv
+  path_pattern: sample=pattern7_hybrid_incremental_cumulative/system=retail_demo/table=orders/dt=2025-11-24/delta/delta-part-0001.csv
   partition_column: run_date
   options:
     format: csv

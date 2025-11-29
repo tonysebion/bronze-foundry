@@ -73,7 +73,8 @@ def print_migration_report(config_path: Path) -> None:
         print("\n" + "=" * 70)
         print("Migration Recommendations:")
         print("=" * 70)
-        print("""
+        print(
+            """
 1. Review the errors above
 2. Update your config YAML to match the schema
 3. Common issues:
@@ -83,7 +84,8 @@ def print_migration_report(config_path: Path) -> None:
 4. Run this script again to verify
 
 For schema reference, see: docs/framework/reference/CONFIG_REFERENCE.md
-""")
+"""
+        )
 
 
 def main() -> int:

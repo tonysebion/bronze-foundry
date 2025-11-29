@@ -35,7 +35,7 @@ def resolve_env_vars(value: Any) -> Any:
         {'key': 'secret123'}
     """
     if isinstance(value, str):
-        pattern = re.compile(r'\$\{([^}]+)\}')
+        pattern = re.compile(r"\$\{([^}]+)\}")
 
         def replacer(match: re.Match) -> str:
             var_name = match.group(1)
@@ -92,7 +92,7 @@ class S3ConnectionConfig:
             access_key_id=data.get("access_key_id"),
             secret_access_key=data.get("secret_access_key"),
             region=data.get("region", "us-east-1"),
-            buckets=data.get("buckets", {})
+            buckets=data.get("buckets", {}),
         )
 
     def get_bucket(self, name: str) -> str:
@@ -150,11 +150,7 @@ class EnvironmentConfig:
 
         azure_data = data.get("azure")
 
-        return cls(
-            name=name,
-            s3=s3_config,
-            azure=azure_data
-        )
+        return cls(name=name, s3=s3_config, azure=azure_data)
 
     @classmethod
     def from_yaml(cls, path: Path) -> "EnvironmentConfig":

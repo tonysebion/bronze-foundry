@@ -4,6 +4,7 @@ This utility implements a minimal advisory lock based on creating a lockfile
 with O_EXCL semantics. It is intended for local filesystem coordination and
 is not a distributed lock for cloud object stores.
 """
+
 from __future__ import annotations
 
 import os
@@ -20,7 +21,9 @@ class LockAcquireError(Exception):
 
 
 @contextmanager
-def file_lock(dir_path: Path, lock_name: str = ".silver.lock", timeout: float = 30.0, poll_interval: float = 0.2) -> Iterator[None]:
+def file_lock(
+    dir_path: Path, lock_name: str = ".silver.lock", timeout: float = 30.0, poll_interval: float = 0.2
+) -> Iterator[None]:
     """Context manager for a lock on a directory.
 
     Args:

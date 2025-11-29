@@ -4,6 +4,22 @@ domain: retail_demo  # Domain directory for Bronze/Silver samples
 system: retail_demo  # System identifier path component
 entity: orders  # Entity name referenced in metadata and path keys
 
+storage:
+  source:
+    backend: s3
+    bucket: mdf
+    prefix: source_samples/
+  bronze:
+    backend: s3
+    bucket: mdf
+    prefix: bronze_samples/
+  silver:
+    backend: s3
+    bucket: mdf
+    prefix: silver_samples/
+
+# Flip to local storage for debugging by using backend=local and matching prefixes to ./sampledata/, sampledata/bronze_samples/, sampledata/silver_samples/
+
 path_structure:
   sample_key: "sample"
   system_key: "system"
@@ -16,7 +32,7 @@ path_structure:
 bronze:
   enabled: true
   source_type: file
-  path_pattern: ./sampledata/source_samples/sample=pattern6_hybrid_incremental_point/system=retail_demo/table=orders/dt=2025-11-24/delta/delta-part-0001.csv
+  path_pattern: sample=pattern6_hybrid_incremental_point/system=retail_demo/table=orders/dt=2025-11-24/delta/delta-part-0001.csv
   partition_column: run_date
   options:
     format: csv

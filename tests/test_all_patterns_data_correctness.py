@@ -33,8 +33,16 @@ PATTERN_DEFINITIONS = {
     "pattern3": {"name": "SCD State", "folder": "pattern3_scd_state", "load_pattern": "full"},
     "pattern4": {"name": "Hybrid CDC Point", "folder": "pattern4_hybrid_cdc_point", "load_pattern": "cdc"},
     "pattern5": {"name": "Hybrid CDC Cumulative", "folder": "pattern5_hybrid_cdc_cumulative", "load_pattern": "cdc"},
-    "pattern6": {"name": "Hybrid Incremental Point", "folder": "pattern6_hybrid_incremental_point", "load_pattern": "cdc"},
-    "pattern7": {"name": "Hybrid Incremental Cumulative", "folder": "pattern7_hybrid_incremental_cumulative", "load_pattern": "cdc"},
+    "pattern6": {
+        "name": "Hybrid Incremental Point",
+        "folder": "pattern6_hybrid_incremental_point",
+        "load_pattern": "cdc",
+    },
+    "pattern7": {
+        "name": "Hybrid Incremental Cumulative",
+        "folder": "pattern7_hybrid_incremental_cumulative",
+        "load_pattern": "cdc",
+    },
 }
 
 
@@ -158,13 +166,18 @@ def test_sample_coverage_summary() -> None:
 
     # Write summary
     report_path = REPO_ROOT / "SAMPLE_DATA_COVERAGE.json"
-    report_path.write_text(json.dumps({
-        "patterns": summary,
-        "totals": {
-            "total_silver_partitions": total_silver_partitions,
-            "total_silver_records": total_silver_records,
-        }
-    }, indent=2))
+    report_path.write_text(
+        json.dumps(
+            {
+                "patterns": summary,
+                "totals": {
+                    "total_silver_partitions": total_silver_partitions,
+                    "total_silver_records": total_silver_records,
+                },
+            },
+            indent=2,
+        )
+    )
 
 
 # ============================================================================
@@ -282,16 +295,17 @@ def test_pattern5_hybrid_cdc_cumulative_scd2_columns(pattern_key: str) -> None:
     for partition in silver_partitions[:3]:  # Check first 3 partitions
         df = _read_all_parquet(partition)
         missing = required_scd2_cols - set(df.columns)
-        assert not missing, (
-            f"{pattern_key} partition {partition.name} missing SCD Type 2 columns: {missing}"
-        )
+        assert not missing, f"{pattern_key} partition {partition.name} missing SCD Type 2 columns: {missing}"
 
         # Verify is_current has boolean-like values
         if "is_current" in df.columns:
             unique_vals = set(df["is_current"].unique())
-            assert unique_vals <= {0, 1, True, False}, (
-                f"is_current should contain only 0/1 or True/False, got {unique_vals}"
-            )
+            assert unique_vals <= {
+                0,
+                1,
+                True,
+                False,
+            }, f"is_current should contain only 0/1 or True/False, got {unique_vals}"
 
 
 @pytest.mark.parametrize("pattern_key", ["pattern6", "pattern7"])
@@ -308,9 +322,7 @@ def test_pattern6_7_hybrid_point_snapshot_columns(pattern_key: str) -> None:
     for partition in silver_partitions[:3]:  # Check first 3 partitions
         df = _read_all_parquet(partition)
         missing = required_point_cols - set(df.columns)
-        assert not missing, (
-            f"{pattern_key} partition {partition.name} missing point-in-time columns: {missing}"
-        )
+        assert not missing, f"{pattern_key} partition {partition.name} missing point-in-time columns: {missing}"
 
 
 @pytest.mark.parametrize("pattern_key", ["pattern5"])
@@ -388,9 +400,9 @@ def test_pattern_silver_partitions_have_metadata(pattern_key: str) -> None:
             missing_metadata.append(str(partition))
 
     # Allow some variance - not all patterns may have metadata at partition level
-    assert len(missing_metadata) < len(silver_partitions) * 0.5, (
-        f"{pattern_key}: Too many silver partitions missing metadata"
-    )
+    assert (
+        len(missing_metadata) < len(silver_partitions) * 0.5
+    ), f"{pattern_key}: Too many silver partitions missing metadata"
 
 
 # ============================================================================
@@ -437,7 +449,7 @@ def test_pattern_coverage_report() -> None:
             "total_records": 0,
             "patterns_validated": 0,
             "avg_records_per_partition": 0,
-        }
+        },
     }
 
     for pattern_key in PATTERN_DEFINITIONS:
@@ -470,5 +482,9 @@ def test_pattern_coverage_report() -> None:
     report_path.write_text(json.dumps(report, indent=2))
 
     # Assertions (adjusted for actual sample data)
-    assert report["quality_metrics"]["total_samples"] > 50, f"Expected >50 samples, got {report['quality_metrics']['total_samples']}"
-    assert report["quality_metrics"]["total_records"] > 1000, f"Expected >1k records, got {report['quality_metrics']['total_records']}"
+    assert (
+        report["quality_metrics"]["total_samples"] > 50
+    ), f"Expected >50 samples, got {report['quality_metrics']['total_samples']}"
+    assert (
+        report["quality_metrics"]["total_records"] > 1000
+    ), f"Expected >1k records, got {report['quality_metrics']['total_records']}"

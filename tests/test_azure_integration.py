@@ -15,12 +15,8 @@ import os
 import pytest
 
 # Skip entire module if Azure dependencies not available
-pytest.importorskip(
-    "azure.storage.blob", reason="Azure storage dependencies not installed"
-)
-pytest.importorskip(
-    "azure.identity", reason="Azure identity dependencies not installed"
-)
+pytest.importorskip("azure.storage.blob", reason="Azure storage dependencies not installed")
+pytest.importorskip("azure.identity", reason="Azure identity dependencies not installed")
 
 from core.storage.plugins.azure_storage import AzureStorageBackend  # noqa: E402
 
