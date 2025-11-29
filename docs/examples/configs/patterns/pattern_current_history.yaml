@@ -39,3 +39,7 @@ silver:
     - customer_id
   partition_by:
     - effective_from_dt
+  # V1 Unified temporal configuration: partition by record time (state change time), not load time
+  record_time_column: "updated_at"  # Column with state change time
+  record_time_partition: "effective_from_date"  # Partition key name for state change date
+  load_batch_id_column: "load_batch_id"  # Standard column for batch tracking
