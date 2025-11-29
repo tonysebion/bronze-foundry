@@ -24,6 +24,9 @@ bronze:
     pattern_folder: pattern3_scd_state
     max_rows_per_file: 200000
     partitioning_strategy: date
+    output_formats:
+      - csv
+      - parquet
 
 silver:
   enabled: true

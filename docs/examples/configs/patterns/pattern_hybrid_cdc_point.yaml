@@ -28,6 +28,9 @@ bronze:
       cadence_days: 7
       delta_patterns: ["pattern4_hybrid_cdc_point"]
     match_dir: delta
+    output_formats:
+      - csv
+      - parquet
 
 silver:
   enabled: true

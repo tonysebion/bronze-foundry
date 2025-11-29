@@ -27,6 +27,9 @@ bronze:
     reference_mode:
       role: delta
       cadence_days: 1
+    output_formats:
+      - csv
+      - parquet
 
 silver:
   enabled: true

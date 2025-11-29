@@ -24,6 +24,9 @@ bronze:
     pattern_folder: pattern5_hybrid_cdc_cumulative
     delta_mode: cumulative
     match_dir: delta
+    output_formats:
+      - csv
+      - parquet
 
 silver:
   enabled: true

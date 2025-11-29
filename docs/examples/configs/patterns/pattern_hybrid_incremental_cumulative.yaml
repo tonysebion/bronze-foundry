@@ -25,6 +25,9 @@ bronze:
     delta_mode: cumulative
     partitioning_strategy: timestamp
     match_dir: delta
+    output_formats:
+      - csv
+      - parquet
 
 silver:
   enabled: true

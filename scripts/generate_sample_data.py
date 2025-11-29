@@ -275,7 +275,12 @@ def generate_full_snapshot(seed: int = 42, row_count: int = FULL_ROW_COUNT) -> N
 
 
 def _write_hybrid_reference(
-    base_dir: Path, date_str: str, seed: int, delta_patterns: List[str], delta_mode: str
+    base_dir: Path,
+    date_str: str,
+    seed: int,
+    delta_patterns: List[str],
+    delta_mode: str,
+    formats: Iterable[str],
 ) -> None:
     rng = Random(seed)
     rows: List[Dict[str, object]] = []
@@ -293,7 +298,7 @@ def _write_hybrid_reference(
             }
         )
     chunk_path = base_dir / "reference-part-0001.csv"
-    _write_chunk_files(chunk_path, rows)
+    _write_chunk_files(chunk_path, rows, formats=formats)
     _write_reference_metadata(base_dir, date_str, rows, delta_mode, delta_patterns)
 
 
@@ -306,10 +311,11 @@ def _write_hybrid_delta(
     rows: List[Dict[str, object]],
     delta_mode: str,
     reference_run_date: date,
+    formats: Iterable[str],
 ) -> None:
     base_dir.mkdir(parents=True, exist_ok=True)
     chunk_path = base_dir / "delta-part-0001.csv"
-    _write_chunk_files(chunk_path, rows)
+    _write_chunk_files(chunk_path, rows, formats=formats)
     _write_delta_metadata(
         base_dir, date_str, rows, delta_mode, [delta_pattern], reference_run_date
     )
@@ -602,6 +608,7 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
     for combo_name, delta_pattern, delta_mode in HYBRID_COMBOS:
         pattern_id = _pattern_dir(combo_name)
         runtime = _get_runtime_values(pattern_id)
+        formats = runtime["output_formats"]
         path_keys = _get_path_keys(pattern_id)
 
         base_pattern_dir = (
@@ -618,6 +625,7 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
                 seed,
                 [delta_pattern],
                 delta_mode,
+                formats=formats,
             )
         cumulative_rows: List[Dict[str, object]] = []
         for offset in range(1, HYBRID_DELTA_DAYS + 1):
@@ -646,6 +654,7 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
                 rows_to_write,
                 delta_mode,
                 reference_run_date,
+                formats=formats,
             )
 
 
