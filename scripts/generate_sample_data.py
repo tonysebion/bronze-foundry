@@ -786,10 +786,7 @@ def main() -> None:
         "--hybrid-delta-rows",
         type=int,
         default=None,
-        help=(
-            "Row count for each hybrid delta partition (defaults to --cdc-row-count "
-            f"/ {HYBRID_DELTA_DAYS})."
-        ),
+        help="Row count for each hybrid delta partition (defaults to --cdc-row-count).",
     )
     parser.add_argument(
         "--linear-growth",
@@ -845,7 +842,7 @@ def main() -> None:
     if args.hybrid_reference_rows is None:
         args.hybrid_reference_rows = args.full_row_count
     if args.hybrid_delta_rows is None:
-        args.hybrid_delta_rows = max(1, args.cdc_row_count // max(HYBRID_DELTA_DAYS, 1))
+        args.hybrid_delta_rows = max(1, args.cdc_row_count)
     args.hybrid_reference_rows = max(1, args.hybrid_reference_rows)
     args.hybrid_delta_rows = max(1, args.hybrid_delta_rows)
     HYBRID_REFERENCE_ROWS = args.hybrid_reference_rows
