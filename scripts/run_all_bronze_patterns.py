@@ -189,9 +189,12 @@ def _discover_run_dates_s3(
         if not dt_name.startswith("dt="):
             continue
         date_value = dt_name.split("=", 1)[1]
-        sample_path = f"{base}/{dt_name}"
+        candidate = f"{base}/{dt_name}"
         if tail:
-            sample_path = f"{sample_path}/{tail}"
+            candidate = f"{candidate}/{tail}"
+        sample_path = _resolve_s3_sample_path(client, bucket, candidate)
+        if not sample_path:
+            continue
         run_dates.append({"run_date": date_value, "sample_path": sample_path})
 
     if not run_dates:

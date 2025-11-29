@@ -1,12 +1,10 @@
 """Test script to verify S3 config parsing and file reading."""
 
 from pathlib import Path
-from datetime import date
 import sys
 
 from core.config.loader import load_config_with_env
-from core.extractors.file_extractor import FileExtractor
-from core.config.dataset import dataset_to_runtime_config
+# Unused imports removed to satisfy flake8
 from core.storage.uri import StorageURI
 from core.storage.filesystem import create_filesystem
 
@@ -45,12 +43,12 @@ def test_s3_source_reading(dataset, env_config):
     print("STEP 2: Source Reading - Reading CSV from S3")
     print("=" * 80)
 
-    print(f"\nSource path: {dataset.bronze.path_pattern}")
+    print("\nSource path: {}".format(dataset.bronze.path_pattern))
 
     try:
         # Parse the S3 URI
         uri = StorageURI.parse(dataset.bronze.path_pattern)
-        print(f"Parsed URI:")
+        print("Parsed URI:")
         print(f"  Backend: {uri.backend}")
         print(f"  Bucket: {uri.bucket}")
         print(f"  Key: {uri.key}")
@@ -58,16 +56,16 @@ def test_s3_source_reading(dataset, env_config):
         # Create filesystem
         fs = create_filesystem(uri, env_config)
         fsspec_path = uri.to_fsspec_path(env_config)
-        print(f"\nResolved path: {fsspec_path}")
+        print("\nResolved path: {}".format(fsspec_path))
 
         # Try to read the file
-        print(f"\nAttempting to read file...")
+        print("\nAttempting to read file...")
         with fs.open(fsspec_path, "r") as f:
             # Read first 5 lines
             lines = [f.readline() for _ in range(5)]
 
-        print(f"[OK] Successfully read {len(lines)} lines from S3")
-        print(f"\nFirst 3 lines:")
+        print("[OK] Successfully read {} lines from S3".format(len(lines)))
+        print("\nFirst 3 lines:")
         for i, line in enumerate(lines[:3], 1):
             print(f"  {i}: {line.strip()[:100]}")
 
@@ -94,7 +92,7 @@ def test_s3_write_simulation(dataset, env_config):
         f"s3://{bronze_bucket}/{bronze_prefix}system={dataset.system}/entity={dataset.entity}/run_date=2025-11-13/"
     )
 
-    print(f"\nBronze output would be written to:")
+    print("\nBronze output would be written to:")
     print(f"  {bronze_path}")
 
     # Silver output path
@@ -104,10 +102,10 @@ def test_s3_write_simulation(dataset, env_config):
         f"s3://{silver_bucket}/{silver_prefix}system={dataset.system}/entity={dataset.entity}/event_date=2025-11-13/"
     )
 
-    print(f"\nSilver output would be written to:")
+    print("\nSilver output would be written to:")
     print(f"  {silver_path}")
 
-    print(f"\n[OK] Output path construction successful")
+    print("\n[OK] Output path construction successful")
     return True
 
 

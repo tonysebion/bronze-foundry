@@ -30,6 +30,7 @@ from core.exceptions import RetryExhaustedError
 
 
 Predicate = Callable[[BaseException], bool]
+DelayCallback = Callable[[BaseException, int, float], Optional[float]]
 
 
 @dataclass
@@ -48,7 +49,7 @@ class RetryPolicy:
     )
     retry_if: Optional[Predicate] = None  # custom predicate
     # Optional callback to compute delay from an exception (e.g., Retry-After). If returns None, fall back to exponential.
-    delay_from_exception: Optional[Callable[[BaseException, int, float], Optional[float]]] = None
+    delay_from_exception: Optional[DelayCallback] = None
 
     def should_retry(self, exc: BaseException) -> bool:
         if self.retry_if is not None:
