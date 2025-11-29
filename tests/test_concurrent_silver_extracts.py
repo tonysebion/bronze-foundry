@@ -87,6 +87,12 @@ def test_concurrent_writes_with_locks(tmp_path: Path) -> None:
     # Use Popen to kick off processes concurrently and collect output reliably
     procs = []
     import time
+    # Ensure no stale lock files from previous runs
+    for f in silver_tmp.rglob(".silver.lock"):
+        try:
+            f.unlink()
+        except Exception:
+            pass
     for t in tags:
         p = subprocess.Popen(
             [sys.executable, str(REPO_ROOT / "silver_extract.py"), "--config", str(config_path), "--bronze-path", str(bronze_part), "--silver-base", str(silver_tmp), "--write-parquet", "--artifact-writer", "transactional", "--chunk-tag", t, "--use-locks"],
