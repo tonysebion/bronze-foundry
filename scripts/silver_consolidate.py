@@ -19,13 +19,6 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-from core.bronze.io import write_batch_metadata, write_checksum_manifest
-from core.storage.locks import file_lock
-
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Consolidate chunked Silver artifacts")
     parser.add_argument("--silver-base", help="Base silver dir to search", default=None)
@@ -87,6 +80,8 @@ def _consolidate_csv(files: List[Path], final_path: Path, dedupe_keys: List[str]
 
 
 def _consolidate_partition(partition: Path, args: argparse.Namespace) -> None:
+    from core.bronze.io import write_batch_metadata, write_checksum_manifest
+
     # Parse chunk metadata files in partition
     chunk_meta_files = sorted(partition.glob("_metadata_chunk_*.json"))
     if not chunk_meta_files:
@@ -162,6 +157,8 @@ def _consolidate_partition(partition: Path, args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    from core.storage.locks import file_lock
+
     args = parse_args()
     base = Path(args.silver_base) if args.silver_base else Path("sampledata") / "silver_samples"
     if not base.exists():
