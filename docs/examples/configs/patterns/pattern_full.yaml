@@ -4,6 +4,42 @@ domain: retail_demo  # Business domain for the dataset (appears in sample paths)
 system: retail_demo  # Logical system name used in Bronze/Silver metadata
 entity: orders  # Table/entity name referenced throughout the fixtures
 
+# ============================================================================
+# STORAGE CONFIGURATION
+# Platform/infrastructure settings - controls where data is read from and written to
+# Easy toggle between local filesystem and S3 storage
+# ============================================================================
+storage:
+  # SOURCE: Where to read source files from
+  source:
+    backend: s3  # "local" or "s3"
+    bucket: source_data  # For S3: bucket name or reference from environment config
+    prefix: source_samples/  # Base path prefix within bucket (or base directory for local)
+
+  # BRONZE: Where to write Bronze chunks
+  bronze:
+    backend: s3  # "local" or "s3"
+    bucket: bronze_data  # For S3: bucket name or reference from environment config
+    prefix: bronze_samples/  # Path prefix within bucket (or base directory for local)
+
+  # SILVER: Where to read Bronze and write Silver artifacts
+  silver:
+    backend: s3  # "local" or "s3"
+    bucket: silver_data  # For S3: bucket name or reference from environment config
+    prefix: silver_samples/  # Path prefix within bucket (or base directory for local)
+
+# To switch back to local filesystem, change all backends to "local" and update prefixes:
+# storage:
+#   source:
+#     backend: local
+#     prefix: ./sampledata/source_samples/
+#   bronze:
+#     backend: local
+#     prefix: sampledata/bronze_samples/
+#   silver:
+#     backend: local
+#     prefix: sampledata/silver_samples/
+
 path_structure:
   sample_key: "sample"  # Folder prefix for pattern-specific snapshots
   system_key: "system"  # Bronze path component for system
@@ -16,12 +52,17 @@ path_structure:
 bronze:
   enabled: true  # Bronze writes are required; full snapshots rewrite entire partition
   source_type: file  # Using filesystem-based sample data
-  path_pattern: ./sampledata/source_samples/sample=pattern1_full_events/system=retail_demo/table=orders/dt=2025-11-13/full-part-0001.csv
+
+  # Path pattern for source files - relative to storage.source.bucket/prefix
+  # The storage section defines WHERE (s3 vs local, which bucket)
+  # This defines WHAT (which specific files/pattern within that location)
+  path_pattern: sample=pattern1_full_events/system=retail_demo/table=orders/dt=2025-11-13/full-part-0001.parquet
+
   partition_column: run_date  # Column Bronze uses for partitioning metadata
   options:
     format: csv  # Source sample format (used when regenerating)
     load_pattern: full  # Load pattern label exposed via metadata
-    pattern_folder: pattern1_full_events  # Directory under sampledata/bronze_samples
+    pattern_folder: pattern1_full_events  # Directory under bronze_samples
     max_rows_per_file: 250000  # Approximate file size threshold
     partitioning_strategy: date  # Hints how run dates map to partitions
     output_formats:
