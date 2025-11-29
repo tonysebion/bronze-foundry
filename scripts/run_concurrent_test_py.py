@@ -24,7 +24,7 @@ tags=[f'lock-{uuid.uuid4().hex[:6]}' for _ in range(3)]
 for t in tags:
     stdout_path = silver_tmp / f"{t}.out"
     stderr_path = silver_tmp / f"{t}.err"
-    cmd=[sys.executable, str(ROOT/'silver_extract.py'), '--config', str(config), '--bronze-path', str(bronze), '--silver-base', str(silver_tmp), '--write-parquet', '--artifact-writer', 'transactional', '--chunk-tag', t, '--use-locks', '--lock-timeout', '10']
+    cmd=[sys.executable, str(ROOT/'silver_extract.py'), '--config', str(config), '--bronze-path', str(bronze), '--silver-base', str(silver_tmp), '--write-parquet', '--artifact-writer', 'transactional', '--chunk-tag', t, '--use-locks', '--lock-timeout', '10', '--verbose']
     p = subprocess.Popen(cmd, cwd=ROOT, stdout=open(stdout_path, 'w', encoding='utf-8'), stderr=open(stderr_path, 'w', encoding='utf-8'), text=True)
     procs.append((t, p))
     time.sleep(0.2)

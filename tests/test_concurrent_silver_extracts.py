@@ -77,7 +77,14 @@ def test_concurrent_writes_and_consolidation(tmp_path: Path) -> None:
 
 @pytest.mark.integration
 def test_concurrent_writes_with_locks(tmp_path: Path) -> None:
-    bronze_part = _find_bronze_partition()
+    # Pick a bronze partition with minimal rows to keep concurrent writes fast and reliable
+    bronze_root = REPO_ROOT / "sampledata" / "bronze_samples"
+    candidate_parts = [p for p in bronze_root.rglob("dt=*") if p.is_dir() and list(p.glob("*.csv"))]
+    bronze_part = (
+        min(candidate_parts, key=lambda p: min(f.stat().st_size for f in p.glob("*.csv")))
+        if candidate_parts
+        else _find_bronze_partition()
+    )
     silver_tmp = tmp_path / "silver_tmp_locks"
     silver_tmp.mkdir(parents=True)
 
