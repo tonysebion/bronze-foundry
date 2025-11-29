@@ -256,7 +256,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if not (REPO_ROOT / "scripts" / "generate_sample_data.py").exists():
-        print("❌ Please run from the repository root.")
+        print("Please run from the repository root.")
         return 1
 
     if not args.skip_sample_generation:
@@ -316,14 +316,18 @@ def main() -> int:
     print("=" * 60)
     print(f"\nCompleted: {successful}/{total} runs")
     if successful == total:
-        print("\n✅ ALL BRONZE EXTRACTIONS SUCCEEDED!")
-        print(f"\n📁 Bronze outputs: {bronze_root.resolve()}")
+        print("
+ALL BRONZE EXTRACTIONS SUCCEEDED!")
+        print(f"
+Bronze outputs: {bronze_root.resolve()}")
     else:
-        print("\n❌ SOME BRONZE EXTRACTIONS FAILED")
-        print("\nFailed runs:")
+        print("
+SOME BRONZE EXTRACTIONS FAILED")
+        print("
+Failed runs:")
         for config_name, run_date, success in results:
             if not success:
-                print(f"   ❌ {config_name} ({run_date})")
+                print(f"   - {config_name} ({run_date})")
 
     return 0 if successful == total else 1
 
