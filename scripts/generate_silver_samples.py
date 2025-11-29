@@ -311,6 +311,12 @@ def _run_cli(cmd: list[str]) -> None:
     subprocess.run([sys.executable, *cmd], check=True, cwd=REPO_ROOT)
 
 
+def _ensure_bronze_samples_present() -> None:
+    """Generate Bronze samples when no partitions are detected."""
+    print("[INFO] Bronze samples missing; generating via scripts/generate_sample_data.py")
+    _run_cli(["scripts/generate_sample_data.py"])
+
+
 def _generate_for_partition(
     partition: Dict[str, Any],
     config: PatternConfig,
@@ -391,7 +397,12 @@ def main() -> None:
 
     partitions = list(_find_bronze_partitions())
     if not partitions:
-        raise RuntimeError("No Bronze partitions found; generate Bronze samples first.")
+        _ensure_bronze_samples_present()
+        partitions = list(_find_bronze_partitions())
+        if not partitions:
+            raise RuntimeError(
+                "No Bronze partitions found even after generating sample data."
+            )
 
     _clear_path(TEMP_SILVER_SAMPLE_ROOT)
     TEMP_SILVER_SAMPLE_ROOT.mkdir(parents=True, exist_ok=True)
