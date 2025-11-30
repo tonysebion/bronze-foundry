@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import date
 from pathlib import Path
 from typing import Iterable, Any, Dict
 
@@ -147,6 +148,29 @@ def _resolve_s3_sample_path(client, bucket: str, candidate: str) -> str | None:
     return None
 
 
+def _bronze_relative_path(config: Dict[str, Any], run_date_str: str) -> str:
+    system = config.get("system", "unknown")
+    table = config.get("entity", "dataset")
+    bronze_options = config.get("bronze", {}).get("options", {})
+    pattern_folder = bronze_options.get("pattern_folder") or config.get("pattern_id") or "default"
+    return f"system={system}/table={table}/pattern={pattern_folder}/dt={run_date_str}/"
+
+
+def _build_bronze_destination(
+    config: Dict[str, Any], env_config: EnvironmentConfig, run_date_str: str
+) -> str:
+    storage_cfg = config.get("storage", {}).get("bronze", {})
+    bucket_ref = storage_cfg.get("bucket")
+    prefix = storage_cfg.get("prefix", "").lstrip("/")
+    if prefix and not prefix.endswith("/"):
+        prefix = f"{prefix}/"
+    relative = prefix + _bronze_relative_path(config, run_date_str)
+    if bucket_ref and env_config and env_config.s3:
+        bucket = env_config.s3.get_bucket(bucket_ref)
+        return f"s3://{bucket}/{relative}"
+    return relative
+
+
 def _discover_run_dates_s3(
     cfg: Dict[str, Any],
     env_config: EnvironmentConfig,
@@ -238,7 +262,7 @@ def _discover_run_dates(
     storage = cfg.get("storage", {})
     source_backend = storage.get("source", {}).get("backend", "local")
     if source_backend == "s3":
-        return _discover_run_dates_s3(cfg, env_config, explicit_dates)
+    return _discover_run_dates_s3(cfg, env_config, explicit_dates)
     return _discover_run_dates_local(config_path, explicit_dates)
 
 
@@ -336,7 +360,7 @@ def rewrite_config(
 
     temp_config = temp_dir / f"temp_{Path(original_path).stem}_{run_date.replace('-', '')}.yaml"
     temp_config.write_text(yaml.safe_dump(config))
-    return str(temp_config)
+    return str(temp_config), config
 
 
 def process_run(task: Dict[str, Any]) -> tuple[str, str, bool]:
@@ -429,19 +453,20 @@ def main() -> int:
                 run_counter += 1
                 pattern_dir = bronze_root / (entry["pattern"] or Path(entry["config"]).stem)
                 pattern_dir.mkdir(parents=True, exist_ok=True)
-                tasks.append(
-                    {
-                        "config_path": entry["config"],
-                        "run_date": run_info["run_date"],
-                        "run_count": run_counter,
-                        "temp_path": temp_path,
-                        "output_base": pattern_dir,
-                        "total_runs": total_runs,
-                        "pattern": entry["pattern"],
-                        "sample_path": run_info.get("sample_path"),
-                        "limit_records": limit_records,
-                    }
-                )
+        tasks.append(
+            {
+                "config_path": entry["config"],
+                "run_date": run_info["run_date"],
+                "run_count": run_counter,
+                "temp_path": temp_path,
+                "output_base": pattern_dir,
+                "total_runs": total_runs,
+                "pattern": entry["pattern"],
+                "sample_path": run_info.get("sample_path"),
+                "limit_records": limit_records,
+                "env_config": entry["env_config"],
+            }
+        )
 
         print(f"Scheduling {len(tasks)} Bronze runs ({total_runs} total) across patterns", flush=True)
 
