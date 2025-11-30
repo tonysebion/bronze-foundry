@@ -94,6 +94,7 @@ def main():
         help="Run tests together with ruff linting for a single command",
     )
     parser.add_argument("--black-check", action="store_true", help="Check code formatting with black")
+        parser.add_argument("--flake8", action="store_true", help="Run flake8 linting")
     parser.add_argument(
         "--all-checks",
         action="store_true",
@@ -110,6 +111,7 @@ def main():
     run_mypy = args.mypy or args.all_checks
     run_ruff = args.ruff or args.with_lint or args.all_checks
     run_black = args.black_check or args.all_checks
+        run_flake8 = args.flake8 or args.all_checks
 
     # Run tests
     if run_tests:
@@ -176,6 +178,17 @@ def main():
             *black_targets,
         ]
         results.append(run_command(black_cmd, "Code Formatting (black)"))
+    
+    # Run flake8 linting
+    if run_flake8:
+        flake8_cmd = [
+            sys.executable,
+            "-m",
+            "flake8",
+            "--max-line-length=120",
+            ".",
+        ]
+        results.append(run_command(flake8_cmd, "Linting (flake8)"))
 
     # Print summary
     print("\n" + "=" * 80)
