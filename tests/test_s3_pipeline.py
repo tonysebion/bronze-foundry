@@ -1,14 +1,12 @@
-"""Deprecated wrapper — please use `scripts/check_s3_pipeline.py` instead.
+"""Deprecated wrapper — the S3 pipeline check script has moved.
 
-To run the S3 pipeline check interactively, invoke the new script:
-```
-python scripts/check_s3_pipeline.py
-```
+This module intentionally raises a module-skip so pytest doesn't import any
+logic; run the new script in `scripts/check_s3_pipeline.py` interactively.
 """
 
-if __name__ == "__main__":
-    # Run the new CLI script instead (it performs the same checks).
-    from scripts.check_s3_pipeline import main
-    import sys
+import pytest
 
-    sys.exit(main())
+pytest.skip(
+    "S3 pipeline check moved to scripts/check_s3_pipeline.py; run interactively if needed",
+    allow_module_level=True,
+)

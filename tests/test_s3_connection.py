@@ -1,14 +1,12 @@
-"""Deprecated wrapper — please use `scripts/check_s3_connection.py` instead.
+"""Deprecated wrapper — the S3 connection check script has moved.
 
-To run the S3 connection check interactively, invoke the script directly:
-```
-python scripts/check_s3_connection.py
-```
+This module intentionally raises a module-skip so pytest won't import any
+logic; the script to run interactively is `scripts/check_s3_connection.py`.
 """
 
-if __name__ == "__main__":
-    # Run the new script to avoid pytest collecting this file as test code.
-    from scripts.check_s3_connection import main
-    import sys
+import pytest
 
-    sys.exit(main())
+pytest.skip(
+    "S3 connection check moved to scripts/check_s3_connection.py; run interactively if needed",
+    allow_module_level=True,
+)
