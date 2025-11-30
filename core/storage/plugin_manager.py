@@ -25,12 +25,15 @@ def resolve_backend_type(config: Dict[str, Any]) -> str:
     return backend_value.lower()
 
 
-def get_backend_factory(backend_type: str) -> Callable[[Dict[str, Any]], "StorageBackend"]:
+def get_backend_factory(
+    backend_type: str,
+) -> Callable[[Dict[str, Any]], "StorageBackend"]:
     factory = BACKEND_REGISTRY.get(backend_type)
     if not factory:
         available = list(BACKEND_REGISTRY.keys())
         error_msg = (
-            f"Storage backend '{backend_type}' is not available. " f"Available backends: {', '.join(available)}."
+            f"Storage backend '{backend_type}' is not available. "
+            f"Available backends: {', '.join(available)}."
         )
 
         # Provide helpful hints for common missing backends

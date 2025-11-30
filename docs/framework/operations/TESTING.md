@@ -157,6 +157,32 @@ python run_tests.py --flake8
 python -m flake8 --max-line-length=120 .
 ```
 
+### Pre-commit hooks
+
+If you'd like to run the style checks locally on commit, enable pre-commit hooks with:
+
+```bash
+pip install -r requirements-dev.txt
+pre-commit install
+```
+
+You can run the hooks across all files with:
+
+```bash
+pre-commit run --all-files
+```
+
+Pre-commit prevents style regressions locally and ensures GitHub Actions will be given clean candidates.
+
+### GitHub Actions Integration
+
+We added a workflow to run the full test-and-style suite on PRs and pushes:
+
+  - `.github/workflows/test-and-style.yml` — runs `python run_tests.py --all-checks`.
+
+This runs tests, type checking, ruff, black and flake8 and enforces the same checks you run locally.
+
+
 ### Code Formatting (black)
 
 ```bash

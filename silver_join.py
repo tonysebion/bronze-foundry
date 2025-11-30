@@ -60,7 +60,9 @@ def normalize_platform_config(cfg: Dict[str, Any] | None) -> Dict[str, Any]:
     return normalized
 
 
-def merge_platform_configs(base: Dict[str, Any] | None, override: Dict[str, Any] | None) -> Dict[str, Any]:
+def merge_platform_configs(
+    base: Dict[str, Any] | None, override: Dict[str, Any] | None
+) -> Dict[str, Any]:
     base_norm = normalize_platform_config(base)
     override_norm = normalize_platform_config(override)
     merged = dict(base_norm)
@@ -92,7 +94,9 @@ def fetch_asset_local(
 
     prefix = entry["path"].rstrip("/\\")
     if not prefix:
-        raise ValueError("Remote path must be provided when the local path does not exist")
+        raise ValueError(
+            "Remote path must be provided when the local path does not exist"
+        )
 
     name_value = entry.get("name")
     if isinstance(name_value, str) and name_value:
@@ -121,9 +125,13 @@ def fetch_asset_local(
 def read_metadata(silver_path: Path) -> Dict[str, Any]:
     metadata_path = silver_path / "_metadata.json"
     if metadata_path.exists():
-        payload = cast(Dict[str, Any], json.loads(metadata_path.read_text(encoding="utf-8")))
+        payload = cast(
+            Dict[str, Any], json.loads(metadata_path.read_text(encoding="utf-8"))
+        )
     else:
-        logger.warning("No metadata found for %s; falling back to minimal defaults", silver_path)
+        logger.warning(
+            "No metadata found for %s; falling back to minimal defaults", silver_path
+        )
         payload = {}
     payload.setdefault("silver_path", str(silver_path))
     return payload
@@ -185,7 +193,9 @@ def _resolve_join_pairs(
                 left_key = entry.get("left") or entry.get("source")
                 right_key = entry.get("right") or entry.get("target")
                 if not left_key or not right_key:
-                    raise ValueError("Each join_key_pairs entry must contain 'left' and 'right'")
+                    raise ValueError(
+                        "Each join_key_pairs entry must contain 'left' and 'right'"
+                    )
                 pairs.append((str(left_key), str(right_key)))
             else:
                 raise ValueError("join_key_pairs entries must be strings or mappings")
@@ -239,7 +249,9 @@ def _resolve_chunk_size(
 
 def _align_datetime_columns(left: pd.DataFrame, right: pd.DataFrame) -> None:
     for col in set(left.columns).intersection(right.columns):
-        if not (is_datetime64_any_dtype(left[col]) and is_datetime64_any_dtype(right[col])):
+        if not (
+            is_datetime64_any_dtype(left[col]) and is_datetime64_any_dtype(right[col])
+        ):
             continue
         left_tz = left[col].dt.tz
         right_tz = right[col].dt.tz
@@ -342,7 +354,9 @@ def _evaluate_unique_keys(df: pd.DataFrame, cfg: Dict[str, Any]) -> Dict[str, An
     }
 
 
-def run_quality_guards(df: pd.DataFrame, guard_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+def run_quality_guards(
+    df: pd.DataFrame, guard_cfg: Dict[str, Any]
+) -> List[Dict[str, Any]]:
     if not guard_cfg:
         return []
     results: List[Dict[str, Any]] = []
@@ -391,7 +405,9 @@ class RightPartitionCache:
 
     def __init__(self, df: pd.DataFrame, join_keys: List[str]) -> None:
         if not join_keys:
-            raise ValueError("Join keys must be configured to partition the right-hand asset.")
+            raise ValueError(
+                "Join keys must be configured to partition the right-hand asset."
+            )
         self.df = df
         self.join_keys = join_keys
         self._cache: Dict[Tuple[Any, ...], pd.DataFrame] = {}
@@ -452,7 +468,9 @@ class JoinProgressTracker:
 
     def __init__(self, checkpoint_dir: Optional[Path]) -> None:
         self.checkpoint_dir = checkpoint_dir.resolve() if checkpoint_dir else None
-        self.progress_file = self.checkpoint_dir / "progress.json" if self.checkpoint_dir else None
+        self.progress_file = (
+            self.checkpoint_dir / "progress.json" if self.checkpoint_dir else None
+        )
         self.chunks_processed = 0
         self.total_records = 0
         self.recent_chunks: List[Dict[str, Any]] = []
@@ -470,7 +488,9 @@ class JoinProgressTracker:
             "chunk_index": chunk_index,
             "record_count": record_count,
             "duration_seconds": duration_seconds,
-            "sample_keys": [self._format_key(key) for key in islice(sample_keys, self.MAX_RECENT)],
+            "sample_keys": [
+                self._format_key(key) for key in islice(sample_keys, self.MAX_RECENT)
+            ],
         }
         self.recent_chunks.append(entry)
         if len(self.recent_chunks) > self.MAX_RECENT:
@@ -561,7 +581,9 @@ def build_input_audit(meta: Dict[str, Any]) -> Dict[str, Any]:
             audit["bronze_checksum_manifest"] = {
                 "path": str(manifest_path),
                 "file_count": len(manifest_payload.get("files", [])),
-                "sample_files": [entry.get("path") for entry in manifest_payload.get("files", [])[:3]],
+                "sample_files": [
+                    entry.get("path") for entry in manifest_payload.get("files", [])[:3]
+                ],
             }
     return audit
 
@@ -584,7 +606,9 @@ def _model_supported(model: SilverModel, metadata_list: List[Dict[str, Any]]) ->
     return True
 
 
-def select_model(requested_model: str | None, metadata_list: List[Dict[str, Any]]) -> SilverModel:
+def select_model(
+    requested_model: str | None, metadata_list: List[Dict[str, Any]]
+) -> SilverModel:
     desired = determine_model(requested_model, metadata_list[0])
     if _model_supported(desired, metadata_list):
         return desired
@@ -612,7 +636,9 @@ def _order_inputs_by_reference(
     inputs: List[Tuple[Dict[str, Any], pd.DataFrame, Dict[str, Any], str]],
 ) -> List[Tuple[Dict[str, Any], pd.DataFrame, Dict[str, Any], str]]:
     delta_run_dates = {
-        meta.get("run_date") for _, _, meta, _ in inputs if (meta.get("reference_mode") or {}).get("role") == "delta"
+        meta.get("run_date")
+        for _, _, meta, _ in inputs
+        if (meta.get("reference_mode") or {}).get("role") == "delta"
     }
 
     def score(entry: Tuple[Any, Any, Dict[str, Any], Any]) -> int:
@@ -630,15 +656,23 @@ def _order_inputs_by_reference(
     return sorted(inputs, key=score)
 
 
-def build_run_options(output_cfg: Dict[str, Any], metadata_list: List[Dict[str, Any]]) -> RunOptions:
+def build_run_options(
+    output_cfg: Dict[str, Any], metadata_list: List[Dict[str, Any]]
+) -> RunOptions:
     formats = {fmt.strip().lower() for fmt in output_cfg.get("formats", ["parquet"])}
     write_parquet = "parquet" in formats
     write_csv = "csv" in formats
     if not (write_parquet or write_csv):
-        raise ValueError("silver_join.output.formats must include at least one of 'parquet' or 'csv'")
+        raise ValueError(
+            "silver_join.output.formats must include at least one of 'parquet' or 'csv'"
+        )
 
-    primary_keys = metadata_list[0].get("primary_keys") or output_cfg.get("primary_keys") or []
-    order_column = metadata_list[0].get("order_column") or output_cfg.get("order_column")
+    primary_keys = (
+        metadata_list[0].get("primary_keys") or output_cfg.get("primary_keys") or []
+    )
+    order_column = metadata_list[0].get("order_column") or output_cfg.get(
+        "order_column"
+    )
 
     return RunOptions(
         load_pattern=LoadPattern.FULL,
@@ -715,9 +749,15 @@ def _execute_join(
             }
         )
         chunk_frames.append(merged_chunk)
-        matched_right_keys.update(cache.normalize_query_keys(_extract_join_key_set(right_subset, canonical_keys)))
+        matched_right_keys.update(
+            cache.normalize_query_keys(
+                _extract_join_key_set(right_subset, canonical_keys)
+            )
+        )
         if progress_tracker:
-            progress_tracker.record_chunk(chunk_count, len(merged_chunk), key_set, duration)
+            progress_tracker.record_chunk(
+                chunk_count, len(merged_chunk), key_set, duration
+            )
 
     all_right_keys = cache.all_keys()
     unmatched_keys = all_right_keys - matched_right_keys
@@ -749,7 +789,9 @@ def _execute_join(
     else:
         merged = pd.concat(chunk_frames, ignore_index=True)
 
-    column_origin = _build_column_origin(merged.columns, left_aligned.columns, right_aligned.columns, canonical_keys)
+    column_origin = _build_column_origin(
+        merged.columns, left_aligned.columns, right_aligned.columns, canonical_keys
+    )
 
     stats = JoinRunStats(
         chunk_count=chunk_count,
@@ -775,10 +817,14 @@ def _normalize_projection(raw: Any) -> List[Tuple[str, str]]:
             elif len(item) == 1:
                 src, alias = next(iter(item.items()))
             else:
-                raise ValueError("Projection mappings must contain 'source' or a single key/value")
+                raise ValueError(
+                    "Projection mappings must contain 'source' or a single key/value"
+                )
             entries.append((str(src), str(alias)))
             continue
-        raise ValueError("Projection entries must be strings or single key/value mappings")
+        raise ValueError(
+            "Projection entries must be strings or single key/value mappings"
+        )
     return entries
 
 
@@ -887,7 +933,9 @@ def _persist_join_output(
             from core.silver.models import SilverModel as _SM
 
             model = _SM.PERIODIC_SNAPSHOT
-            logger.debug("Defaulted Silver model to PERIODIC_SNAPSHOT for legacy join output")
+            logger.debug(
+                "Defaulted Silver model to PERIODIC_SNAPSHOT for legacy join output"
+            )
         except Exception:  # pragma: no cover - defensive
             pass
 
@@ -924,7 +972,9 @@ def _persist_join_output(
             "unmatched_right_keys": join_stats.unmatched_right_keys,
             "right_only_rows": join_stats.right_only_rows,
         },
-        "join_key_pairs": [{"left": left_key, "right": right_key} for left_key, right_key in join_pairs],
+        "join_key_pairs": [
+            {"left": left_key, "right": right_key} for left_key, right_key in join_pairs
+        ],
         "chunk_size": chunk_size,
         "output_columns": list(df.columns),
         "column_lineage": column_lineage,
@@ -1007,8 +1057,12 @@ class SilverJoinRunner:
     def fetch_assets(self, workspace: Path) -> AssetFetchResult:
         left_entry = self.join_config["left"]
         right_entry = self.join_config["right"]
-        left_path = fetch_asset_local(left_entry, workspace, self.platform_cfg, self.storage_scope)
-        right_path = fetch_asset_local(right_entry, workspace, self.platform_cfg, self.storage_scope)
+        left_path = fetch_asset_local(
+            left_entry, workspace, self.platform_cfg, self.storage_scope
+        )
+        right_path = fetch_asset_local(
+            right_entry, workspace, self.platform_cfg, self.storage_scope
+        )
         left_meta = read_metadata(left_path)
         right_meta = read_metadata(right_path)
         left_df = read_silver_data(left_path)
@@ -1039,8 +1093,12 @@ class SilverJoinRunner:
         spill_dir: Optional[Path],
         join_strategy: str,
     ) -> JoinExecutionResult:
-        join_pairs = _resolve_join_pairs(self.output_cfg, assets.left_df, assets.right_df, assets.metadata_list)
-        chunk_size = _resolve_chunk_size(self.output_cfg, assets.left_df, assets.metadata_list, join_strategy)
+        join_pairs = _resolve_join_pairs(
+            self.output_cfg, assets.left_df, assets.right_df, assets.metadata_list
+        )
+        chunk_size = _resolve_chunk_size(
+            self.output_cfg, assets.left_df, assets.metadata_list, join_strategy
+        )
         joined, join_stats, column_origin, join_metrics = _execute_join(
             assets.left_df,
             assets.right_df,
@@ -1050,8 +1108,12 @@ class SilverJoinRunner:
             progress_tracker,
             spill_dir,
         )
-        projected, column_lineage = apply_projection(joined, self.output_cfg, column_origin)
-        guards = run_quality_guards(projected, self.output_cfg.get("quality_guards", {}))
+        projected, column_lineage = apply_projection(
+            joined, self.output_cfg, column_origin
+        )
+        guards = run_quality_guards(
+            projected, self.output_cfg.get("quality_guards", {})
+        )
         return JoinExecutionResult(
             joined_df=projected,
             join_stats=join_stats,
@@ -1069,7 +1131,10 @@ class SilverJoinRunner:
         progress_tracker: JoinProgressTracker,
     ) -> None:
         source_audits = [build_input_audit(meta) for meta in assets.metadata_list]
-        requested_model = self.output_cfg.get("model") or SilverModel.default_for_load_pattern(LoadPattern.FULL).value
+        requested_model = (
+            self.output_cfg.get("model")
+            or SilverModel.default_for_load_pattern(LoadPattern.FULL).value
+        )
         model = select_model(requested_model, assets.metadata_list)
         run_opts = build_run_options(self.output_cfg, assets.metadata_list)
         progress_summary = progress_tracker.summary()
@@ -1102,7 +1167,9 @@ class SilverJoinRunner:
         validate_storage_metadata(self.platform_cfg)
         enforce_storage_scope(self.platform_cfg, self.storage_scope)
         output_path = Path(self.output_cfg["path"])
-        checkpoint_dir = self.output_cfg.get("checkpoint_dir") or output_path / ".join_progress"
+        checkpoint_dir = (
+            self.output_cfg.get("checkpoint_dir") or output_path / ".join_progress"
+        )
         progress_tracker = JoinProgressTracker(Path(checkpoint_dir))
         join_strategy = _normalize_join_strategy(self.output_cfg.get("join_strategy"))
         spill_path = self.output_cfg.get("spill_dir")
@@ -1110,13 +1177,17 @@ class SilverJoinRunner:
         with tempfile.TemporaryDirectory(prefix="silver_join_") as workspace_dir:
             workspace = Path(workspace_dir)
             assets = self.fetch_assets(workspace)
-            result = self.perform_join(assets, progress_tracker, spill_dir, join_strategy)
+            result = self.perform_join(
+                assets, progress_tracker, spill_dir, join_strategy
+            )
         self.write_output(assets, result, progress_tracker)
         return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Join two Silver assets into a curated third asset")
+    parser = argparse.ArgumentParser(
+        description="Join two Silver assets into a curated third asset"
+    )
     parser.add_argument("--config", help="Silver join configuration YAML")
     parser.add_argument(
         "--run-context",

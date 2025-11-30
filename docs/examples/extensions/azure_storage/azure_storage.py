@@ -94,7 +94,9 @@ class AzureStorage(StorageBackend):
 
         # Initialize blob service client
         self.blob_service_client = self._build_client(azure_cfg)
-        self.container_client = self.blob_service_client.get_container_client(self.container_name)
+        self.container_client = self.blob_service_client.get_container_client(
+            self.container_name
+        )
 
         # Ensure container exists
         try:
@@ -127,8 +129,12 @@ class AzureStorage(StorageBackend):
 
             if account_name and account_key:
                 account_url = f"https://{account_name}.blob.core.windows.net"
-                logger.debug(f"Using Azure account key authentication for {account_url}")
-                return BlobServiceClient(account_url=account_url, credential=account_key)
+                logger.debug(
+                    f"Using Azure account key authentication for {account_url}"
+                )
+                return BlobServiceClient(
+                    account_url=account_url, credential=account_key
+                )
 
         # Method 3: Service Principal (recommended for production)
         tenant_id_env = azure_cfg.get("tenant_id_env")
@@ -143,9 +149,13 @@ class AzureStorage(StorageBackend):
             if tenant_id and client_id and client_secret:
                 from azure.identity import ClientSecretCredential
 
-                account_name = os.environ.get(account_name_env or "AZURE_STORAGE_ACCOUNT")
+                account_name = os.environ.get(
+                    account_name_env or "AZURE_STORAGE_ACCOUNT"
+                )
                 if not account_name:
-                    raise ValueError("account_name_env required for service principal auth")
+                    raise ValueError(
+                        "account_name_env required for service principal auth"
+                    )
 
                 account_url = f"https://{account_name}.blob.core.windows.net"
                 client_credential = ClientSecretCredential(
@@ -153,8 +163,12 @@ class AzureStorage(StorageBackend):
                     client_id=client_id,
                     client_secret=client_secret,
                 )
-                logger.debug(f"Using Azure service principal authentication for {account_url}")
-                return BlobServiceClient(account_url=account_url, credential=client_credential)
+                logger.debug(
+                    f"Using Azure service principal authentication for {account_url}"
+                )
+                return BlobServiceClient(
+                    account_url=account_url, credential=client_credential
+                )
 
         # Method 4: Managed Identity (for Azure VMs/Functions)
         if azure_cfg.get("use_managed_identity", False):
@@ -166,8 +180,12 @@ class AzureStorage(StorageBackend):
 
             account_url = f"https://{account_name}.blob.core.windows.net"
             managed_credential = ManagedIdentityCredential()
-            logger.debug(f"Using Azure managed identity authentication for {account_url}")
-            return BlobServiceClient(account_url=account_url, credential=managed_credential)
+            logger.debug(
+                f"Using Azure managed identity authentication for {account_url}"
+            )
+            return BlobServiceClient(
+                account_url=account_url, credential=managed_credential
+            )
 
         raise ValueError(
             "No valid Azure authentication found. Provide one of: "
@@ -203,12 +221,16 @@ class AzureStorage(StorageBackend):
         blob_path = self._build_blob_path(remote_path)
 
         try:
-            blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=blob_path)
+            blob_client = self.blob_service_client.get_blob_client(
+                container=self.container_name, blob=blob_path
+            )
 
             with open(local_path, "rb") as data:
                 blob_client.upload_blob(data, overwrite=True)
 
-            logger.info(f"Uploaded {os.path.basename(local_path)} to azure://{self.container_name}/{blob_path}")
+            logger.info(
+                f"Uploaded {os.path.basename(local_path)} to azure://{self.container_name}/{blob_path}"
+            )
             return True
         except AzureError as e:
             logger.error(f"Failed to upload {local_path} to Azure: {e}")
@@ -239,12 +261,16 @@ class AzureStorage(StorageBackend):
         blob_path = self._build_blob_path(remote_path)
 
         try:
-            blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=blob_path)
+            blob_client = self.blob_service_client.get_blob_client(
+                container=self.container_name, blob=blob_path
+            )
 
             with open(local_path, "wb") as download_file:
                 download_file.write(blob_client.download_blob().readall())
 
-            logger.info(f"Downloaded azure://{self.container_name}/{blob_path} to {local_path}")
+            logger.info(
+                f"Downloaded azure://{self.container_name}/{blob_path} to {local_path}"
+            )
             return True
         except AzureError as e:
             logger.error(f"Failed to download {remote_path} from Azure: {e}")
@@ -300,7 +326,9 @@ class AzureStorage(StorageBackend):
         blob_path = self._build_blob_path(remote_path)
 
         try:
-            blob_client = self.blob_service_client.get_blob_client(container=self.container_name, blob=blob_path)
+            blob_client = self.blob_service_client.get_blob_client(
+                container=self.container_name, blob=blob_path
+            )
             blob_client.delete_blob()
             logger.info(f"Deleted azure://{self.container_name}/{blob_path}")
             return True

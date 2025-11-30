@@ -554,4 +554,3 @@ v1/
 | 5 | Derived State | derived_state | effective_from_date | Time-range queries | Entity history |
 | 6 | Latest Only | latest_state | **SHOULD BE UNPARTITIONED** | Current state | ~~Time-range~~ |
 | 7 | SCD1 Current | state_scd1 | **SHOULD BE UNPARTITIONED** | Current state | ~~Time-range~~ |
-

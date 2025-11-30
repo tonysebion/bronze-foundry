@@ -8,12 +8,26 @@ from pathlib import Path
 
 
 @pytest.fixture(scope="session", autouse=True)
-def ensure_sample_data_available() -> None:
+def ensure_sample_data_available(pytestconfig) -> None:
     """Fail early if Bronze sample data is missing so tests don't run blind."""
     project_root = Path(__file__).resolve().parents[1]
     root = project_root / "sampledata" / "source_samples"
 
     # If source_samples are missing, attempt to generate them automatically
+    # However, skip sample generation when only running style checks to avoid long runs
+    args = getattr(pytestconfig, "args", []) or []
+    is_style_only = (
+        all(
+            any(s in str(arg) for s in ["test_style_black.py", "test_style_flake8.py"])
+            for arg in args
+        )
+        if args
+        else False
+    )
+
+    if is_style_only:
+        # We are running style tests only; don't try to generate sample data
+        return
     if not root.exists() or not any(root.rglob("*.csv")):
         # Skip attempting to generate if explicitly disabled using env var
         if os.getenv("SKIP_SAMPLE_GENERATION"):
@@ -25,8 +39,12 @@ def ensure_sample_data_available() -> None:
         gen_script = project_root / "scripts" / "generate_sample_data.py"
         if gen_script.exists():
             try:
-                print("Generating Bronze sample data using scripts/generate_sample_data.py ...")
-                subprocess.run([sys.executable, str(gen_script)], check=True, cwd=project_root)
+                print(
+                    "Generating Bronze sample data using scripts/generate_sample_data.py ..."
+                )
+                subprocess.run(
+                    [sys.executable, str(gen_script)], check=True, cwd=project_root
+                )
             except Exception as exc:  # noqa: BLE001 - we report to user rather than silently swallowing
                 pytest.exit(
                     "Bronze sample data missing and automatic generation failed; "

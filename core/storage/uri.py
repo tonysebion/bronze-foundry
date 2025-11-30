@@ -60,22 +60,39 @@ class StorageURI:
         # S3 URI: s3://bucket/key
         s3_match = re.match(r"^s3://([^/]+)/(.+)$", uri)
         if s3_match:
-            return StorageURI(backend="s3", bucket=s3_match.group(1), key=s3_match.group(2), original=uri)
+            return StorageURI(
+                backend="s3",
+                bucket=s3_match.group(1),
+                key=s3_match.group(2),
+                original=uri,
+            )
 
         # S3 URI without trailing path (just bucket)
         s3_bucket_match = re.match(r"^s3://([^/]+)/?$", uri)
         if s3_bucket_match:
-            return StorageURI(backend="s3", bucket=s3_bucket_match.group(1), key="", original=uri)
+            return StorageURI(
+                backend="s3", bucket=s3_bucket_match.group(1), key="", original=uri
+            )
 
         # Azure URI: azblob://container/path
         azure_match = re.match(r"^azblob://([^/]+)/(.+)$", uri)
         if azure_match:
-            return StorageURI(backend="azure", bucket=azure_match.group(1), key=azure_match.group(2), original=uri)
+            return StorageURI(
+                backend="azure",
+                bucket=azure_match.group(1),
+                key=azure_match.group(2),
+                original=uri,
+            )
 
         # Azure URI without trailing path
         azure_container_match = re.match(r"^azblob://([^/]+)/?$", uri)
         if azure_container_match:
-            return StorageURI(backend="azure", bucket=azure_container_match.group(1), key="", original=uri)
+            return StorageURI(
+                backend="azure",
+                bucket=azure_container_match.group(1),
+                key="",
+                original=uri,
+            )
 
         # Local filesystem (default for anything without a scheme)
         return StorageURI(backend="local", bucket=None, key=uri, original=uri)

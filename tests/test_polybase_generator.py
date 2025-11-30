@@ -57,7 +57,13 @@ def test_polybase_disabled_when_silver_disabled():
 
 def test_polybase_setup_event_entity():
     """Test Polybase setup generation for event entity."""
-    from core.config.dataset import BronzeIntent, SilverIntent, DeleteMode, SchemaMode, InputMode
+    from core.config.dataset import (
+        BronzeIntent,
+        SilverIntent,
+        DeleteMode,
+        SchemaMode,
+        InputMode,
+    )
 
     dataset = DatasetConfig(
         system="retail_demo",
@@ -120,7 +126,13 @@ def test_polybase_setup_event_entity():
 
 def test_polybase_setup_state_entity():
     """Test Polybase setup generation for state entity."""
-    from core.config.dataset import BronzeIntent, SilverIntent, DeleteMode, SchemaMode, HistoryMode
+    from core.config.dataset import (
+        BronzeIntent,
+        SilverIntent,
+        DeleteMode,
+        SchemaMode,
+        HistoryMode,
+    )
 
     dataset = DatasetConfig(
         system="retail_demo",
@@ -177,7 +189,13 @@ def test_polybase_setup_state_entity():
 
 def test_polybase_sample_queries_event():
     """Test that event entity sample queries are appropriate."""
-    from core.config.dataset import BronzeIntent, SilverIntent, DeleteMode, SchemaMode, InputMode
+    from core.config.dataset import (
+        BronzeIntent,
+        SilverIntent,
+        DeleteMode,
+        SchemaMode,
+        InputMode,
+    )
 
     dataset = DatasetConfig(
         system="retail_demo",
@@ -224,7 +242,13 @@ def test_polybase_sample_queries_event():
 
 def test_polybase_sample_queries_state():
     """Test that state entity sample queries are appropriate."""
-    from core.config.dataset import BronzeIntent, SilverIntent, DeleteMode, SchemaMode, HistoryMode
+    from core.config.dataset import (
+        BronzeIntent,
+        SilverIntent,
+        DeleteMode,
+        SchemaMode,
+        HistoryMode,
+    )
 
     dataset = DatasetConfig(
         system="retail_demo",
@@ -263,12 +287,22 @@ def test_polybase_sample_queries_state():
 
     # Queries should involve temporal predicates
     all_queries = " ".join(queries)
-    assert "effective_from_date" in all_queries or "effective_from_dt" in all_queries or "is_current" in all_queries
+    assert (
+        "effective_from_date" in all_queries
+        or "effective_from_dt" in all_queries
+        or "is_current" in all_queries
+    )
 
 
 def test_polybase_custom_schema_name():
     """Test that custom schema names are honored."""
-    from core.config.dataset import BronzeIntent, SilverIntent, DeleteMode, SchemaMode, InputMode
+    from core.config.dataset import (
+        BronzeIntent,
+        SilverIntent,
+        DeleteMode,
+        SchemaMode,
+        InputMode,
+    )
 
     dataset = DatasetConfig(
         system="retail_demo",
@@ -305,7 +339,13 @@ def test_polybase_custom_schema_name():
 
 def test_polybase_derived_event():
     """Test Polybase setup for derived event entity."""
-    from core.config.dataset import BronzeIntent, SilverIntent, DeleteMode, SchemaMode, InputMode
+    from core.config.dataset import (
+        BronzeIntent,
+        SilverIntent,
+        DeleteMode,
+        SchemaMode,
+        InputMode,
+    )
 
     dataset = DatasetConfig(
         system="retail_demo",
@@ -346,7 +386,13 @@ def test_polybase_derived_event():
 
 def test_polybase_derived_state():
     """Test Polybase setup for derived state entity."""
-    from core.config.dataset import BronzeIntent, SilverIntent, DeleteMode, SchemaMode, HistoryMode
+    from core.config.dataset import (
+        BronzeIntent,
+        SilverIntent,
+        DeleteMode,
+        SchemaMode,
+        HistoryMode,
+    )
 
     dataset = DatasetConfig(
         system="retail_demo",
@@ -387,7 +433,13 @@ def test_polybase_derived_state():
 
 def test_temporal_functions_state_entity():
     """Test temporal function generation for state entity."""
-    from core.config.dataset import BronzeIntent, SilverIntent, DeleteMode, SchemaMode, HistoryMode
+    from core.config.dataset import (
+        BronzeIntent,
+        SilverIntent,
+        DeleteMode,
+        SchemaMode,
+        HistoryMode,
+    )
     from core.polybase import generate_temporal_functions_sql
 
     dataset = DatasetConfig(
@@ -431,7 +483,13 @@ def test_temporal_functions_state_entity():
 
 def test_temporal_functions_event_entity():
     """Test temporal function generation for event entity."""
-    from core.config.dataset import BronzeIntent, SilverIntent, DeleteMode, SchemaMode, InputMode
+    from core.config.dataset import (
+        BronzeIntent,
+        SilverIntent,
+        DeleteMode,
+        SchemaMode,
+        InputMode,
+    )
     from core.polybase import generate_temporal_functions_sql
 
     dataset = DatasetConfig(

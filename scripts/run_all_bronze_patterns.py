@@ -1,25 +1,25 @@
-﻿#!/usr/bin/env python
+#!/usr/bin/env python
 """
 Run Bronze extraction for every sample pattern so Bronze outputs mirror the source layout.
 
 Usage:
     python scripts/run_all_bronze_patterns.py
 
-By default this regenerates source samples before running Bronze. Use
-`--skip-sample-generation` to reuse data already under `sampledata/source_samples`.
+This script assumes each pattern's source samples already exist remotely (S3)
+and writes Bronze outputs into temporary local staging directories before uploading
+them using the config settings.
 """
 
 from __future__ import annotations
 
 import argparse
 import concurrent.futures
-import shutil
+import os
 import subprocess
 import sys
 import tempfile
-from datetime import date
 from pathlib import Path
-from typing import Iterable, Any, Dict
+from typing import Any, Dict, Iterable
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -31,9 +31,6 @@ import yaml  # noqa: E402
 from botocore.exceptions import ClientError
 from core.config.loader import load_config_with_env
 from core.config.environment import EnvironmentConfig
-
-BRONZE_SAMPLE_ROOT = Path("sampledata/bronze_samples")
-DOC_BRONZE_SAMPLE_ROOT = REPO_ROOT / "docs" / "examples" / "data" / "bronze_samples"
 
 PATTERN_CONFIGS = [
     {
@@ -152,7 +149,9 @@ def _bronze_relative_path(config: Dict[str, Any], run_date_str: str) -> str:
     system = config.get("system", "unknown")
     table = config.get("entity", "dataset")
     bronze_options = config.get("bronze", {}).get("options", {})
-    pattern_folder = bronze_options.get("pattern_folder") or config.get("pattern_id") or "default"
+    pattern_folder = (
+        bronze_options.get("pattern_folder") or config.get("pattern_id") or "default"
+    )
     return f"system={system}/table={table}/pattern={pattern_folder}/dt={run_date_str}/"
 
 
@@ -218,11 +217,16 @@ def _discover_run_dates_s3(
             candidate = f"{base}/{dt_name}"
             if tail_path:
                 candidate = f"{candidate}/{tail_path}"
-            sample_path = _resolve_s3_sample_path(client, bucket, candidate) or candidate
+            sample_path = (
+                _resolve_s3_sample_path(client, bucket, candidate) or candidate
+            )
             if sample_path and date_value not in run_dates_dict:
                 run_dates_dict[date_value] = sample_path
 
-    run_dates = [{"run_date": dt, "sample_path": sample} for dt, sample in sorted(run_dates_dict.items())]
+    run_dates = [
+        {"run_date": dt, "sample_path": sample}
+        for dt, sample in sorted(run_dates_dict.items())
+    ]
 
     if not run_dates:
         raise ValueError(f"No dt= prefixes found under s3://{bucket}/{base_root}")
@@ -230,11 +234,14 @@ def _discover_run_dates_s3(
     return run_dates
 
 
-def _discover_run_dates_local(config_path: Path, explicit_dates: Iterable[str] | None) -> list[dict]:
+def _discover_run_dates_local(
+    config_path: Path,
+    explicit_dates: Iterable[str] | None,
+    cfg: Dict[str, Any],
+) -> list[dict]:
     if explicit_dates:
         return [{"run_date": date, "sample_path": None} for date in explicit_dates]
 
-    cfg = yaml.safe_load(config_path.read_text())
     base_dir = _pattern_base_dir(_extract_path_pattern_from_config(cfg))
     tail = _tail_after_dt(_extract_path_pattern_from_config(cfg))
     dt_dirs = sorted(p for p in base_dir.glob("dt=*") if p.is_dir())
@@ -246,24 +253,34 @@ def _discover_run_dates_local(config_path: Path, explicit_dates: Iterable[str] |
         candidate = dt_dir / tail if tail.parts else dt_dir
         sample_path = _resolve_sample_path(dt_dir, candidate)
         if sample_path:
-            valid_dates.append({"run_date": dt_dir.name.split("=", 1)[1], "sample_path": sample_path})
+            valid_dates.append(
+                {"run_date": dt_dir.name.split("=", 1)[1], "sample_path": sample_path}
+            )
     if not valid_dates:
         raise ValueError(f"No valid files were found for {config_path}")
 
     return valid_dates
 
 
+def _load_config_dict(config_path: Path) -> Dict[str, Any]:
+    cfg = yaml.safe_load(config_path.read_text())
+    if not isinstance(cfg, dict):
+        raise ValueError("Config must be a YAML dictionary/object")
+    return cfg
+
+
 def _discover_run_dates(
     config_path: Path,
     explicit_dates: Iterable[str] | None,
     env_config: EnvironmentConfig,
+    cfg: Dict[str, Any] | None = None,
 ) -> list[dict]:
-    cfg = yaml.safe_load(config_path.read_text())
+    cfg = cfg or _load_config_dict(config_path)
     storage = cfg.get("storage", {})
     source_backend = storage.get("source", {}).get("backend", "local")
     if source_backend == "s3":
         return _discover_run_dates_s3(cfg, env_config, explicit_dates)
-    return _discover_run_dates_local(config_path, explicit_dates)
+    return _discover_run_dates_local(config_path, explicit_dates, cfg)
 
 
 def _resolve_sample_path(dt_dir: Path, candidate: Path) -> Path | None:
@@ -289,13 +306,6 @@ def _resolve_sample_path(dt_dir: Path, candidate: Path) -> Path | None:
             return path
 
     return None
-
-
-def _sync_doc_bronze_samples() -> None:
-    if DOC_BRONZE_SAMPLE_ROOT.exists():
-        shutil.rmtree(DOC_BRONZE_SAMPLE_ROOT)
-    if BRONZE_SAMPLE_ROOT.exists():
-        shutil.copytree(BRONZE_SAMPLE_ROOT, DOC_BRONZE_SAMPLE_ROOT)
 
 
 def run_command(cmd: list[str], description: str) -> bool:
@@ -358,7 +368,10 @@ def rewrite_config(
         file_cfg = source_cfg.setdefault("file", {})
         file_cfg["limit_rows"] = limit_records
 
-    temp_config = temp_dir / f"temp_{Path(original_path).stem}_{run_date.replace('-', '')}.yaml"
+    os.makedirs(output_base, exist_ok=True)
+    temp_config = (
+        temp_dir / f"temp_{Path(original_path).stem}_{run_date.replace('-', '')}.yaml"
+    )
     temp_config.write_text(yaml.safe_dump(config))
     return str(temp_config), config
 
@@ -369,12 +382,14 @@ def process_run(task: Dict[str, Any]) -> tuple[str, str, bool]:
     temp_path = task["temp_path"]
     bronze_out = task["output_base"]
     total_runs = task["total_runs"]
-    pattern_folder = task.get("pattern")
+    pattern_folder = task.get("pattern_folder")
     run_count = task["run_count"]
     env_config = task["env_config"]
 
     config_name = Path(config_path).name
-    description = f"[{run_count}/{total_runs}] Bronze extraction: {config_name} ({run_date})"
+    description = (
+        f"[{run_count}/{total_runs}] Bronze extraction: {config_name} ({run_date})"
+    )
 
     actual_config, rewritten_cfg = rewrite_config(
         config_path,
@@ -406,7 +421,9 @@ def process_run(task: Dict[str, Any]) -> tuple[str, str, bool]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run Bronze extraction for all pattern configs")
+    parser = argparse.ArgumentParser(
+        description="Run Bronze extraction for all pattern configs"
+    )
     parser.add_argument(
         "--limit-records",
         type=int,
@@ -422,23 +439,40 @@ def main() -> int:
 
     print("Preparing discovery (this can take a while)...", flush=True)
 
-    print("Scanning source_samples in S3 for available pattern dates (this may take a moment)...", flush=True)
+    print(
+        "Scanning source_samples in S3 for available pattern dates (this may take a moment)...",
+        flush=True,
+    )
     pattern_runs: list[Dict[str, Any]] = []
     for entry in PATTERN_CONFIGS:
         config_path = entry["config"]
-        dataset, env_config = load_config_with_env(REPO_ROOT / config_path)
+        config_full_path = REPO_ROOT / config_path
+        cfg = _load_config_dict(config_full_path)
+        _, env_config = load_config_with_env(config_full_path)
         if not env_config:
             print(f"Environment config missing for {config_path}")
             return 1
-        run_dates = _discover_run_dates(REPO_ROOT / config_path, None, env_config)
-        print(f"Pattern {entry.get('pattern', config_path)} has {len(run_dates)} dates", flush=True)
+        pattern_folder = (
+            cfg.get("bronze", {}).get("options", {}).get("pattern_folder")
+            or cfg.get("pattern_id")
+            or entry.get("pattern")
+        )
+        run_dates = _discover_run_dates(config_full_path, None, env_config, cfg)
+        print(
+            f"Pattern {entry.get('pattern', config_path)} has {len(run_dates)} dates",
+            flush=True,
+        )
         for d in run_dates[:3]:
-            print(f"  sample path: {d['sample_path']} (run_date={d['run_date']})", flush=True)
+            print(
+                f"  sample path: {d['sample_path']} (run_date={d['run_date']})",
+                flush=True,
+            )
         pattern_runs.append(
             {
                 "config": config_path,
                 "run_dates": run_dates,
                 "pattern": entry.get("pattern"),
+                "pattern_folder": pattern_folder,
                 "env_config": env_config,
             }
         )
@@ -446,35 +480,37 @@ def main() -> int:
     total_runs = sum(len(entry["run_dates"]) for entry in pattern_runs)
     print(f"Configs to run: {len(pattern_runs)} ({total_runs} Bronze runs)", flush=True)
 
-    bronze_root = BRONZE_SAMPLE_ROOT
-    bronze_root.mkdir(parents=True, exist_ok=True)
-
     limit_records = args.limit_records
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
         tasks: list[Dict[str, Any]] = []
         run_counter = 0
         for entry in pattern_runs:
+            pattern_dir = temp_path / (entry["pattern"] or Path(entry["config"]).stem)
             for run_info in entry["run_dates"]:
                 run_counter += 1
-                pattern_dir = bronze_root / (entry["pattern"] or Path(entry["config"]).stem)
-                pattern_dir.mkdir(parents=True, exist_ok=True)
-        tasks.append(
-            {
-                "config_path": entry["config"],
-                "run_date": run_info["run_date"],
-                "run_count": run_counter,
-                "temp_path": temp_path,
-                "output_base": pattern_dir,
-                "total_runs": total_runs,
-                "pattern": entry["pattern"],
-                "sample_path": run_info.get("sample_path"),
-                "limit_records": limit_records,
-                "env_config": entry["env_config"],
-            }
-        )
+                run_output = pattern_dir / run_info["run_date"]
+                run_output.mkdir(parents=True, exist_ok=True)
+                tasks.append(
+                    {
+                        "config_path": entry["config"],
+                        "run_date": run_info["run_date"],
+                        "run_count": run_counter,
+                        "temp_path": temp_path,
+                        "output_base": run_output,
+                        "total_runs": total_runs,
+                        "pattern": entry["pattern"],
+                        "pattern_folder": entry.get("pattern_folder"),
+                        "sample_path": run_info.get("sample_path"),
+                        "limit_records": limit_records,
+                        "env_config": entry["env_config"],
+                    }
+                )
 
-        print(f"Scheduling {len(tasks)} Bronze runs ({total_runs} total) across patterns", flush=True)
+        print(
+            f"Scheduling {len(tasks)} Bronze runs ({total_runs} total) across patterns",
+            flush=True,
+        )
 
         results: list[tuple[str, str, bool]] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
@@ -491,7 +527,9 @@ def main() -> int:
     print(f"\nCompleted: {successful}/{total} runs")
     if successful == total:
         print("ALL BRONZE EXTRACTIONS SUCCEEDED!")
-        print(f"Bronze outputs: {bronze_root.resolve()}")
+        print(
+            "Bronze outputs were uploaded per configuration and temporary staging directories were removed."
+        )
     else:
         print("SOME BRONZE EXTRACTIONS FAILED")
         print("Failed runs:")

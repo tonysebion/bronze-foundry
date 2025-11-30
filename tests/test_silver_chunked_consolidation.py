@@ -32,7 +32,14 @@ def test_chunked_promotion_and_consolidation(tmp_path: Path) -> None:
     chunk1 = f"test-{uuid.uuid4().hex[:6]}"
     chunk2 = f"test-{uuid.uuid4().hex[:6]}"
 
-    config_path = REPO_ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
+    config_path = (
+        REPO_ROOT
+        / "docs"
+        / "examples"
+        / "configs"
+        / "patterns"
+        / "pattern_current_history.yaml"
+    )
     cmd_base = [
         sys.executable,
         str(REPO_ROOT / "silver_extract.py"),
@@ -47,12 +54,22 @@ def test_chunked_promotion_and_consolidation(tmp_path: Path) -> None:
         "--artifact-writer",
         "transactional",
     ]
-    p1 = subprocess.run([*cmd_base, "--chunk-tag", chunk1], cwd=REPO_ROOT, capture_output=True, text=True)
+    p1 = subprocess.run(
+        [*cmd_base, "--chunk-tag", chunk1],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
     if p1.returncode != 0:
         print("P1 STDOUT:\n", p1.stdout)
         print("P1 STDERR:\n", p1.stderr)
         raise RuntimeError("silver_extract failed for chunk 1")
-    p2 = subprocess.run([*cmd_base, "--chunk-tag", chunk2], cwd=REPO_ROOT, capture_output=True, text=True)
+    p2 = subprocess.run(
+        [*cmd_base, "--chunk-tag", chunk2],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
     if p2.returncode != 0:
         print("P2 STDOUT:\n", p2.stdout)
         print("P2 STDERR:\n", p2.stderr)
@@ -64,7 +81,12 @@ def test_chunked_promotion_and_consolidation(tmp_path: Path) -> None:
 
     # Consolidate
     subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts" / "silver_consolidate.py"), "--silver-base", str(silver_tmp)],
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts" / "silver_consolidate.py"),
+            "--silver-base",
+            str(silver_tmp),
+        ],
         check=True,
         cwd=REPO_ROOT,
     )
@@ -83,7 +105,14 @@ def test_consolidate_prune_chunks(tmp_path: Path) -> None:
 
     chunk1 = f"test-{uuid.uuid4().hex[:6]}"
     chunk2 = f"test-{uuid.uuid4().hex[:6]}"
-    config_path = REPO_ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
+    config_path = (
+        REPO_ROOT
+        / "docs"
+        / "examples"
+        / "configs"
+        / "patterns"
+        / "pattern_current_history.yaml"
+    )
     cmd_base = [
         sys.executable,
         str(REPO_ROOT / "silver_extract.py"),
@@ -98,12 +127,22 @@ def test_consolidate_prune_chunks(tmp_path: Path) -> None:
         "--artifact-writer",
         "transactional",
     ]
-    p1 = subprocess.run([*cmd_base, "--chunk-tag", chunk1], cwd=REPO_ROOT, capture_output=True, text=True)
+    p1 = subprocess.run(
+        [*cmd_base, "--chunk-tag", chunk1],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
     if p1.returncode != 0:
         print("P1 STDOUT:\n", p1.stdout)
         print("P1 STDERR:\n", p1.stderr)
         raise RuntimeError("silver_extract failed for chunk 1")
-    p2 = subprocess.run([*cmd_base, "--chunk-tag", chunk2], cwd=REPO_ROOT, capture_output=True, text=True)
+    p2 = subprocess.run(
+        [*cmd_base, "--chunk-tag", chunk2],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
     if p2.returncode != 0:
         print("P2 STDOUT:\n", p2.stdout)
         print("P2 STDERR:\n", p2.stderr)
@@ -123,7 +162,9 @@ def test_consolidate_prune_chunks(tmp_path: Path) -> None:
     )
 
     # No chunk metadata should remain
-    assert not list(silver_tmp.rglob("*_metadata_chunk_*.json")), "Expected no chunk metadata files after pruning"
+    assert not list(
+        silver_tmp.rglob("*_metadata_chunk_*.json")
+    ), "Expected no chunk metadata files after pruning"
     # We can't easily assert no chunk artifact remain due to naming; ensure _metadata_chunk files removed is good enough
 
 
@@ -178,7 +219,12 @@ def test_intent_chunk_metadata_written(tmp_path: Path) -> None:
         "--artifact-writer",
         "transactional",
     ]
-    p = subprocess.run([*cmd_base, "--chunk-tag", chunk_tag], cwd=REPO_ROOT, capture_output=True, text=True)
+    p = subprocess.run(
+        [*cmd_base, "--chunk-tag", chunk_tag],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
     if p.returncode != 0:
         msg = (
             f"silver_extract failed for intent config: returncode={p.returncode}\n"

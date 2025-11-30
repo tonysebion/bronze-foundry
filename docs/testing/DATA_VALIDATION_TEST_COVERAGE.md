@@ -485,4 +485,3 @@ Before deploying Silver artifacts to production Polybase:
 
 **Recommended effort:** 2-3 days of focused test development
 **Expected outcome:** Comprehensive data correctness validation before Polybase deployment
-

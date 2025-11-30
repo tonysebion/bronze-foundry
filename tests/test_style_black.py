@@ -19,9 +19,21 @@ def test_black_formatting_check():
         "bronze_extract.py",
         "silver_extract.py",
     ]
-    # Only include targets that exist in the repo
-    targets = [str(ROOT / t) if Path(ROOT / t).exists() else t for t in targets]
+    # Only include targets that exist in the repo; avoids scanning sampledata/site dir
+    targets = [str(ROOT / t) for t in targets if (ROOT / t).exists()]
 
     cmd = [sys.executable, "-m", "black", "--check", "--line-length=120", *targets]
-    result = subprocess.run(cmd)
-    assert result.returncode == 0, "black check failed; run 'black --line-length=120 .' to fix formatting"
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        raise AssertionError(
+            "black check timed out; try running black directly to diagnose"
+        )
+
+    if result.returncode != 0:
+        # Include stdout/stderr in assertion to help fix quickly
+        raise AssertionError(
+            "black check failed; run 'black --line-length=120 .' to fix formatting\n"
+            + result.stdout
+            + result.stderr
+        )

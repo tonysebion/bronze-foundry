@@ -15,7 +15,9 @@ bronze = (
     / "table=orders"
     / "dt=2025-11-28"
 )
-config = ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
+config = (
+    ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
+)
 silver_tmp = ROOT / "output" / "silver_tmp_run_test"
 if silver_tmp.exists():
     shutil.rmtree(silver_tmp)
@@ -96,7 +98,12 @@ for t, p in procs:
 
 # consolidate
 subprocess.run(
-    [sys.executable, str(ROOT / "scripts" / "silver_consolidate.py"), "--silver-base", str(silver_tmp)],
+    [
+        sys.executable,
+        str(ROOT / "scripts" / "silver_consolidate.py"),
+        "--silver-base",
+        str(silver_tmp),
+    ],
     check=True,
     cwd=ROOT,
 )

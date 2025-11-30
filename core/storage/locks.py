@@ -22,7 +22,10 @@ class LockAcquireError(Exception):
 
 @contextmanager
 def file_lock(
-    dir_path: Path, lock_name: str = ".silver.lock", timeout: float = 30.0, poll_interval: float = 0.2
+    dir_path: Path,
+    lock_name: str = ".silver.lock",
+    timeout: float = 30.0,
+    poll_interval: float = 0.2,
 ) -> Iterator[None]:
     """Context manager for a lock on a directory.
 
@@ -44,7 +47,9 @@ def file_lock(
                 with os.fdopen(fd, "w") as f:
                     f.write(str(os.getpid()))
                 fd = None
-                logging.getLogger(__name__).debug("Acquired lock %s by pid %s", lock_path, os.getpid())
+                logging.getLogger(__name__).debug(
+                    "Acquired lock %s by pid %s", lock_path, os.getpid()
+                )
                 break
             except FileExistsError:
                 # If the existing lock file looks stale (pid not running), remove it and retry
@@ -83,7 +88,9 @@ def file_lock(
                             exc,
                         )
                 if time.time() - start >= timeout:
-                    raise LockAcquireError(f"Unable to acquire lock {lock_path} after {timeout}s")
+                    raise LockAcquireError(
+                        f"Unable to acquire lock {lock_path} after {timeout}s"
+                    )
                 time.sleep(poll_interval)
         yield
     finally:
@@ -94,7 +101,9 @@ def file_lock(
                 pass
         try:
             lock_path.unlink()
-            logging.getLogger(__name__).debug("Released lock %s by pid %s", lock_path, os.getpid())
+            logging.getLogger(__name__).debug(
+                "Released lock %s by pid %s", lock_path, os.getpid()
+            )
         except FileNotFoundError:
             pass
         except Exception:

@@ -87,7 +87,12 @@ for t, p in procs:
     print("ERR", err[:1000])
 
 subprocess.run(
-    [sys.executable, str(ROOT / "scripts" / "silver_consolidate.py"), "--silver-base", str(silver_tmp)],
+    [
+        sys.executable,
+        str(ROOT / "scripts" / "silver_consolidate.py"),
+        "--silver-base",
+        str(silver_tmp),
+    ],
     check=True,
     cwd=ROOT,
 )

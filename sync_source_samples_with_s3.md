@@ -15,4 +15,3 @@ Default output format [None]: json
 aws --endpoint-url http://localhost:9000 s3 sync "C:\github\bronze-foundry\sampledata\source_samples" s3://mdf/source_samples
 
 aws --endpoint-url http://localhost:9000 s3 sync "C:\github\bronze-foundry\sampledata\source_samples" s3://mdf/source_samples --dryrun
-

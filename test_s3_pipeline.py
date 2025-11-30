@@ -89,9 +89,7 @@ def test_s3_write_simulation(dataset, env_config):
     # Bronze output path
     bronze_bucket = env_config.s3.get_bucket(dataset.bronze.output_bucket)
     bronze_prefix = dataset.bronze.output_prefix
-    bronze_path = (
-        f"s3://{bronze_bucket}/{bronze_prefix}system={dataset.system}/entity={dataset.entity}/run_date=2025-11-13/"
-    )
+    bronze_path = f"s3://{bronze_bucket}/{bronze_prefix}system={dataset.system}/entity={dataset.entity}/run_date=2025-11-13/"
 
     print("\nBronze output would be written to:")
     print(f"  {bronze_path}")
@@ -99,9 +97,7 @@ def test_s3_write_simulation(dataset, env_config):
     # Silver output path
     silver_bucket = env_config.s3.get_bucket(dataset.silver.output_bucket)
     silver_prefix = dataset.silver.output_prefix
-    silver_path = (
-        f"s3://{silver_bucket}/{silver_prefix}system={dataset.system}/entity={dataset.entity}/event_date=2025-11-13/"
-    )
+    silver_path = f"s3://{silver_bucket}/{silver_prefix}system={dataset.system}/entity={dataset.entity}/event_date=2025-11-13/"
 
     print("\nSilver output would be written to:")
     print(f"  {silver_path}")
