@@ -1,4 +1,4 @@
-"""Smoke test for the Bronze samples S3 location described in environments/dev.yaml."""
+"""Smoke test that S3 Bronze data exists via environments/dev.yaml."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import boto3
 import pytest
-from botocore.exceptions import ClientError, EndpointConnectionError
+from botocore.exceptions import EndpointConnectionError, ClientError
 
 from core.config.environment import EnvironmentConfig
 
@@ -44,5 +44,5 @@ def test_dev_s3_bronze_samples_exist() -> None:
 
     assert response.get("KeyCount", 0) > 0, (
         f"No Bronze artifacts found under s3://{bucket}/{prefix}; "
-        "run the Bronze generator to populate the bucket before generating Silver."
+        "run Bronze generation to populate the bucket."
     )
