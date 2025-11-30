@@ -39,7 +39,6 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 BRONZE_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "bronze_samples"
-SOURCE_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "source_samples"
 SILVER_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "silver_samples"
 TEMP_SILVER_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "silver_samples_tmp"
 CONFIGS_DIR = REPO_ROOT / "docs" / "examples" / "configs" / "patterns"
@@ -374,21 +373,6 @@ def _run_cli(cmd: list[str]) -> None:
     subprocess.run([sys.executable, *cmd], check=True, cwd=REPO_ROOT)
 
 
-def _ensure_bronze_samples_present() -> None:
-    """Generate Bronze samples when no partitions are detected."""
-    if SOURCE_SAMPLE_ROOT.exists():
-        print(
-            "[INFO] Bronze samples missing; "
-            "source samples already exist so running scripts/run_all_bronze_patterns.py"
-        )
-        _run_cli(["scripts/run_all_bronze_patterns.py", "--skip-sample-generation"])
-        return
-    print(
-        "[INFO] Bronze samples missing; "
-        "source samples absent so running scripts/generate_sample_data.py"
-    )
-    _run_cli(["scripts/generate_sample_data.py"])
-
 
 def _consolidate_silver_samples() -> None:
     """Run consolidation to produce metadata/checksum manifests."""
@@ -687,12 +671,10 @@ def main() -> None:
 
     partitions = list(_find_bronze_partitions())
     if not partitions:
-        _ensure_bronze_samples_present()
-        partitions = list(_find_bronze_partitions())
-        if not partitions:
-            raise RuntimeError(
-                "No Bronze partitions found even after generating sample data."
-            )
+        raise RuntimeError(
+            "No Bronze partitions found under "
+            f"{BRONZE_SAMPLE_ROOT}; ensure Bronze samples exist before running."
+        )
 
     _clear_path(TEMP_SILVER_SAMPLE_ROOT)
     TEMP_SILVER_SAMPLE_ROOT.mkdir(parents=True, exist_ok=True)
