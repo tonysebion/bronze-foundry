@@ -1103,19 +1103,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--on-success-webhook",
         action="append",
         dest="on_success_webhook",
-        help=(
-            "URL to POST a JSON payload to when the Silver promotion succeeds "
-            "(can be specified multiple times)"
-        ),
+        help=("URL to POST a JSON payload to when the Silver promotion succeeds " "(can be specified multiple times)"),
     )
     parser.add_argument(
         "--on-failure-webhook",
         action="append",
         dest="on_failure_webhook",
-        help=(
-            "URL to POST a JSON payload to when the Silver promotion fails "
-            "(can be specified multiple times)"
-        ),
+        help=("URL to POST a JSON payload to when the Silver promotion fails " "(can be specified multiple times)"),
     )
     parser.add_argument(
         "--chunk-tag",
@@ -1133,10 +1127,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--lock-timeout",
         type=float,
         default=60.0,
-        help=(
-            "Maximum seconds to wait for filesystem lock acquisition when --use-locks "
-            "is set (default: 60)"
-        ),
+        help=("Maximum seconds to wait for filesystem lock acquisition when --use-locks " "is set (default: 60)"),
     )
     return parser
 

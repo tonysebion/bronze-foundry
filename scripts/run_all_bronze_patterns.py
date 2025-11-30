@@ -30,6 +30,7 @@ import yaml  # noqa: E402
 from botocore.exceptions import ClientError
 from core.config.loader import load_config_with_env
 from core.config.environment import EnvironmentConfig
+
 BRONZE_SAMPLE_ROOT = Path("sampledata/bronze_samples")
 DOC_BRONZE_SAMPLE_ROOT = REPO_ROOT / "docs" / "examples" / "data" / "bronze_samples"
 
@@ -449,8 +450,8 @@ def main() -> int:
                         "pattern": entry["pattern"],
                         "sample_path": run_info.get("sample_path"),
                         "limit_records": limit_records,
-                }
-            )
+                    }
+                )
 
         print(f"Scheduling {len(tasks)} Bronze runs ({total_runs} total) across patterns")
 

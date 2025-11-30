@@ -267,9 +267,11 @@ class BronzeOrchestrator:
                     )
                     logger.info(
                         "  ✓ Load pattern: %s",
-                        tcfg.source.run.load_pattern.value
-                        if getattr(tcfg.source, "run", None)
-                        else LoadPattern.FULL.value,
+                        (
+                            tcfg.source.run.load_pattern.value
+                            if getattr(tcfg.source, "run", None)
+                            else LoadPattern.FULL.value
+                        ),
                     )
                     platform = cfg.model_dump()["platform"]
                     storage_backend = platform["bronze"].get("storage_backend", "s3")
