@@ -5,6 +5,24 @@ system: retail_demo  # Logical system name used in Bronze/Silver metadata
 entity: orders  # Table/entity name referenced throughout the fixtures
 
 # ============================================================================
+# PATH STRUCTURE
+# Define the folder prefixes used across storage layers; reorder or rename these
+# keys to adjust how Bronze/Silver directories are constructed.
+# ============================================================================
+path_structure:
+  bronze:
+    system_key: "system"  # Bronze path component for system
+    entity_key: "table"  # Bronze path component for entity
+    pattern_key: "pattern"  # Bronze path component for pattern
+    date_key: "dt"  # Bronze path component for partition date
+  silver:
+    domain_key: "domain"  # Silver: business domain (curated data organization)
+    entity_key: "entity"  # Silver: curated entity/dataset name
+    version_key: "v"  # Silver: schema/transformation version prefix
+    pattern_key: "pattern"  # Silver: optional pattern for Bronze traceability
+    load_date_key: "load_date"  # Silver: data load date
+
+# ============================================================================
 # STORAGE CONFIGURATION
 # Platform/infrastructure settings - controls where data is read from and written to
 # Easy toggle between local filesystem and S3 storage
@@ -37,15 +55,6 @@ storage:
 #     backend: local
 #     prefix: sampledata/silver_samples/
 
-path_structure:
-  sample_key: "sample"  # Folder prefix for pattern-specific snapshots
-  system_key: "system"  # Bronze path component for system
-  entity_key: "table"  # Bronze path component for entity
-  date_key: "dt"  # Bronze path component for partition date
-  silver_model_key: "silver_model"  # Silver sample hierarchy
-  domain_key: "domain"
-  load_date_key: "load_date"
-
 bronze:
   enabled: true  # Bronze writes are required; full snapshots rewrite entire partition
   source_type: file  # Using filesystem-based sample data
@@ -68,6 +77,7 @@ bronze:
 
 silver:
   enabled: true  # Programmatic Silver promotion is enabled for this pattern
+  include_pattern_folder: true  # Include pattern in path for Bronze traceability
   entity_kind: event  # This dataset behaves like an event log
   input_mode: replace_daily  # Each run rewrites the entire partition
   delete_mode: ignore

@@ -17,10 +17,19 @@ def build_bronze_relative_path(cfg: dict, run_date: date) -> str:
 
     partition_strategy = partitioning.get("partition_strategy", "date")
 
+    # Try to get path structure from config; fallback to defaults
+    path_structure = cfg.get("path_structure", {})
+    bronze_keys = path_structure.get("bronze", {}) if isinstance(path_structure, dict) else {}
+    
+    system_key = bronze_keys.get("system_key", "system")
+    entity_key = bronze_keys.get("entity_key", "table")
+    pattern_key = bronze_keys.get("pattern_key", "pattern")
+    date_key = bronze_keys.get("date_key", "dt")
+
     system = source_cfg["system"]
     table = source_cfg["table"]
 
-    base_path = f"system={system}/table={table}/"
+    base_path = f"{system_key}={system}/{entity_key}={table}/"
 
     run_cfg = source_cfg.get("run", {})
     load_pattern = run_cfg.get("load_pattern", LoadPattern.FULL.value)
@@ -32,7 +41,7 @@ def build_bronze_relative_path(cfg: dict, run_date: date) -> str:
         or load_pattern
     )
     if pattern_folder:
-        base_path += f"pattern={pattern_folder}/"
+        base_path += f"{pattern_key}={pattern_folder}/"
 
     if not use_dt:
         return base_path
@@ -42,10 +51,10 @@ def build_bronze_relative_path(cfg: dict, run_date: date) -> str:
         return partition.relative_path().as_posix() + "/"
     elif partition_strategy == "hourly":
         current_hour = datetime.now().strftime("%H")
-        return f"{base_path}dt={run_date.isoformat()}/hour={current_hour}/"
+        return f"{base_path}{date_key}={run_date.isoformat()}/hour={current_hour}/"
     elif partition_strategy == "timestamp":
         timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-        return f"{base_path}dt={run_date.isoformat()}/batch={timestamp}/"
+        return f"{base_path}{date_key}={run_date.isoformat()}/batch={timestamp}/"
     elif partition_strategy == "batch_id":
         from datetime import datetime as dt
         import uuid
@@ -54,9 +63,9 @@ def build_bronze_relative_path(cfg: dict, run_date: date) -> str:
             run_cfg.get("batch_id")
             or f"{dt.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
         )
-        return f"{base_path}dt={run_date.isoformat()}/batch_id={batch_id}/"
+        return f"{base_path}{date_key}={run_date.isoformat()}/batch_id={batch_id}/"
     else:
-        return f"{base_path}dt={run_date.isoformat()}/"
+        return f"{base_path}{date_key}={run_date.isoformat()}/"
 
 
 def build_silver_partition_path(
@@ -68,9 +77,23 @@ def build_silver_partition_path(
     include_pattern_folder: bool,
     load_pattern: LoadPattern,
     run_date: date,
+    path_structure: dict | None = None,
 ) -> Path:
-    path = silver_base / f"domain={domain}" / f"entity={entity}" / f"v{version}"
+    # Extract path structure keys for silver layer
+    if path_structure and isinstance(path_structure, dict):
+        silver_keys = path_structure.get("silver", {})
+    else:
+        silver_keys = {}
+    
+    domain_key = silver_keys.get("domain_key", "domain")
+    entity_key = silver_keys.get("entity_key", "entity")
+    version_key = silver_keys.get("version_key", "v")
+    pattern_key = silver_keys.get("pattern_key", "pattern")
+    load_date_key = silver_keys.get("load_date_key", "load_date")
+    
+    # Build path: domain/entity/v{version}/[pattern/]load_date
+    path = silver_base / f"{domain_key}={domain}" / f"{entity_key}={entity}" / f"{version_key}{version}"
     if include_pattern_folder:
-        path = path / f"pattern={load_pattern.value}"
-    path = path / f"{load_partition_name}={run_date.isoformat()}"
+        path = path / f"{pattern_key}={load_pattern.value}"
+    path = path / f"{load_date_key}={run_date.isoformat()}"
     return path

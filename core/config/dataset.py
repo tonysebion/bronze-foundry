@@ -585,6 +585,61 @@ class PolybaseSetup:
 
 
 @dataclass
+class PathStructure:
+    """Configuration for how Bronze and Silver paths are structured.
+    
+    Allows independent control of path ordering for Bronze vs Silver layers.
+    """
+    bronze: Dict[str, str] = field(default_factory=dict)  # e.g., system_key, entity_key, pattern_key, date_key
+    silver: Dict[str, str] = field(default_factory=dict)  # e.g., sample_key, silver_model_key, domain_key, load_date_key
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "PathStructure":
+        """Parse path_structure from config dict.
+        
+        Supports both nested format (bronze/silver subsections) and legacy flat format.
+        """
+        if not data:
+            return cls()
+        
+        if not isinstance(data, dict):
+            raise ValueError("path_structure must be a dictionary")
+        
+        # Check if using new nested format
+        if "bronze" in data and isinstance(data["bronze"], dict):
+            bronze_keys = data["bronze"]
+        else:
+            # Legacy flat format - extract bronze keys
+            bronze_keys = {
+                k: data.get(k, v)
+                for k, v in {
+                    "system_key": "system",
+                    "entity_key": "table",
+                    "pattern_key": "pattern",
+                    "date_key": "dt",
+                }.items()
+            }
+        
+        # Check if using new nested format for silver
+        if "silver" in data and isinstance(data["silver"], dict):
+            silver_keys = data["silver"]
+        else:
+            # Legacy flat format - extract silver keys
+            silver_keys = {
+                k: data.get(k, v)
+                for k, v in {
+                    "domain_key": "domain",
+                    "entity_key": "entity",
+                    "version_key": "v",
+                    "pattern_key": "pattern",
+                    "load_date_key": "load_date",
+                }.items()
+            }
+        
+        return cls(bronze=bronze_keys, silver=silver_keys)
+
+
+@dataclass
 class DatasetConfig:
     system: str
     entity: str
@@ -592,6 +647,7 @@ class DatasetConfig:
     domain: Optional[str]
     bronze: BronzeIntent
     silver: SilverIntent
+    path_structure: PathStructure
     polybase_setup: Optional[PolybaseSetup] = None
 
     @classmethod
@@ -668,6 +724,7 @@ class DatasetConfig:
         bronze_cfg = BronzeIntent.from_dict(bronze_data)
         silver_cfg = SilverIntent.from_dict(silver_data)
         polybase_cfg = PolybaseSetup.from_dict(data.get("polybase_setup"))
+        path_struct = PathStructure.from_dict(data.get("path_structure", {}))
         return cls(
             system=system,
             entity=entity,
@@ -675,6 +732,7 @@ class DatasetConfig:
             domain=domain,
             bronze=bronze_cfg,
             silver=silver_cfg,
+            path_structure=path_struct,
             polybase_setup=polybase_cfg,
         )
 
@@ -888,6 +946,10 @@ def dataset_to_runtime_config(dataset: DatasetConfig) -> Dict[str, Any]:
         "platform": platform_cfg,
         "source": source_cfg,
         "silver": silver_cfg,
+        "path_structure": {
+            "bronze": dataset.path_structure.bronze,
+            "silver": dataset.path_structure.silver,
+        },
     }
 
 

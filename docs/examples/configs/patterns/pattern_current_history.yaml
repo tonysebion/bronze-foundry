@@ -19,13 +19,17 @@ storage:
 # to ./sampledata/source_samples/, sampledata/bronze_samples/, and sampledata/silver_samples/ respectively.
 
 path_structure:
-  sample_key: "sample"
-  system_key: "system"
-  entity_key: "table"
-  date_key: "dt"
-  silver_model_key: "silver_model"
-  domain_key: "domain"
-  load_date_key: "load_date"
+  bronze:
+    system_key: "system"
+    entity_key: "table"
+    pattern_key: "pattern"
+    date_key: "dt"
+  silver:
+    domain_key: "domain"  # Silver: business domain (curated data organization)
+    entity_key: "entity"  # Silver: curated entity/dataset name
+    version_key: "v"  # Silver: schema/transformation version prefix
+    pattern_key: "pattern"  # Silver: optional pattern for Bronze traceability
+    load_date_key: "load_date"  # Silver: data load date
 
 bronze:
   enabled: true  # Current/history mix demonstrating SCD Type 2
@@ -44,6 +48,7 @@ bronze:
 
 silver:
   enabled: true  # Silver builds SCD2 history/current artifacts
+  include_pattern_folder: true  # Include pattern in path for Bronze traceability
   entity_kind: state
   history_mode: scd2
   delete_mode: tombstone_state

@@ -809,6 +809,7 @@ class SilverPromotionService:
                 include_pattern_folder,
                 load_pattern,
                 run_date,
+                cfg.get("path_structure"),
             )
         else:
             partition = silver_base / derive_relative_partition(bronze_path)

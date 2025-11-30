@@ -4,6 +4,24 @@ domain: retail_demo  # Logical business domain inside sampledata/ hierarchy
 system: retail_demo  # Logical system label repeated under system= folders
 entity: orders  # Entity/table driving Bronze/Silver paths
 
+# ============================================================================
+# PATH STRUCTURE
+# Define how Bronze directories are composed and how Silver hierarchy maps to Silver samples.
+# Swap/reorder these keys to change the folder order without touching generate_silver_samples.py.
+# ============================================================================
+path_structure:
+  bronze:
+    system_key: "system"
+    entity_key: "table"
+    pattern_key: "pattern"
+    date_key: "dt"
+  silver:
+    domain_key: "domain"  # Silver: business domain (curated data organization)
+    entity_key: "entity"  # Silver: curated entity/dataset name
+    version_key: "v"  # Silver: schema/transformation version prefix
+    pattern_key: "pattern"  # Silver: optional pattern for Bronze traceability
+    load_date_key: "load_date"  # Silver: data load date
+
 storage:
   source:
     backend: s3
@@ -14,28 +32,6 @@ storage:
   silver:
     backend: s3
     prefix: silver_samples/
-
-# To use local filesystem instead of S3, change each backend to "local"
-# and point the prefixes at local directories, e.g.:
-# storage:
-#   source:
-#     backend: local
-#     prefix: ./sampledata/source_samples/
-#   bronze:
-#     backend: local
-#     prefix: sampledata/bronze_samples/
-#   silver:
-#     backend: local
-#     prefix: sampledata/silver_samples/
-
-path_structure:
-  sample_key: "sample"  # Bronze folder representing pattern id hierarchy
-  system_key: "system"
-  entity_key: "table"
-  date_key: "dt"
-  silver_model_key: "silver_model"
-  domain_key: "domain"
-  load_date_key: "load_date"
 
 bronze:
   enabled: true  # CDC delta snapshots that append to history
@@ -57,6 +53,7 @@ bronze:
 
 silver:
   enabled: true  # Silver reads the append-only log for CDC events
+  include_pattern_folder: true  # Include pattern in path for Bronze traceability
   entity_kind: event
   input_mode: append_log  # Appends every chunk, preserving duplicates
   delete_mode: ignore

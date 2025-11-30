@@ -167,6 +167,56 @@ def _build_s3_client(env_config: EnvironmentConfig) -> boto3.client:
     )
 
 
+def _get_path_structure_keys(config: PatternConfig, layer: str) -> Dict[str, str]:
+    """Extract path_structure keys for a specific layer (bronze or silver).
+    
+    Supports both new nested format (path_structure.bronze/path_structure.silver)
+    and legacy flat format (backward compatibility).
+    
+    Args:
+        config: PatternConfig containing the pattern YAML path
+        layer: "bronze" or "silver" indicating which layer's keys to retrieve
+        
+    Returns:
+        Dictionary of key names, or empty dict if path_structure not found
+    """
+    try:
+        raw = yaml.safe_load(config.path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return {}
+        
+        path_structure = raw.get("path_structure", {})
+        if not isinstance(path_structure, dict):
+            return {}
+        
+        # New format: path_structure has bronze/silver subsections
+        if isinstance(path_structure.get(layer), dict):
+            return path_structure[layer]
+        
+        # Legacy format: flat structure applies to both layers
+        # Return the flat structure as-is for backward compatibility
+        if layer == "bronze":
+            # For bronze, we need system, entity, pattern, date keys
+            return {
+                "system_key": path_structure.get("system_key", "system"),
+                "entity_key": path_structure.get("entity_key", "table"),
+                "pattern_key": path_structure.get("pattern_key", "pattern"),
+                "date_key": path_structure.get("date_key", "dt"),
+            }
+        elif layer == "silver":
+            # For silver, we need sample, silver_model, domain, load_date keys
+            return {
+                "sample_key": path_structure.get("sample_key", "sample"),
+                "silver_model_key": path_structure.get("silver_model_key", "silver_model"),
+                "domain_key": path_structure.get("domain_key", "domain"),
+                "load_date_key": path_structure.get("load_date_key", "load_date"),
+            }
+        
+        return {}
+    except Exception:
+        return {}
+
+
 def _discover_s3_partitions(config: PatternConfig) -> List[BronzePartition]:
     if not config.env_config or not config.env_config.s3:
         raise RuntimeError(
@@ -177,25 +227,34 @@ def _discover_s3_partitions(config: PatternConfig) -> List[BronzePartition]:
         config.dataset.bronze.output_bucket or "bronze_data"
     )
     prefix_base = (config.dataset.bronze.output_prefix or "bronze_samples/").strip("/")
-    path_root = "/".join(
-        part
-        for part in (
-            prefix_base,
-            f"system={config.dataset.system}",
-            f"table={config.dataset.entity}",
-            f"pattern={config.pattern_folder}",
-        )
-        if part
-    )
+    
+    # Try to load path_structure from the pattern config YAML
+    path_config_keys = _get_path_structure_keys(config, "bronze")
+    
+    # Build path using configured keys or fallback to defaults
+    path_parts = [prefix_base] if prefix_base else []
+    system_key = path_config_keys.get("system_key", "system")
+    entity_key = path_config_keys.get("entity_key", "table")
+    pattern_key = path_config_keys.get("pattern_key", "pattern")
+    date_key = path_config_keys.get("date_key", "dt")
+    
+    path_parts.extend([
+        f"{system_key}={config.dataset.system}",
+        f"{entity_key}={config.dataset.entity}",
+        f"{pattern_key}={config.pattern_folder}",
+    ])
+    
+    path_root = "/".join(part for part in path_parts if part)
     if not path_root.endswith("/"):
         path_root += "/"
+    
     partitions: List[BronzePartition] = []
     paginator = client.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=bucket, Prefix=path_root, Delimiter="/"):
         for common in page.get("CommonPrefixes", []):
             dt_prefix = common["Prefix"]
             dt_name = Path(dt_prefix.rstrip("/")).name
-            if not dt_name.startswith("dt="):
+            if not dt_name.startswith(f"{date_key}="):
                 continue
             run_date = dt_name.split("=", 1)[1]
             has_data = False
@@ -224,11 +283,43 @@ def _list_all_s3_partitions(pattern_configs: Dict[str, List[PatternConfig]]) -> 
 
 
 def _build_s3_silver_prefix(config: PatternConfig) -> str:
+    """Build S3 prefix using path_structure configuration from the pattern YAML.
+    
+    This reflects the actual path structure that silver_extract.py will create
+    when using the config-based path building (via build_silver_partition_path).
+    """
     prefix_base = (config.dataset.silver.output_prefix or "silver_samples/").strip("/")
-    silver_subpath = Path(f"sample={config.pattern_folder}") / f"silver_model={config.silver_model}"
+    
+    # Try to load path_structure from the pattern config YAML
+    path_config_keys = _get_path_structure_keys(config, "silver")
+    
+    # Build Silver prefix using configured keys from path_structure
+    domain_key = path_config_keys.get("domain_key", "domain")
+    entity_key = path_config_keys.get("entity_key", "entity")
+    version_key = path_config_keys.get("version_key", "v")
+    pattern_key = path_config_keys.get("pattern_key", "pattern")
+    load_date_key = path_config_keys.get("load_date_key", "load_date")
+    
+    # Build the path: domain/entity/version/[pattern]/load_date (pattern is optional)
+    version = config.dataset.silver.get("version", 1) if hasattr(config.dataset.silver, 'get') else 1
+    
+    path_parts = [
+        f"{domain_key}={config.domain}",
+        f"{entity_key}={config.entity}",
+        f"{version_key}{version}",
+    ]
+    
+    # Pattern key is optional based on include_pattern_folder in silver config
+    silver_cfg = config.dataset.silver
+    if hasattr(silver_cfg, 'get') and silver_cfg.get('include_pattern_folder', False):
+        path_parts.append(f"{pattern_key}={config.pattern_folder}")
+    elif isinstance(silver_cfg, dict) and silver_cfg.get('include_pattern_folder', False):
+        path_parts.append(f"{pattern_key}={config.pattern_folder}")
+    
+    silver_subpath = "/".join(path_parts)
     if prefix_base:
-        return f"{prefix_base}/{silver_subpath.as_posix()}"
-    return silver_subpath.as_posix()
+        return f"{prefix_base}/{silver_subpath}"
+    return silver_subpath
 
 
 def _download_partition_from_s3(partition: BronzePartition, env_config: EnvironmentConfig) -> Path:
@@ -257,7 +348,7 @@ def _download_partition_from_s3(partition: BronzePartition, env_config: Environm
     return temp_dir
 
 
-def _rewrite_local_silver_config(original: Path, target: Path) -> Path:
+def _rewrite_local_silver_config(original: Path, target: Path, silver_output_dir: Path) -> Path:
     cfg = yaml.safe_load(original.read_text(encoding="utf-8")) or {}
     bronze = cfg.setdefault("bronze", {})
     bronze.setdefault("source_storage", "local")
@@ -265,6 +356,8 @@ def _rewrite_local_silver_config(original: Path, target: Path) -> Path:
     silver = cfg.setdefault("silver", {})
     silver.setdefault("input_storage", "local")
     silver.setdefault("output_storage", "local")
+    # Set output_dir to temp directory so silver_extract uses config-based path structure
+    silver["output_dir"] = str(silver_output_dir)
     target.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
     return target
 
@@ -527,11 +620,9 @@ def _generate_for_partition(
     try:
         temp_silver_root = Path(tempfile.mkdtemp(prefix=f"silver_{partition.pattern}_{run_date}_"))
         try:
-            silver_base = temp_silver_root / f"sample={config.pattern_folder}" / f"silver_model={config.silver_model}"
-            silver_base.mkdir(parents=True, exist_ok=True)
-            pattern_root = silver_base.parent
             temp_config_path = temp_silver_root / f"intent_{config.path.stem}_local.yaml"
-            local_config = _rewrite_local_silver_config(config.path, temp_config_path)
+            # Pass temp_silver_root as output_dir so silver_extract.py uses config-based path_structure
+            local_config = _rewrite_local_silver_config(config.path, temp_config_path, temp_silver_root)
             cmd = [
                 "silver_extract.py",
                 "--config",
@@ -540,8 +631,6 @@ def _generate_for_partition(
                 str(bronze_dir),
                 "--date",
                 run_date,
-                "--silver-base",
-                str(silver_base),
             ]
             if artifact_writer:
                 cmd.extend(["--artifact-writer", artifact_writer])
@@ -557,22 +646,34 @@ def _generate_for_partition(
                 cmd.append("--write-csv")
             else:
                 cmd.append("--no-write-csv")
-            print(f"Generating Silver for sample={partition.pattern}/silver_model={config.silver_model} run_date={run_date}")
+            print(f"Generating Silver for {config.dataset.domain}/{config.dataset.entity} run_date={run_date}")
             _run_cli(cmd)
+            # Find the pattern folder in the generated structure
+            # With config-based path structure, it will be: domain=.../entity=.../v1/pattern=.../load_date=.../
+            pattern_root = None
+            for root, dirs, files in temp_silver_root.walk():
+                # Look for a directory containing pattern metadata
+                if any(f.startswith("_metadata") for f in files):
+                    pattern_root = root
+                    break
+            if not pattern_root:
+                # Fallback: use temp_silver_root itself
+                pattern_root = temp_silver_root
             _write_pattern_readme(pattern_root, config.pattern_folder, config.silver_model)
             silver_prefix = _build_s3_silver_prefix(config)
             bucket_ref = config.env_config.s3.get_bucket(
                 config.dataset.silver.output_bucket or "silver_data"
             )
             _write_polybase_ddl(pattern_root, config, bucket_ref, silver_prefix)
-            _upload_directory_to_s3(pattern_root, bucket_ref, silver_prefix, config.env_config)
+            # Upload temp_silver_root contents to silver_samples/ so directory names are preserved
+            base_prefix = (config.dataset.silver.output_prefix or "silver_samples/").strip("/")
+            _upload_directory_to_s3(temp_silver_root, bucket_ref, base_prefix, config.env_config)
             return bucket_ref, silver_prefix
         finally:
             try:
                 temp_config_path.unlink()
             except OSError:
                 pass
-            _clear_path(silver_base.parent)
             _clear_path(temp_silver_root)
     finally:
         _clear_path(bronze_dir)

@@ -18,13 +18,17 @@ storage:
 # Switch back to local by changing each backend to "local" and the prefixes to ./sampledata/source_samples/, sampledata/bronze_samples/, and sampledata/silver_samples/
 
 path_structure:
-  sample_key: "sample"  # Folder prefix that groups pattern-specific samples
-  system_key: "system"
-  entity_key: "table"
-  date_key: "dt"
-  silver_model_key: "silver_model"  # Keys used when writing silver samples
-  domain_key: "domain"
-  load_date_key: "load_date"
+  bronze:
+    system_key: "system"
+    entity_key: "table"
+    pattern_key: "pattern"
+    date_key: "dt"
+  silver:
+    domain_key: "domain"  # Silver: business domain (curated data organization)
+    entity_key: "entity"  # Silver: curated entity/dataset name
+    version_key: "v"  # Silver: schema/transformation version prefix
+    pattern_key: "pattern"  # Silver: optional pattern for Bronze traceability
+    load_date_key: "load_date"  # Silver: data load date
 
 bronze:
   enabled: true
@@ -47,6 +51,7 @@ bronze:
 
 silver:
   enabled: true
+  include_pattern_folder: true  # Include pattern in path for Bronze traceability
   entity_kind: derived_event
   input_mode: append_log
   delete_mode: tombstone_event

@@ -2,6 +2,7 @@
 
 from core.config.dataset import (
     DatasetConfig,
+    PathStructure,
     PolybaseExternalDataSource,
     PolybaseExternalFileFormat,
     PolybaseExternalTable,
@@ -34,20 +35,35 @@ def generate_polybase_setup(
     if not dataset.silver.enabled:
         return PolybaseSetup(enabled=False)
 
-    # Derive data source location (where silver samples are stored)
+    # Derive data source location using domain-aware Silver path structure
     if not external_data_source_location:
         silver_base = dataset.silver_base_path
+        # Extract path structure keys or use defaults
+        path_struct = dataset.path_structure or PathStructure()
+        silver_keys = path_struct.silver if path_struct.silver else {}
+        
+        domain = dataset.domain or "default"
+        entity = dataset.entity
+        version = dataset.silver.version or 1
+        
+        domain_key = silver_keys.get("domain_key", "domain")
+        entity_key = silver_keys.get("entity_key", "entity")
+        version_key = silver_keys.get("version_key", "v")
+        
+        # Build domain-aware path: domain=X/entity=Y/vN/
         external_data_source_location = (
-            f"/{silver_base.as_posix()}/{dataset.bronze_relative_prefix()}/"
+            f"/{silver_base.as_posix()}/"
+            f"{domain_key}={domain}/{entity_key}={entity}/{version_key}{version}/"
         )
 
-    # Derive data source name from pattern or entity
+    # Derive data source name from pattern or entity, including version
     if not external_data_source_name:
         pattern_folder = dataset.bronze.options.get("pattern_folder", dataset.entity)
+        version = dataset.silver.version or 1
         if dataset.silver.entity_kind.is_state_like:
-            external_data_source_name = f"silver_{pattern_folder}_state_source"
+            external_data_source_name = f"silver_{pattern_folder}_v{version}_state_source"
         else:
-            external_data_source_name = f"silver_{pattern_folder}_events_source"
+            external_data_source_name = f"silver_{pattern_folder}_v{version}_events_source"
 
     # Create external data source
     external_data_source = PolybaseExternalDataSource(
@@ -66,8 +82,13 @@ def generate_polybase_setup(
 
     # Create external table(s)
     pattern_folder = dataset.bronze.options.get("pattern_folder", dataset.entity)
-    # Simplify artifact name: just use pattern_folder for location
-    artifact_location = pattern_folder
+    # Use pattern_key from path structure if available
+    path_struct = dataset.path_structure or PathStructure()
+    silver_keys = path_struct.silver if path_struct.silver else {}
+    pattern_key = silver_keys.get("pattern_key", "pattern")
+    
+    # Artifact location uses pattern_key format: pattern=pattern_folder
+    artifact_location = f"{pattern_key}={pattern_folder}"
     table_name = _derive_external_table_name(dataset, pattern_folder)
     partition_columns = (
         dataset.silver.record_time_partition or dataset.silver.partition_by or []
@@ -100,12 +121,17 @@ def generate_polybase_setup(
 
 
 def _derive_external_table_name(dataset: DatasetConfig, artifact_name: str) -> str:
-    """Derive the external table name from the dataset configuration."""
+    """Derive the external table name from the dataset configuration.
+    
+    Includes version in the table name to support side-by-side querying of different versions.
+    Example: orders_v1_events_external, orders_v2_state_external
+    """
     entity = dataset.entity
+    version = dataset.silver.version or 1
     if dataset.silver.entity_kind.is_state_like:
-        return f"{entity}_state_external"
+        return f"{entity}_v{version}_state_external"
     else:
-        return f"{entity}_events_external"
+        return f"{entity}_v{version}_events_external"
 
 
 def _generate_sample_queries(
@@ -141,16 +167,29 @@ def _generate_sample_queries(
         # Event entity - time-range and aggregate queries
         partition_col = dataset.silver.record_time_partition or "event_date"
         ts_col = dataset.silver.event_ts_column or "updated_at"
+        load_date_col = "load_date"  # Standard load_date column for version-aware queries
+        
+        # Query 1: Specific date data for current version
         queries.append(
             f"SELECT * FROM {fq_table} "
             f"WHERE {partition_col} = '2025-11-13' "
             f"ORDER BY {', '.join(dataset.silver.natural_keys)}, {ts_col} LIMIT 100"
         )
+        
+        # Query 2: Time-range aggregation with load_date filtering
         queries.append(
             f"SELECT {', '.join(dataset.silver.natural_keys)}, "
             f"COUNT(*) as event_count FROM {fq_table} "
             f"WHERE {partition_col} >= '2025-11-01' "
+            f"AND {partition_col} <= '2025-11-30' "
             f"GROUP BY {', '.join(dataset.silver.natural_keys)}"
+        )
+        
+        # Query 3: Load date aware query
+        queries.append(
+            f"SELECT {', '.join(dataset.silver.natural_keys)}, {ts_col}, {load_date_col} FROM {fq_table} "
+            f"WHERE {load_date_col} = '2025-11-13' "
+            f"ORDER BY {', '.join(dataset.silver.natural_keys)}, {ts_col}"
         )
 
     return queries

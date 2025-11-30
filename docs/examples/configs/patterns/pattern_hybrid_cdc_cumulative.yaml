@@ -19,13 +19,17 @@ storage:
 # (e.g., source prefix ./sampledata/source_samples/, bronze prefix sampledata/bronze_samples/, silver prefix sampledata/silver_samples/)
 
 path_structure:
-  sample_key: "sample"
-  system_key: "system"
-  entity_key: "table"
-  date_key: "dt"
-  silver_model_key: "silver_model"
-  domain_key: "domain"
-  load_date_key: "load_date"
+  bronze:
+    system_key: "system"
+    entity_key: "table"
+    pattern_key: "pattern"
+    date_key: "dt"
+  silver:
+    domain_key: "domain"  # Silver: business domain (curated data organization)
+    entity_key: "entity"  # Silver: curated entity/dataset name
+    version_key: "v"  # Silver: schema/transformation version prefix
+    pattern_key: "pattern"  # Silver: optional pattern for Bronze traceability
+    load_date_key: "load_date"  # Silver: data load date
 
 bronze:
   enabled: true
@@ -44,6 +48,7 @@ bronze:
 
 silver:
   enabled: true
+  include_pattern_folder: true  # Include pattern in path for Bronze traceability
   entity_kind: derived_state
   history_mode: scd2
   delete_mode: ignore
