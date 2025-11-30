@@ -55,7 +55,7 @@ mdf/
 
 ### Documentation
 - ✅ `docs/S3_SETUP_GUIDE.md` - Complete setup and usage guide
-- ✅ `test_s3_connection.py` - Connection test script
+- ✅ `scripts/check_s3_connection.py` - Connection test script (moved from `tests/`)
 
 ### Dependencies
 - ✅ `fsspec>=2023.1.0` - Filesystem abstraction
@@ -70,7 +70,7 @@ pip install -r requirements.txt
 
 ### 2. Test Connection
 ```bash
-python test_s3_connection.py
+python scripts/check_s3_connection.py
 ```
 
 This will verify:
@@ -198,7 +198,7 @@ You can migrate one component at a time:
 
 ## Next Steps
 
-1. Run `test_s3_connection.py` to verify everything works
+1. Run `scripts/check_s3_connection.py` to verify everything works
 2. Review `docs/S3_SETUP_GUIDE.md` for detailed examples
 3. Try the `pattern_s3_example.yaml` pattern
 4. Migrate your existing patterns to S3 as needed
@@ -206,7 +206,7 @@ You can migrate one component at a time:
 ## Support
 
 - See `docs/S3_SETUP_GUIDE.md` for detailed documentation
-- Check `test_s3_connection.py` output for connection issues
+- Check `scripts/check_s3_connection.py` output for connection issues
 - Example configs in `docs/examples/configs/patterns/`
 
 ---
