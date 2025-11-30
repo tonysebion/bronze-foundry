@@ -18,4 +18,4 @@ class BaseExtractor(ABC):
         cfg: Dict[str, Any],
         run_date: date,
     ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-      raise NotImplementedError()
+        raise NotImplementedError()

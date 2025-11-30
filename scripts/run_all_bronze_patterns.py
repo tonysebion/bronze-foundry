@@ -378,11 +378,6 @@ def process_run(task: Dict[str, Any]) -> tuple[str, str, bool]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run Bronze extraction for all pattern configs")
     parser.add_argument(
-        "--skip-sample-generation",
-        action="store_true",
-        help="Skip generating the source pattern samples",
-    )
-    parser.add_argument(
         "--limit-records",
         type=int,
         default=None,
@@ -395,12 +390,7 @@ def main() -> int:
         print("Please run from the repository root.")
         return 1
 
-    if not args.skip_sample_generation:
-        if not run_command(
-            [sys.executable, "scripts/generate_sample_data.py"],
-            "Generating sample data",
-        ):
-            return 1
+    print("Preparing discovery (this can take a while)...", flush=True)
 
     print("Scanning source_samples in S3 for available pattern dates (this may take a moment)...", flush=True)
     pattern_runs: list[Dict[str, Any]] = []
@@ -424,7 +414,7 @@ def main() -> int:
         )
 
     total_runs = sum(len(entry["run_dates"]) for entry in pattern_runs)
-    print(f"Configs to run: {len(pattern_runs)} ({total_runs} Bronze runs)")
+    print(f"Configs to run: {len(pattern_runs)} ({total_runs} Bronze runs)", flush=True)
 
     bronze_root = BRONZE_SAMPLE_ROOT
     bronze_root.mkdir(parents=True, exist_ok=True)
