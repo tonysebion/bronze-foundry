@@ -262,7 +262,7 @@ def _discover_run_dates(
     storage = cfg.get("storage", {})
     source_backend = storage.get("source", {}).get("backend", "local")
     if source_backend == "s3":
-    return _discover_run_dates_s3(cfg, env_config, explicit_dates)
+        return _discover_run_dates_s3(cfg, env_config, explicit_dates)
     return _discover_run_dates_local(config_path, explicit_dates)
 
 
@@ -371,11 +371,12 @@ def process_run(task: Dict[str, Any]) -> tuple[str, str, bool]:
     total_runs = task["total_runs"]
     pattern_folder = task.get("pattern")
     run_count = task["run_count"]
+    env_config = task["env_config"]
 
     config_name = Path(config_path).name
     description = f"[{run_count}/{total_runs}] Bronze extraction: {config_name} ({run_date})"
 
-    actual_config = rewrite_config(
+    actual_config, rewritten_cfg = rewrite_config(
         config_path,
         run_date,
         temp_path,
@@ -383,6 +384,11 @@ def process_run(task: Dict[str, Any]) -> tuple[str, str, bool]:
         pattern_folder,
         sample_path=task.get("sample_path"),
         limit_records=task.get("limit_records"),
+    )
+    dest_path = _build_bronze_destination(rewritten_cfg, env_config, run_date)
+    print(
+        f"[{run_count}/{total_runs}] Bronze run for {config_name} ({run_date}) writes to {dest_path}",
+        flush=True,
     )
 
     success = run_command(
