@@ -358,6 +358,9 @@ def _rewrite_local_silver_config(original: Path, target: Path, silver_output_dir
     silver.setdefault("output_storage", "local")
     # Set output_dir to temp directory so silver_extract uses config-based path structure
     silver["output_dir"] = str(silver_output_dir)
+    # Ensure bronze.options.pattern_folder is preserved for correct silver path generation
+    if "options" not in bronze:
+        bronze["options"] = {}
     target.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
     return target
 

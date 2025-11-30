@@ -78,22 +78,25 @@ def build_silver_partition_path(
     load_pattern: LoadPattern,
     run_date: date,
     path_structure: dict | None = None,
+    pattern_folder: str | None = None,
 ) -> Path:
     # Extract path structure keys for silver layer
     if path_structure and isinstance(path_structure, dict):
         silver_keys = path_structure.get("silver", {})
     else:
         silver_keys = {}
-    
+
     domain_key = silver_keys.get("domain_key", "domain")
     entity_key = silver_keys.get("entity_key", "entity")
     version_key = silver_keys.get("version_key", "v")
     pattern_key = silver_keys.get("pattern_key", "pattern")
     load_date_key = silver_keys.get("load_date_key", "load_date")
-    
+
     # Build path: domain/entity/v{version}/[pattern/]load_date
     path = silver_base / f"{domain_key}={domain}" / f"{entity_key}={entity}" / f"{version_key}{version}"
     if include_pattern_folder:
-        path = path / f"{pattern_key}={load_pattern.value}"
+        # Use pattern_folder if provided, otherwise fall back to load_pattern enum value
+        pattern_value = pattern_folder if pattern_folder else load_pattern.value
+        path = path / f"{pattern_key}={pattern_value}"
     path = path / f"{load_date_key}={run_date.isoformat()}"
     return path

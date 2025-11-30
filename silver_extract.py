@@ -800,6 +800,14 @@ class SilverPromotionService:
                 silver_base = Path("./silver_output").resolve()
 
         if cfg:
+            # Extract pattern_folder from bronze.options (always extract, used if include_pattern_folder=True)
+            bronze_cfg = cfg.get("bronze", {})
+            bronze_options = bronze_cfg.get("options", {})
+            pattern_folder = bronze_options.get("pattern_folder")
+
+            # DEBUG
+            logger.info(f"DEBUG: pattern_folder={pattern_folder}, include_pattern_folder={include_pattern_folder}, bronze_options keys={list(bronze_options.keys())}")
+
             partition = build_silver_partition_path(
                 silver_base,
                 domain,
@@ -810,6 +818,7 @@ class SilverPromotionService:
                 load_pattern,
                 run_date,
                 cfg.get("path_structure"),
+                pattern_folder=pattern_folder,
             )
         else:
             partition = silver_base / derive_relative_partition(bronze_path)
