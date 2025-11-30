@@ -84,6 +84,16 @@ def _require_bool(value: Any, field_name: str, default: bool) -> bool:
     return value
 
 
+def _ensure_bucket_reference(storage: Any, default_ref: str) -> None:
+    if not isinstance(storage, dict):
+        return
+    backend = storage.get("backend")
+    if backend != "s3":
+        return
+    if "bucket" not in storage or not storage["bucket"]:
+        storage["bucket"] = default_ref
+
+
 @dataclass
 class BronzeIntent:
     enabled: bool
@@ -607,6 +617,9 @@ class DatasetConfig:
             source_storage = storage_config.get("source", {})
             bronze_storage = storage_config.get("bronze", {})
             silver_storage = storage_config.get("silver", {})
+            _ensure_bucket_reference(source_storage, "source_data")
+            _ensure_bucket_reference(bronze_storage, "bronze_data")
+            _ensure_bucket_reference(silver_storage, "silver_data")
 
             # Map storage.source to bronze.source_storage and construct full path
             if "backend" in source_storage:
@@ -708,6 +721,7 @@ def dataset_to_runtime_config(dataset: DatasetConfig) -> Dict[str, Any]:
     if bronze_override:
         bronze_base_path = Path(bronze_override).resolve()
     bronze_base = str(bronze_base_path)
+    pattern_folder = dataset.bronze.options.get("pattern_folder")
 
     if dataset.silver.output_dir:
         silver_base_path = Path(dataset.silver.output_dir).resolve()
@@ -735,6 +749,8 @@ def dataset_to_runtime_config(dataset: DatasetConfig) -> Dict[str, Any]:
         "table": dataset.entity,
         "run": local_run,
     }
+    if pattern_folder:
+        source_cfg["run"]["pattern_folder"] = pattern_folder
     if dataset.bronze.owner_team:
         source_cfg["owner_team"] = dataset.bronze.owner_team
     if dataset.bronze.owner_contact:
@@ -805,6 +821,9 @@ def dataset_to_runtime_config(dataset: DatasetConfig) -> Dict[str, Any]:
     if bronze_backend == "s3":
         bronze_cfg["s3_bucket"] = dataset.bronze.output_bucket
         bronze_cfg["s3_prefix"] = dataset.bronze.output_prefix
+    bronze_options = bronze_cfg.setdefault("options", {})
+    if pattern_folder:
+        bronze_options["pattern_folder"] = pattern_folder
 
     platform_cfg = {
         "bronze": bronze_cfg,

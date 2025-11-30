@@ -7,15 +7,12 @@ entity: orders  # Entity/table alias guiding dataset instrumentation
 storage:
   source:
     backend: s3
-    bucket: mdf
     prefix: source_samples/
   bronze:
     backend: s3
-    bucket: mdf
     prefix: bronze_samples/
   silver:
     backend: s3
-    bucket: mdf
     prefix: silver_samples/
 
 # To revert to local storage, switch the backend values to "local" and update the prefixes

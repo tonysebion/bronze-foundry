@@ -147,29 +147,25 @@ def _resolve_s3_sample_path(client, bucket: str, candidate: str) -> str | None:
     return None
 
 
-def _bronze_relative_path(config: Dict[str, Any], run_date_str: str) -> str:
-    system = config.get("system", "unknown")
-    table = config.get("entity", "dataset")
-    bronze_options = config.get("bronze", {}).get("options", {})
-    pattern_folder = (
-        bronze_options.get("pattern_folder") or config.get("pattern_id") or "default"
-    )
-    return f"system={system}/table={table}/pattern={pattern_folder}/dt={run_date_str}/"
+def _relative_path_for_dataset(dataset: DatasetConfig, run_date_str: str) -> str:
+    runtime_config = dataset_to_runtime_config(dataset)
+    run_date_obj = date.fromisoformat(run_date_str)
+    return build_relative_path(runtime_config, run_date_obj)
 
 
 def _build_bronze_destination(
-    config: Dict[str, Any], env_config: EnvironmentConfig, run_date_str: str
+    dataset: DatasetConfig,
+    run_date_str: str,
 ) -> str:
-    storage_cfg = config.get("storage", {}).get("bronze", {})
-    bucket_ref = storage_cfg.get("bucket")
-    prefix = storage_cfg.get("prefix", "").lstrip("/")
-    if prefix and not prefix.endswith("/"):
-        prefix = f"{prefix}/"
-    relative = prefix + _bronze_relative_path(config, run_date_str)
-    if bucket_ref and env_config and env_config.s3:
-        bucket = env_config.s3.get_bucket(bucket_ref)
-        return f"s3://{bucket}/{relative}"
-    return relative
+    runtime_config = dataset_to_runtime_config(dataset)
+    bronze_cfg = runtime_config.get("platform", {}).get("bronze", {})
+    bucket = bronze_cfg.get("s3_bucket")
+    if not bucket:
+        raise ValueError("Unable to determine S3 bucket for Bronze output")
+    prefix = bronze_cfg.get("s3_prefix", "").strip("/")
+    relative = _relative_path_for_dataset(dataset, run_date_str)
+    combined = f"{prefix}/{relative}" if prefix else relative
+    return f"s3://{bucket}/{combined}"
 
 
 def _discover_run_dates_s3(
@@ -264,10 +260,24 @@ def _discover_run_dates_local(
     return valid_dates
 
 
+def _ensure_environment_bucket_refs(storage: Dict[str, Any]) -> None:
+    def _ensure(section_name: str, default_bucket: str) -> None:
+        section = storage.setdefault(section_name, {})
+        backend = section.get("backend")
+        if backend == "s3":
+            section.setdefault("bucket", default_bucket)
+
+    _ensure("source", "source_data")
+    _ensure("bronze", "bronze_data")
+    _ensure("silver", "silver_data")
+
+
 def _load_config_dict(config_path: Path) -> Dict[str, Any]:
     cfg = yaml.safe_load(config_path.read_text())
     if not isinstance(cfg, dict):
         raise ValueError("Config must be a YAML dictionary/object")
+    storage = cfg.setdefault("storage", {})
+    _ensure_environment_bucket_refs(storage)
     return cfg
 
 
@@ -387,6 +397,7 @@ def process_run(task: Dict[str, Any]) -> tuple[str, str, bool]:
     pattern_folder = task.get("pattern_folder")
     run_count = task["run_count"]
     env_config = task["env_config"]
+    dataset = task["dataset"]
 
     config_name = Path(config_path).name
     description = (
@@ -402,7 +413,7 @@ def process_run(task: Dict[str, Any]) -> tuple[str, str, bool]:
         sample_path=task.get("sample_path"),
         limit_records=task.get("limit_records"),
     )
-    dest_path = _build_bronze_destination(rewritten_cfg, env_config, run_date)
+    dest_path = _build_bronze_destination(dataset, run_date)
     print(
         f"[{run_count}/{total_runs}] Bronze run for {config_name} ({run_date}) writes to {dest_path}",
         flush=True,
@@ -450,7 +461,7 @@ def main() -> int:
         config_path = entry["config"]
         config_full_path = REPO_ROOT / config_path
         cfg = _load_config_dict(config_full_path)
-        _, env_config = load_config_with_env(config_full_path)
+        dataset, env_config = load_config_with_env(config_full_path)
         if not env_config:
             print(f"Environment config missing for {config_path}")
             return 1
@@ -459,6 +470,8 @@ def main() -> int:
             or cfg.get("pattern_id")
             or entry.get("pattern")
         )
+        if pattern_folder:
+            dataset.bronze.options["pattern_folder"] = pattern_folder
         run_dates = _discover_run_dates(config_full_path, None, env_config, cfg)
         print(
             f"Pattern {entry.get('pattern', config_path)} has {len(run_dates)} dates",
@@ -476,6 +489,7 @@ def main() -> int:
                 "pattern": entry.get("pattern"),
                 "pattern_folder": pattern_folder,
                 "env_config": env_config,
+                "dataset": dataset,
             }
         )
 
@@ -506,6 +520,7 @@ def main() -> int:
                         "sample_path": run_info.get("sample_path"),
                         "limit_records": limit_records,
                         "env_config": entry["env_config"],
+                        "dataset": entry["dataset"],
                     }
                 )
 

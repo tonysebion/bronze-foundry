@@ -50,7 +50,8 @@ def build_bronze_partition(cfg: Dict[str, Any], run_date: date) -> BronzePartiti
     platform = cfg["platform"]
     bronze_options = platform.get("bronze", {}).get("options", {})
     pattern_folder = bronze_options.get("pattern_folder")
-    pattern = pattern_folder or source.get("run", {}).get("load_pattern", "full")
+    run_cfg = source.get("run", {})
+    pattern = pattern_folder or run_cfg.get("pattern_folder") or run_cfg.get("load_pattern", "full")
     return BronzePartition(
         system=source["system"],
         table=source["table"],

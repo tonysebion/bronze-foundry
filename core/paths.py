@@ -25,7 +25,12 @@ def build_bronze_relative_path(cfg: dict, run_date: date) -> str:
     run_cfg = source_cfg.get("run", {})
     load_pattern = run_cfg.get("load_pattern", LoadPattern.FULL.value)
     bronze_options = bronze.get("options", {})
-    pattern_folder = bronze_options.get("pattern_folder") or load_pattern
+    run_cfg = cfg["source"].get("run", {})
+    pattern_folder = (
+        bronze_options.get("pattern_folder")
+        or run_cfg.get("pattern_folder")
+        or load_pattern
+    )
     if pattern_folder:
         base_path += f"pattern={pattern_folder}/"
 

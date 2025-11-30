@@ -7,15 +7,12 @@ entity: orders  # Entity/table that this pattern represents
 storage:
   source:
     backend: s3
-    bucket: mdf
     prefix: source_samples/
   bronze:
     backend: s3
-    bucket: mdf
     prefix: bronze_samples/
   silver:
     backend: s3
-    bucket: mdf
     prefix: silver_samples/
 
 # Switch back to local by changing each backend to "local" and the prefixes to ./sampledata/source_samples/, sampledata/bronze_samples/, and sampledata/silver_samples/

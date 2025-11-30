@@ -7,15 +7,12 @@ entity: orders  # Entity/table driving Bronze/Silver paths
 storage:
   source:
     backend: s3
-    bucket: mdf
     prefix: source_samples/
   bronze:
     backend: s3
-    bucket: mdf
     prefix: bronze_samples/
   silver:
     backend: s3
-    bucket: mdf
     prefix: silver_samples/
 
 # To use local filesystem instead of S3, change each backend to "local"
