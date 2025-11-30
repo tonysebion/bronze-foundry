@@ -28,21 +28,14 @@ def validate_storage_metadata(
 
     provider_type = metadata.get("provider_type")
     if provider_type and provider_type not in VALID_PROVIDER_TYPES:
-        raise ValueError(
-            f"storage_metadata.provider_type must be one of {VALID_PROVIDER_TYPES}"
-        )
+        raise ValueError(f"storage_metadata.provider_type must be one of {VALID_PROVIDER_TYPES}")
 
     cloud_provider = metadata.get("cloud_provider")
     if cloud_provider not in VALID_CLOUD_PROVIDERS:
-        raise ValueError(
-            "storage_metadata.cloud_provider must be one of "
-            f"{[p for p in VALID_CLOUD_PROVIDERS if p]}"
-        )
+        raise ValueError("storage_metadata.cloud_provider must be one of " f"{[p for p in VALID_CLOUD_PROVIDERS if p]}")
 
 
-def enforce_storage_scope(
-    platform_cfg: Union[Dict[str, Any], PlatformConfig], scope: str | None
-) -> None:
+def enforce_storage_scope(platform_cfg: Union[Dict[str, Any], PlatformConfig], scope: str | None) -> None:
     if isinstance(platform_cfg, PlatformConfig):
         platform_cfg = platform_cfg.model_dump()
     if not scope or scope == "any":
@@ -60,9 +53,7 @@ def enforce_storage_scope(
 
     boundary = metadata.get("boundary")
     if boundary != "onprem":
-        raise ValueError(
-            "storage_scope='onprem' requires storage_metadata.boundary='onprem'"
-        )
+        raise ValueError("storage_scope='onprem' requires storage_metadata.boundary='onprem'")
 
     provider_type = metadata.get("provider_type", "")
     if "_cloud" in provider_type:
@@ -70,6 +61,4 @@ def enforce_storage_scope(
 
     cloud_provider = metadata.get("cloud_provider")
     if cloud_provider:
-        raise ValueError(
-            "storage_scope='onprem' requires storage_metadata.cloud_provider to be null"
-        )
+        raise ValueError("storage_scope='onprem' requires storage_metadata.cloud_provider to be null")

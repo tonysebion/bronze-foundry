@@ -20,6 +20,4 @@ def test_generate_silver_samples() -> None:
     )
     silver_root = REPO_ROOT / "sampledata" / "silver_samples"
     assert silver_root.exists()
-    assert any(
-        silver_root.iterdir()
-    ), "Silver sample tree should contain generated partitions"
+    assert any(silver_root.iterdir()), "Silver sample tree should contain generated partitions"
