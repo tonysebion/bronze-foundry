@@ -4,7 +4,7 @@
 
 This framework is intentionally lightweight and orchestration-neutral: you can run it from any scheduler or workflow orchestrator that can invoke a Python CLI.
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI](https://github.com/tonysebion/medallion-foundry/actions/workflows/ci.yml/badge.svg)](https://github.com/tonysebion/medallion-foundry/actions)
 
@@ -75,6 +75,51 @@ Need a concrete intent example before touching Python? Follow `docs/usage/onboar
 - **Pattern-driven guidance**
   Source and semantic owners can lean on `docs/framework/silver_patterns.md` and `docs/usage/onboarding/new_dataset_checklist.md` to describe entity_kind, history_mode, input_mode, natural keys, timestamps, attributes, and advanced controls for every dataset. These docs demonstrate how Bronze and Silver work together so configs become intent-driven rather than procedural.
 
+## Storage Configuration Patterns
+
+The framework supports multiple storage backends with a unified abstraction. Configuration patterns differ based on your target:
+
+### Local Filesystem (Development/Testing)
+```yaml
+bronze:
+  options:
+    local_output_dir: ./output  # All outputs go here; no cloud credentials needed
+```
+
+### S3 (AWS)
+```yaml
+platform:
+  storage:
+    source:      # Where to read source files
+      backend: s3
+      bucket: my-data-bucket
+      prefix: source_data/
+    bronze:      # Where to write Bronze layer
+      backend: s3
+      bucket: my-data-bucket
+      prefix: bronze/
+    silver:      # Where to write Silver layer
+      backend: s3
+      bucket: my-data-bucket
+      prefix: silver/
+```
+
+### Azure Blob Storage / ADLS
+```yaml
+platform:
+  storage:
+    source:
+      backend: azure
+      container: source-data
+      path: source_data/
+    bronze:
+      backend: azure
+      container: data-lake
+      path: bronze/
+```
+
+**Migration Path:** Start with `local_output_dir` for testing, then switch to `storage.source/bronze/silver` configuration for production cloud deployments.
+
 ## Quick Start
 
 ### Testing Your API (For Product/API Teams)
@@ -84,8 +129,9 @@ Need a concrete intent example before touching Python? Follow `docs/usage/onboar
 **Quick summary:**
 
 ```bash
-# 1. Setup (one-time, ~3 minutes), use a 64-bit install of python
-python -m venv .venv
+# 1. Setup (one-time, ~3 minutes), use Python 3.9 or later (64-bit install)
+which python3.9  # or python3 --version (should be 3.9+)
+python3.9 -m venv .venv
 .venv\Scripts\activate  # Windows
 pip install -r requirements.txt
 
@@ -159,7 +205,20 @@ This workflow validates the full pipeline using cloud storage, ideal for product
 
 ---
 
-### Running the new intent configs
+### Intent Configs (Unified Bronze + Silver)
+
+Modern medallion-foundry configs bundle Bronze and Silver definitions in a single YAML file for easier management and consistency. This is the recommended approach for all new projects.
+
+**Intent Config Structure:** Each file contains both `bronze:` and `silver:` sections:
+```yaml
+bronze:          # Bronze extraction layer definition
+  source_type: api
+  # ... Bronze config ...
+
+silver:          # Silver promotion layer definition (optional)
+  entity_kind: event
+  # ... Silver config ...
+```
 
 To exercise the example configurations under `docs/examples/configs`, run Bronze and Silver separately with the same YAML (each config now has both sections). For example:
 

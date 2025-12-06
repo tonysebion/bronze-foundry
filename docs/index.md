@@ -15,13 +15,18 @@ pip install -r requirements.txt
 # 2. Try the demo
 python scripts/run_demo.py
 
-# 3. Copy a config for your data
-cp docs/examples/configs/examples/api_example.yaml config/my_api.yaml
+# 3. Copy a minimal config for your data
+cp docs/examples/configs/minimal/minimal_api_example.yaml config/my_api.yaml
 # Edit config/my_api.yaml with your API details
 
 # 4. Run
 python bronze_extract.py --config config/my_api.yaml --date 2025-11-27
 ```
+
+**Prefer other sources?** Use minimal configs for your source type:
+- REST API: `docs/examples/configs/minimal/minimal_api_example.yaml`
+- Database: `docs/examples/configs/minimal/minimal_db_example.yaml`
+- CSV/JSON Files: `docs/examples/configs/minimal/minimal_file_example.yaml`
 
 **That's it!** Check `output/` for your Bronze data, then run Silver for curated datasets.
 
@@ -89,6 +94,67 @@ python bronze_extract.py --config config/my_api.yaml --date 2025-11-27
 - [Operations Playbook](framework/operations/OPS_PLAYBOOK.md) - Production runbooks
 - [Troubleshooting Guide](framework/operations/troubleshooting-guide.md) - Common issues & solutions
 - [Scripts Overview](scripts/README.md) - Utility scripts reference
+
+---
+
+## ⚙️ **System Requirements & Compatibility**
+
+### Python Version Matrix
+
+| Python | Status | Notes |
+|--------|--------|-------|
+| 3.9 | ✅ Recommended | Minimum supported version; best compatibility |
+| 3.10 | ✅ Supported | Recommended for production |
+| 3.11 | ✅ Supported | Recommended for production |
+| 3.12 | ✅ Supported | Tested in CI/CD |
+| 3.13 | ✅ Supported | Latest version supported |
+| 3.8 | ❌ Not Supported | Uses Python 3.9+ features (f-strings, type hints) |
+
+**Action:** Use `python3.9` or later. Run `python --version` to verify.
+
+### Storage Backends
+
+| Backend | Status | Min Requirements |
+|---------|--------|------------------|
+| **Local Filesystem** | ✅ | Python 3.9+, read/write permissions |
+| **AWS S3** | ✅ | boto3, AWS credentials, IAM permissions |
+| **Azure Blob/ADLS** | ✅ | Azure SDK, connection string or managed identity |
+
+---
+
+## 📋 **Intent Configs vs Legacy Configs**
+
+Modern medallion-foundry uses **Intent Configs** – single YAML files containing both Bronze extraction and Silver promotion definitions.
+
+### Intent Config (Recommended)
+```yaml
+# Single file: config/my_dataset.yaml
+bronze:
+  source_type: api
+  system: my_system
+  # ... Bronze config ...
+
+silver:
+  entity_kind: event
+  # ... Silver config ...
+```
+
+**Usage:**
+```bash
+python bronze_extract.py --config config/my_dataset.yaml
+python silver_extract.py --config config/my_dataset.yaml
+```
+
+### Legacy Approach (Not Recommended)
+Separate files for Bronze and Silver – leads to sync issues and duplication.
+
+```
+config/
+  ├── my_dataset_bronze.yaml   # Bronze only
+  └── my_dataset_silver.yaml   # Silver only
+```
+
+**Migration:** Move to intent configs by consolidating separate files into a single file with both `bronze:` and `silver:` sections. See the example configs in `docs/examples/configs/examples/` for reference patterns.
 
 ---
 

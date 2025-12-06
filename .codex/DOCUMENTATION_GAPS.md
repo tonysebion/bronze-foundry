@@ -7,7 +7,167 @@
 
 ## Summary
 
-This report identifies 5 documentation gaps and discrepancies that could confuse users or cause implementation errors. The most critical issue (CLI flag inconsistency) has been addressed.
+This report identifies 5 documentation gaps and discrepancies that could confuse users or cause implementation errors. The most critical issue (CLI flag inconsistency) and additional improvements have been addressed.
+
+---
+
+## 🟢 Gap #1: CLI Flag Inconsistency (CRITICAL) – **FIXED** ✅
+
+### Problem
+Documentation inconsistently references CLI validation flags:
+- Some sections mention `--validate` (non-existent flag)
+- Some mention `--validate-only` (actual flag)
+- Purpose of `--validate-only` vs `--dry-run` is unclear (both seem like "validation")
+
+### Impact
+**HIGH** – Users following Quick Start hit "unknown flag" errors and cannot validate configs before running.
+
+### Fix Applied ✅
+- Updated `docs/index.md` to clarify both flags with explicit descriptions:
+  - `--validate-only`: Check YAML syntax and configuration schema
+  - `--dry-run`: Test connections without running extraction
+- Added explicit validation flag mention to README.md Architecture Principles
+
+---
+
+## 🟢 Gap #2: Storage Backend Configuration Pattern Inconsistency – **FIXED** ✅
+
+### Problem
+Example configs show two different storage patterns without explaining abstraction:
+- Local: `bronze.options.local_output_dir`
+- Cloud: `platform.storage.source/bronze/silver`
+
+### Impact
+**MEDIUM** – Confuses new users trying to migrate from local to cloud storage.
+
+### Fix Applied ✅
+- Added **Storage Configuration Patterns** section to README.md with:
+  - Local Filesystem example
+  - S3 (AWS) example
+  - Azure Blob/ADLS example
+  - Clear migration path from local → cloud
+
+---
+
+## 🟢 Gap #3: Intent Config vs Legacy Config Confusion – **FIXED** ✅
+
+### Problem
+Documentation claims configs are "unified" but no migration guide exists.
+
+### Fix Applied ✅
+- Added **Intent Configs (Unified Bronze + Silver)** section to README.md explaining:
+  - New intent config structure (recommended)
+  - Legacy approach (separate files)
+  - Why unified configs are better
+- Added **Intent Configs vs Legacy Configs** reference section to docs/index.md with migration guidance
+
+---
+
+## 🟢 Gap #4: Python Version Specificity Missing – **FIXED** ✅
+
+### Problem
+- Badge says "Python 3.8+" but code uses 3.9+ features
+- No version matrix showing what works where
+
+### Impact
+**LOW-MEDIUM** – Users on Python 3.8 hit cryptic syntax errors.
+
+### Fix Applied ✅
+- Updated Python badge from 3.8+ → 3.9+
+- Updated pyproject.toml: `requires-python = ">=3.9"` (removed 3.8)
+- Added **System Requirements & Compatibility** section to docs/index.md with Python version matrix:
+  - 3.9: ✅ Minimum/Recommended
+  - 3.10–3.13: ✅ Supported
+  - 3.8: ❌ Not Supported
+- Updated Quick Start: "use Python 3.9 or later"
+
+---
+
+## 🟢 Gap #5: Example Config Structure Mismatch – **FIXED** ✅
+
+### Problem
+README describes examples as "simple" but they're complex with Silver sections.
+
+### Impact
+**LOW** – Overwhelms beginners trying to understand Bronze-only configs.
+
+### Fix Applied ✅
+- Created **minimal example configs** in `docs/examples/configs/minimal/`:
+  - `minimal_api_example.yaml` (7 lines, Bronze-only)
+  - `minimal_db_example.yaml` (7 lines, Bronze-only)
+  - `minimal_file_example.yaml` (7 lines, Bronze-only)
+  - `README.md` explaining the tier structure
+- Updated `docs/examples/configs/examples/README.md` to clarify:
+  - Minimal examples for learning
+  - Full examples for production
+- Updated `docs/index.md` Quick Start to point to minimal examples
+- Reorganized example tiers:
+  - **Minimal tier** (learning): `../minimal/`
+  - **Full tier** (production): `../examples/`
+
+---
+
+## Implementation Summary
+
+| Gap | Priority | Effort | Impact | Status |
+|-----|----------|--------|--------|--------|
+| #1 CLI Flags | 🔴 Critical | 1 hour | Blocks Quick Start | ✅ **DONE** |
+| #2 Storage Patterns | 🟠 High | 2 hours | Confuses cloud migration | ✅ **DONE** |
+| #3 Intent Config | 🟠 High | 3 hours | Breaks config compatibility | ✅ **DONE** |
+| #4 Python Version | 🟡 Medium | 1 hour | Cryptic errors on 3.8 | ✅ **DONE** |
+| #5 Example Structure | 🟡 Medium | 2 hours | Overwhelms beginners | ✅ **DONE** |
+
+---
+
+## Files Modified
+
+✅ `docs/index.md`:
+  - Updated Common Tasks CLI table (Gap #1)
+  - Added System Requirements & Compatibility section (Gap #4)
+  - Added Intent Configs vs Legacy reference (Gap #3)
+  - Updated Quick Start to point to minimal examples (Gap #5)
+
+✅ `README.md`:
+  - Updated Python badge 3.8+ → 3.9+ (Gap #4)
+  - Added validation flag clarification (Gap #1)
+  - Added Storage Configuration Patterns section (Gap #2)
+  - Added Intent Configs explanation (Gap #3)
+  - Updated Quick Start with Python 3.9+ requirement (Gap #4)
+
+✅ `pyproject.toml`:
+  - Changed `requires-python = ">=3.8"` → `">=3.9"` (Gap #4)
+  - Removed Python 3.8 from classifiers (Gap #4)
+
+✅ `docs/examples/configs/examples/README.md`:
+  - Restructured to explain minimal vs full tiers (Gap #5)
+  - Added pointer to minimal examples for beginners (Gap #5)
+
+✅ `docs/examples/configs/minimal/` (NEW):
+  - `minimal_api_example.yaml` (7-line Bronze-only example)
+  - `minimal_db_example.yaml` (7-line Bronze-only example)
+  - `minimal_file_example.yaml` (7-line Bronze-only example)
+  - `README.md` (tier structure explanation)
+
+---
+
+## Result
+
+All 5 documentation gaps have been addressed with targeted, user-focused fixes:
+
+1. ✅ **Quick Start users no longer hit CLI flag errors**
+2. ✅ **New users understand storage backend patterns**
+3. ✅ **Legacy config users have migration guidance**
+4. ✅ **Python 3.8 users know it's not supported**
+5. ✅ **Beginners have truly minimal examples to learn from**
+
+The documentation now provides:
+- Clear CLI guidance with proper flag explanations
+- Storage pattern clarity with examples for all backends
+- Intent config migration guidance for legacy users
+- Python version transparency
+- Tiered examples: minimal (learning) → full (production)
+
+
 
 ---
 
