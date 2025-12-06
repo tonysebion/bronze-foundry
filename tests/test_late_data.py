@@ -23,6 +23,7 @@ from core.infrastructure.resilience.late_data import (
     build_late_data_handler,
     parse_backfill_window,
 )
+from core.primitives.time_utils import utc_now
 
 
 class TestLateDataMode:
@@ -199,14 +200,14 @@ class TestLateDataHandler:
         config = LateDataConfig(timestamp_column=None)
         handler = LateDataHandler(config)
         record = {"id": 1, "ts": "2024-01-01"}
-        assert handler.is_late(record, datetime.utcnow()) is False
+        assert handler.is_late(record, utc_now()) is False
 
     def test_is_late_with_missing_value(self) -> None:
         """is_late should return False if timestamp value is missing."""
         config = LateDataConfig(timestamp_column="ts")
         handler = LateDataHandler(config)
         record = {"id": 1}  # No 'ts' field
-        assert handler.is_late(record, datetime.utcnow()) is False
+        assert handler.is_late(record, utc_now()) is False
 
     def test_is_late_datetime_format(self) -> None:
         """is_late should handle datetime strings."""
@@ -313,7 +314,7 @@ class TestLateDataHandler:
         handler = LateDataHandler(config)
 
         records = [{"id": 1}, {"id": 2}]
-        result = handler.process_records(records, datetime.utcnow())
+        result = handler.process_records(records, utc_now())
 
         assert len(result.on_time_records) == 2
         assert len(result.late_records) == 0

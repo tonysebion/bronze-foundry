@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from core.primitives.foundations.base import RichEnumMixin
+from core.primitives.time_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -257,11 +258,11 @@ class RunMetadata:
 
     def __post_init__(self):
         if self.start_time is None:
-            self.start_time = datetime.utcnow()
+            self.start_time = utc_now()
 
     def start(self) -> "RunMetadata":
         """Mark the run as started."""
-        self.start_time = datetime.utcnow()
+        self.start_time = utc_now()
         self.status = RunStatus.RUNNING
         return self
 
@@ -272,7 +273,7 @@ class RunMetadata:
         status: Optional[RunStatus] = None,
     ) -> "RunMetadata":
         """Mark the run as completed."""
-        self.end_time = datetime.utcnow()
+        self.end_time = utc_now()
         self.row_count_in = row_count_in
         self.row_count_out = row_count_out
         if status is not None:
@@ -283,7 +284,7 @@ class RunMetadata:
 
     def fail(self, error: Optional[str] = None) -> "RunMetadata":
         """Mark the run as failed."""
-        self.end_time = datetime.utcnow()
+        self.end_time = utc_now()
         self.status = RunStatus.FAILED
         if error:
             self.extra["error"] = error

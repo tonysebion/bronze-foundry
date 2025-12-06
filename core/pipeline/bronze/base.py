@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from core.pipeline.bronze.io import write_batch_metadata, write_checksum_manifest
 from core.primitives.foundations.patterns import LoadPattern
+from core.primitives.time_utils import utc_isoformat
 
 
 def infer_schema(records: List[Dict[str, Any]]) -> List[Dict[str, str]]:
@@ -66,7 +67,7 @@ def emit_bronze_metadata(
 ) -> Path:
     run_date_str = run_date.date().isoformat()
     metadata_payload = {
-        "batch_timestamp": datetime.utcnow().isoformat() + "Z",
+        "batch_timestamp": utc_isoformat(),
         "run_date": run_date_str,
         "system": system,
         "table": table,

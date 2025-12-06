@@ -32,6 +32,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from core.primitives.time_utils import utc_now
+
 from core.primitives.foundations.base import RichEnumMixin
 
 logger = logging.getLogger(__name__)
@@ -239,7 +241,7 @@ class LateDataHandler:
             ValueError: If mode is 'reject' and late data is found
         """
         if reference_time is None:
-            reference_time = datetime.utcnow()
+            reference_time = utc_now()
 
         result = LateDataResult()
         column = timestamp_column or self.config.timestamp_column

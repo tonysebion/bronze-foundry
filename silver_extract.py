@@ -37,6 +37,7 @@ from core.primitives.catalog.hooks import (
     report_lineage,
 )
 from core.primitives.catalog.webhooks import fire_webhooks
+from core.primitives.time_utils import utc_isoformat
 from core.pipeline.runtime.options import RunOptions
 from core.infrastructure.storage.policy import enforce_storage_scope
 from core.infrastructure.storage.locks import file_lock
@@ -1028,7 +1029,7 @@ class SilverPromotionService:
             "silver_owner": dataset.silver.semantic_owner,
         }
         chunk_meta = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": utc_isoformat(),
             "chunk_tag": self.args.chunk_tag,
             "dataset_id": dataset.dataset_id,
             "artifact_names": list(result.outputs.keys()),
@@ -1057,10 +1058,9 @@ class SilverPromotionService:
         if not context.chunk_tag:
             return
         import json
-        from datetime import datetime
 
         chunk_meta = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": utc_isoformat(),
             "chunk_tag": context.chunk_tag,
             "record_count": record_count,
             "chunk_count": chunk_count,
