@@ -148,3 +148,169 @@ from core import LoadPattern, SilverModel, RunContext
 ```
 
 These re-exports maintain API stability while the internal structure evolves.
+
+---
+
+## Structural Consistency Patterns
+
+The codebase enforces consistent patterns across all layers. These patterns are tested automatically in `tests/test_pattern_consistency.py`.
+
+### Pattern 1: Rich Enums
+
+All enums should follow the `RichEnumMixin` pattern with these methods:
+
+```python
+from enum import Enum
+from core.primitives.foundations.base import RichEnumMixin
+
+# Module-level constants (not class attributes due to Enum metaclass)
+_MY_ENUM_DESCRIPTIONS = {
+    "value_a": "Description for value A",
+    "value_b": "Description for value B",
+}
+
+class MyEnum(RichEnumMixin, str, Enum):
+    VALUE_A = "value_a"
+    VALUE_B = "value_b"
+
+    @classmethod
+    def choices(cls) -> List[str]:
+        """Return list of valid enum values."""
+        return [member.value for member in cls]
+
+    @classmethod
+    def normalize(cls, raw: str | None) -> "MyEnum":
+        """Parse string to enum with case-insensitivity and alias support."""
+        if isinstance(raw, cls):
+            return raw
+        if raw is None:
+            return cls.VALUE_A  # or raise ValueError
+
+        candidate = raw.strip().lower()
+        for member in cls:
+            if member.value == candidate:
+                return member
+
+        raise ValueError(f"Invalid MyEnum '{raw}'")
+
+    def describe(self) -> str:
+        """Return human-readable description."""
+        return _MY_ENUM_DESCRIPTIONS.get(self.value, self.value)
+```
+
+**Enums following this pattern:**
+- `LoadPattern`, `SilverModel` (primitives)
+- `WatermarkType` (state)
+- `StorageBackend`, `SourceType`, `DataClassification` (infrastructure)
+- `Layer`, `RunStatus` (pipeline)
+
+### Pattern 2: Serializable Dataclasses
+
+All key dataclasses should have `to_dict()` and `from_dict()` methods:
+
+```python
+from dataclasses import dataclass
+from typing import Any, Dict
+
+@dataclass
+class MyConfig:
+    name: str
+    count: int = 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "name": self.name,
+            "count": self.count,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "MyConfig":
+        """Create instance from dictionary."""
+        return cls(
+            name=data["name"],
+            count=data.get("count", 0),
+        )
+```
+
+**Dataclasses following this pattern:**
+- `Watermark`, `FileEntry`, `FileManifest` (state)
+- `RunContext` (pipeline)
+- `RetryPolicy`, `CircuitBreaker` (infrastructure)
+
+### Pattern 3: Extractor Registry
+
+New extractors should register themselves using the `@register_extractor` decorator:
+
+```python
+from core.adapters.extractors.base import BaseExtractor, register_extractor
+
+@register_extractor("my_type")
+class MyExtractor(BaseExtractor):
+    def fetch_records(self, cfg, run_date):
+        # Implementation
+        pass
+```
+
+The registry enables dynamic extractor lookup:
+
+```python
+from core.adapters.extractors.base import (
+    get_extractor_class,
+    list_extractor_types,
+    EXTRACTOR_REGISTRY,
+)
+
+# Get extractor class
+cls = get_extractor_class("api")  # Returns ApiExtractor class
+
+# List registered types
+types = list_extractor_types()  # ["api", "db", "db_multi", "file"]
+```
+
+**Registered extractors:**
+- `api` → `ApiExtractor`
+- `db` → `DbExtractor`
+- `db_multi` → `DbMultiExtractor`
+- `file` → `FileExtractor`
+
+### Pattern 4: Explicit `__init__.py` Exports
+
+All `__init__.py` files should have explicit `__all__` lists:
+
+```python
+# Good
+from .module import Class1, Class2, function1
+
+__all__ = [
+    "Class1",
+    "Class2",
+    "function1",
+]
+
+# Bad - using __getattr__ for lazy loading
+def __getattr__(name):
+    if name == "module":
+        from . import module
+        return module
+    raise AttributeError(name)
+```
+
+Use lazy imports inside functions when needed, not in `__init__.py`.
+
+---
+
+## Testing Pattern Enforcement
+
+Pattern consistency is enforced by tests in `tests/test_pattern_consistency.py`:
+
+- **TestRichEnumPattern**: Ensures key enums have `choices()`, `normalize()`, `describe()`
+- **TestSerializableDataclassPattern**: Ensures key dataclasses have `to_dict()`, `from_dict()`
+- **TestExtractorRegistryPattern**: Ensures extractors are registered and subclass `BaseExtractor`
+- **TestInitExportPattern**: Ensures `__init__.py` files have explicit `__all__` and no `__getattr__`
+
+Run these tests with:
+
+```bash
+python -m pytest tests/test_pattern_consistency.py -v
+```
