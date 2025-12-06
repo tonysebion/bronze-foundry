@@ -14,10 +14,27 @@ Legacy pattern names (deprecated):
 from __future__ import annotations
 
 from enum import Enum
-from typing import List
+from typing import Dict, List
+
+from core.primitives.foundations.base import RichEnumMixin
 
 
-class LoadPattern(str, Enum):
+# Define aliases and descriptions as module constants
+# (can't be class attributes due to Enum metaclass behavior)
+_LOAD_PATTERN_ALIASES: Dict[str, str] = {
+    "full": "snapshot",
+    "cdc": "incremental_append",
+}
+
+_LOAD_PATTERN_DESCRIPTIONS: Dict[str, str] = {
+    "snapshot": "Complete snapshot each run (replaces all data)",
+    "incremental_append": "Append new/changed records (insert-only CDC)",
+    "incremental_merge": "Merge/upsert with existing data",
+    "current_history": "Maintains split current + history tables (SCD Type 2)",
+}
+
+
+class LoadPattern(RichEnumMixin, str, Enum):
     """Supported extraction patterns per spec Section 4."""
 
     # New spec-compliant names
@@ -30,29 +47,33 @@ class LoadPattern(str, Enum):
 
     @classmethod
     def choices(cls) -> List[str]:
-        return [pattern.value for pattern in cls]
+        """Return list of valid enum values."""
+        return [member.value for member in cls]
 
     @classmethod
-    def normalize(cls, value: str | None) -> "LoadPattern":
+    def normalize(cls, raw: str | None) -> "LoadPattern":
         """Normalize a pattern value, handling legacy names."""
-        if value is None:
+        if raw is None:
             return cls.SNAPSHOT
-        candidate = value.strip().lower()
+        if isinstance(raw, cls):
+            return raw
 
-        # Handle legacy pattern names
-        legacy_mapping = {
-            "full": cls.SNAPSHOT,
-            "cdc": cls.INCREMENTAL_APPEND,
-        }
-        if candidate in legacy_mapping:
-            return legacy_mapping[candidate]
+        candidate = raw.strip().lower()
 
-        for pattern in cls:
-            if pattern.value == candidate:
-                return pattern
+        # Check aliases first
+        canonical = _LOAD_PATTERN_ALIASES.get(candidate, candidate)
+
+        for member in cls:
+            if member.value == canonical:
+                return member
+
         raise ValueError(
-            f"Invalid load pattern '{value}'. Valid options: {', '.join(cls.choices())}"
+            f"Invalid load pattern '{raw}'. Valid options: {', '.join(cls.choices())}"
         )
+
+    def describe(self) -> str:
+        """Return human-readable description."""
+        return _LOAD_PATTERN_DESCRIPTIONS.get(self.value, self.value)
 
     @property
     def chunk_prefix(self) -> str:
@@ -63,15 +84,6 @@ class LoadPattern(str, Enum):
     def folder_name(self) -> str:
         """Return folder name fragment for this pattern."""
         return f"pattern={self.value}"
-
-    def describe(self) -> str:
-        descriptions = {
-            self.SNAPSHOT: "Complete snapshot each run (replaces all data)",
-            self.INCREMENTAL_APPEND: "Append new/changed records (insert-only CDC)",
-            self.INCREMENTAL_MERGE: "Merge/upsert with existing data",
-            self.CURRENT_HISTORY: "Maintains split current + history tables (SCD Type 2)",
-        }
-        return descriptions.get(self, self.value)
 
     @property
     def is_incremental(self) -> bool:

@@ -31,18 +31,55 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
+
+from core.primitives.foundations.base import RichEnumMixin
 
 logger = logging.getLogger(__name__)
 
 
-class WatermarkType(str, Enum):
+# Module-level constants for WatermarkType
+_WATERMARK_TYPE_DESCRIPTIONS: Dict[str, str] = {
+    "timestamp": "ISO timestamp watermark (e.g., 2025-01-15T10:30:00Z)",
+    "date": "Date watermark (e.g., 2025-01-15)",
+    "integer": "Integer sequence watermark (e.g., record ID)",
+    "string": "String watermark for lexicographic comparison",
+}
+
+
+class WatermarkType(RichEnumMixin, str, Enum):
     """Type of watermark value for proper comparison."""
 
     TIMESTAMP = "timestamp"
     DATE = "date"
     INTEGER = "integer"
     STRING = "string"
+
+    @classmethod
+    def choices(cls) -> List[str]:
+        """Return list of valid enum values."""
+        return [member.value for member in cls]
+
+    @classmethod
+    def normalize(cls, raw: str | None) -> "WatermarkType":
+        """Normalize a watermark type value."""
+        if isinstance(raw, cls):
+            return raw
+        if raw is None:
+            return cls.TIMESTAMP
+
+        candidate = raw.strip().lower()
+        for member in cls:
+            if member.value == candidate:
+                return member
+
+        raise ValueError(
+            f"Invalid WatermarkType '{raw}'. Valid options: {', '.join(cls.choices())}"
+        )
+
+    def describe(self) -> str:
+        """Return human-readable description."""
+        return _WATERMARK_TYPE_DESCRIPTIONS.get(self.value, self.value)
 
 
 @dataclass
