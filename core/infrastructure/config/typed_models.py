@@ -27,6 +27,7 @@ from pydantic import (
 )
 from enum import Enum
 
+from core.primitives.foundations.base import RichEnumMixin
 from core.primitives.foundations.patterns import LoadPattern
 from core.primitives.foundations.models import SilverModel
 
@@ -43,13 +44,48 @@ def resolve_profile(profile_name: str | None) -> SilverModel | None:
 from .dataset import DatasetConfig
 
 
-class DataClassification(str, Enum):
+# Module-level constants for DataClassification
+_DATA_CLASSIFICATION_DESCRIPTIONS: Dict[str, str] = {
+    "public": "Public data with no access restrictions",
+    "internal": "Internal data accessible within the organization",
+    "confidential": "Confidential data with restricted access",
+    "restricted": "Highly restricted data with strict access controls",
+}
+
+
+class DataClassification(RichEnumMixin, str, Enum):
     """Data classification levels per spec."""
 
     PUBLIC = "public"
     INTERNAL = "internal"
     CONFIDENTIAL = "confidential"
     RESTRICTED = "restricted"
+
+    @classmethod
+    def choices(cls) -> List[str]:
+        """Return list of valid enum values."""
+        return [member.value for member in cls]
+
+    @classmethod
+    def normalize(cls, raw: str | None) -> "DataClassification":
+        """Normalize a classification value."""
+        if isinstance(raw, cls):
+            return raw
+        if raw is None:
+            return cls.INTERNAL
+
+        candidate = raw.strip().lower()
+        for member in cls:
+            if member.value == candidate:
+                return member
+
+        raise ValueError(
+            f"Invalid DataClassification '{raw}'. Valid options: {', '.join(cls.choices())}"
+        )
+
+    def describe(self) -> str:
+        """Return human-readable description."""
+        return _DATA_CLASSIFICATION_DESCRIPTIONS.get(self.value, self.value)
 
 
 class OwnerConfig(BaseModel):
@@ -109,17 +145,90 @@ class SchemaConfig(BaseModel):
         })
 
 
-class StorageBackend(str, Enum):
+# Module-level constants for StorageBackend
+_STORAGE_BACKEND_DESCRIPTIONS: Dict[str, str] = {
+    "s3": "Amazon S3 cloud storage",
+    "azure": "Azure Blob Storage",
+    "local": "Local filesystem storage",
+}
+
+
+class StorageBackend(RichEnumMixin, str, Enum):
+    """Storage backend types."""
+
     s3 = "s3"
     azure = "azure"
     local = "local"
 
+    @classmethod
+    def choices(cls) -> List[str]:
+        """Return list of valid enum values."""
+        return [member.value for member in cls]
 
-class SourceType(str, Enum):
+    @classmethod
+    def normalize(cls, raw: str | None) -> "StorageBackend":
+        """Normalize a storage backend value."""
+        if isinstance(raw, cls):
+            return raw
+        if raw is None:
+            return cls.local
+
+        candidate = raw.strip().lower()
+        for member in cls:
+            if member.value == candidate:
+                return member
+
+        raise ValueError(
+            f"Invalid StorageBackend '{raw}'. Valid options: {', '.join(cls.choices())}"
+        )
+
+    def describe(self) -> str:
+        """Return human-readable description."""
+        return _STORAGE_BACKEND_DESCRIPTIONS.get(self.value, self.value)
+
+
+# Module-level constants for SourceType
+_SOURCE_TYPE_DESCRIPTIONS: Dict[str, str] = {
+    "api": "REST API data source",
+    "db": "Database query source",
+    "custom": "Custom extractor implementation",
+    "file": "File-based data source",
+}
+
+
+class SourceType(RichEnumMixin, str, Enum):
+    """Data source types."""
+
     api = "api"
     db = "db"
     custom = "custom"
     file = "file"
+
+    @classmethod
+    def choices(cls) -> List[str]:
+        """Return list of valid enum values."""
+        return [member.value for member in cls]
+
+    @classmethod
+    def normalize(cls, raw: str | None) -> "SourceType":
+        """Normalize a source type value."""
+        if isinstance(raw, cls):
+            return raw
+        if raw is None:
+            raise ValueError("SourceType value must be provided")
+
+        candidate = raw.strip().lower()
+        for member in cls:
+            if member.value == candidate:
+                return member
+
+        raise ValueError(
+            f"Invalid SourceType '{raw}'. Valid options: {', '.join(cls.choices())}"
+        )
+
+    def describe(self) -> str:
+        """Return human-readable description."""
+        return _SOURCE_TYPE_DESCRIPTIONS.get(self.value, self.value)
 
 
 class BronzeConfig(BaseModel):

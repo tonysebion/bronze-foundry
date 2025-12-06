@@ -13,11 +13,12 @@ import logging
 import math
 import random
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import (
     Any,
     Awaitable,
     Callable,
+    Dict,
     Optional,
     Tuple,
     Type,
@@ -80,6 +81,45 @@ class RetryPolicy:
             span = delay * self.jitter
             delay = max(0.0, random.uniform(delay - span, delay + span))
         return delay
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization.
+
+        Note: Callables (retry_if, delay_from_exception) are not serialized.
+        """
+        return {
+            "max_attempts": self.max_attempts,
+            "base_delay": self.base_delay,
+            "max_delay": self.max_delay,
+            "backoff_multiplier": self.backoff_multiplier,
+            "jitter": self.jitter,
+            "retry_on_exceptions": [exc.__name__ for exc in self.retry_on_exceptions],
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "RetryPolicy":
+        """Create from dictionary.
+
+        Note: retry_on_exceptions are restored as a tuple of built-in exception types.
+        Custom exception types and callables are not restored.
+        """
+        # Map exception names back to types (only for common built-ins)
+        exc_name_map = {
+            "TimeoutError": TimeoutError,
+            "ConnectionError": ConnectionError,
+            "OSError": OSError,
+        }
+        exc_names = data.get("retry_on_exceptions", [])
+        exc_types = tuple(exc_name_map.get(name, Exception) for name in exc_names)
+
+        return cls(
+            max_attempts=data.get("max_attempts", 5),
+            base_delay=data.get("base_delay", 0.5),
+            max_delay=data.get("max_delay", 8.0),
+            backoff_multiplier=data.get("backoff_multiplier", 2.0),
+            jitter=data.get("jitter", 0.2),
+            retry_on_exceptions=exc_types if exc_types else (TimeoutError, ConnectionError, OSError),
+        )
 
 
 class CircuitState:
@@ -152,6 +192,34 @@ class CircuitBreaker:
     @property
     def state(self) -> str:
         return self._state
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization.
+
+        Note: on_state_change callback is not serialized.
+        """
+        return {
+            "failure_threshold": self.failure_threshold,
+            "cooldown_seconds": self.cooldown_seconds,
+            "half_open_max_calls": self.half_open_max_calls,
+            "state": self._state,
+            "failures": self._failures,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CircuitBreaker":
+        """Create from dictionary.
+
+        Note: on_state_change callback is not restored.
+        """
+        breaker = cls(
+            failure_threshold=data.get("failure_threshold", 5),
+            cooldown_seconds=data.get("cooldown_seconds", 30.0),
+            half_open_max_calls=data.get("half_open_max_calls", 1),
+        )
+        breaker._state = data.get("state", CircuitState.CLOSED)
+        breaker._failures = data.get("failures", 0)
+        return breaker
 
 
 def execute_with_retry(
