@@ -219,6 +219,7 @@ class TestExtractJob:
     @patch("core.orchestration.runner.job.report_schema_snapshot")
     @patch("core.orchestration.runner.job.report_quality_snapshot")
     @patch("core.orchestration.runner.job.report_run_metadata")
+    @patch("core.orchestration.runner.job.report_lineage")
     @patch("core.orchestration.runner.job.write_run_metadata")
     @patch("core.orchestration.runner.job.build_run_metadata")
     @patch("core.orchestration.runner.job.ChunkWriter")
@@ -229,6 +230,7 @@ class TestExtractJob:
         mock_chunk_writer_cls,
         mock_build_run_metadata,
         mock_write_run_metadata,
+        mock_report_lineage,
         mock_report_run,
         mock_report_quality,
         mock_report_schema,
@@ -248,7 +250,9 @@ class TestExtractJob:
         mock_processor.process.return_value = [tmp_path / "chunk_001.parquet"]
         mock_chunk_processor_cls.return_value = mock_processor
 
-        mock_emit_metadata.return_value = tmp_path / "metadata.json"
+        metadata_path = tmp_path / "metadata.json"
+        manifest_path = tmp_path / "_checksums.json"
+        mock_emit_metadata.return_value = (metadata_path, manifest_path)
 
         metadata_mock = Mock()
         metadata_mock.complete.return_value = metadata_mock
@@ -308,6 +312,20 @@ class TestExtractJob:
             metadata_mock, ctx.local_output_dir
         )
         assert job.created_files[-1] == run_metadata_path
+        mock_report_lineage.assert_called_once()
+        lineage_args = mock_report_lineage.call_args[0]
+        assert lineage_args[0] == "source:test.test_table"
+        assert lineage_args[1] == "bronze:test.test_table"
+        lineage_metadata = lineage_args[2]
+        assert lineage_metadata["partition_path"] == "system=test/table=test_table"
+        assert lineage_metadata["record_count"] == 1
+        assert lineage_metadata["chunk_count"] == 1
+        assert lineage_metadata["load_pattern"] == "snapshot"
+        assert lineage_metadata["files"] == ["chunk_001.parquet"]
+        assert lineage_metadata["metadata"] == metadata_path.name
+        assert lineage_metadata["manifest"] == manifest_path.name
+        assert lineage_metadata["cursor"] == "cursor_123"
+        assert "reference_mode" not in lineage_metadata
 
     @patch("core.orchestration.runner.job.verify_checksum_manifest")
     def test_existing_manifest_aborts_run(self, mock_verify, tmp_path):

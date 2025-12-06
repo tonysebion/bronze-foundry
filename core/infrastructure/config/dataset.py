@@ -861,6 +861,9 @@ def dataset_to_runtime_config(dataset: DatasetConfig) -> Dict[str, Any]:
         "write_csv": dataset.silver.write_csv,
         "storage_enabled": bronze_backend == "s3",
     }
+    reference_mode = dataset.bronze.options.get("reference_mode")
+    if isinstance(reference_mode, dict) and reference_mode:
+        local_run["reference_mode"] = dict(reference_mode)
 
     source_cfg: Dict[str, Any] = {
         "type": dataset.bronze.source_type,

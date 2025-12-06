@@ -40,6 +40,7 @@ from core.primitives.catalog.hooks import (
     report_quality_snapshot,
     report_run_metadata,
     report_schema_snapshot,
+    report_lineage,
 )
 
 logger = logging.getLogger(__name__)
@@ -297,8 +298,8 @@ class ExtractJob:
 
         run_datetime = datetime.combine(self.run_date, datetime.min.time())
         p_load_pattern = self.load_pattern or LoadPattern.SNAPSHOT
-
-        metadata_path = emit_bronze_metadata(
+        chunk_artifacts = list(self.created_files)
+        metadata_path, manifest_path = emit_bronze_metadata(
             self._out_dir,
             run_datetime,
             self.source_cfg["system"],
@@ -348,6 +349,25 @@ class ExtractJob:
                 "status": "success",
             },
         )
+
+        source_name = self.source_cfg.get("config_name")
+        if not source_name:
+            source_name = f"{self.source_cfg['system']}.{self.source_cfg['table']}"
+        source_dataset = f"source:{source_name}"
+        lineage_metadata = {
+            "partition_path": self.relative_path,
+            "record_count": record_count,
+            "chunk_count": chunk_count,
+            "load_pattern": p_load_pattern.value,
+            "files": [path.name for path in chunk_artifacts],
+            "metadata": metadata_path.name,
+            "manifest": manifest_path.name,
+        }
+        if cursor:
+            lineage_metadata["cursor"] = cursor
+        if reference_mode:
+            lineage_metadata["reference_mode"] = reference_mode
+        report_lineage(source_dataset, dataset_id, lineage_metadata)
 
     def _cleanup_on_failure(self) -> None:
         run_cfg = self.source_cfg.get("run", {})

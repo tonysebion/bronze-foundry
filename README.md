@@ -36,7 +36,7 @@ This framework is intentionally lightweight and orchestration-neutral: you can r
 
 *See [docs/usage/patterns/ENHANCED_FEATURES.md](docs/usage/patterns/ENHANCED_FEATURES.md) and [docs/usage/PERFORMANCE_TUNING.md](docs/usage/PERFORMANCE_TUNING.md) for deep dives.*
 
-Need a concrete intent example before touching Python? Follow `docs/usage/onboarding/intent-owner-guide.md`—it bundles the owner intent template, the generated pattern matrix, the expand-intent helper, and a safe-first dry run (`python bronze_extract.py --config ... --dry-run`) into one narrative. After the guide, the new dataset checklist and Bronze readiness checklist list every checkbox you need before declaring a dataset “ready”. Use `docs/index.md` to jump to the setup track (environment, deps, first-run check), maintainer track (`silver_patterns.md`, `pipeline_engine.md`, etc.), or the owner track depending on whether you’re prepping the install, evolving the engine, or filling out configs. For a bird’s-eye view of the usage docs, start at `docs/usage/index.md` to see how beginner, onboarding, and pattern sections fit together.
+Need a concrete intent example before touching Python? Follow `docs/usage/onboarding/intent-owner-guide.md`—it bundles the owner intent template, the generated pattern matrix, the expand-intent helper, and a safe-first validation (`python bronze_extract.py --config ... --validate-only` to check syntax, or `--dry-run` to test connections) into one narrative. After the guide, the new dataset checklist and Bronze readiness checklist list every checkbox you need before declaring a dataset “ready”. Use `docs/index.md` to jump to the setup track (environment, deps, first-run check), maintainer track (`silver_patterns.md`, `pipeline_engine.md`, etc.), or the owner track depending on whether you’re prepping the install, evolving the engine, or filling out configs. For a bird’s-eye view of the usage docs, start at `docs/usage/index.md` to see how beginner, onboarding, and pattern sections fit together.
 
 ## Architecture Principles
 
@@ -68,6 +68,7 @@ Need a concrete intent example before touching Python? Follow `docs/usage/onboar
 
 - **Orchestration friendly**
   - CLI takes `--config` and optional `--date`
+  - Validation flags: `--dry-run` (test connections), `--validate-only` (check syntax)
   - Uses exit codes (0 = success, non-zero = failure)
   - Structured logging with levels and timestamps
 
@@ -349,7 +350,10 @@ python silver_extract.py --config docs/examples/configs/examples/file_example.ya
 ```
 
 - Silver CLI highlights:
-  - `--config`, `--date`, `--dry-run`, `--validate-only`, `--pattern {full|cdc|current_history}`
+  - `--config`, `--date` – standard inputs
+  - `--dry-run` – test connections without running extraction
+  - `--validate-only` – check YAML syntax and configuration schema
+  - `--pattern {full|cdc|current_history}` – override load pattern
   - Output controls: `--write-parquet/--no-write-parquet`, `--write-csv/--no-write-csv`, `--parquet-compression`
   - Naming overrides: `--full-output-name`, `--cdc-output-name`, `--current-output-name`, `--history-output-name`
   - Asset model controls: `--silver-model {scd_type_1|scd_type_2|incremental_merge|full_merge_dedupe|periodic_snapshot}` to request one of the supported Silver asset types (defaults are derived from the Bronze load pattern)

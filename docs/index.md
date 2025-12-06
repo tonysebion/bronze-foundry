@@ -75,9 +75,9 @@ python bronze_extract.py --config config/my_api.yaml --date 2025-11-27
 |------|---------|-------|
 | **Extract data** | `python bronze_extract.py --config config/my.yaml --date YYYY-MM-DD` | Creates Bronze layer |
 | **Create Silver** | `python silver_extract.py --config config/my.yaml --date YYYY-MM-DD` | Curates Bronze data |
-| **Validate config** | `python bronze_extract.py --config config/my.yaml --validate-only` | Check before running |
-| **Dry run** | `python bronze_extract.py --config config/my.yaml --dry-run` | Test connections |
-| **Run demo** | `python scripts/run_demo.py` | Safe experimentation |
+| **Validate config only** | `python bronze_extract.py --config config/my.yaml --validate-only` | Check YAML syntax and schema |
+| **Dry run (test connections)** | `python bronze_extract.py --config config/my.yaml --dry-run` | Test connections without extraction |
+| **Run demo** | `python scripts/run_demo.py` | Safe experimentation with sample data |
 
 ---
 

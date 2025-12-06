@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from core.pipeline.bronze.io import write_batch_metadata, write_checksum_manifest
 from core.primitives.foundations.patterns import LoadPattern
@@ -63,8 +63,7 @@ def emit_bronze_metadata(
     chunk_count: int,
     record_count: int,
     cursor: Optional[str],
-    created_files: List[Path],
-) -> Path:
+) -> Tuple[Path, Path]:
     run_date_str = run_date.date().isoformat()
     actual_chunk_artifact_count = len(created_files)
     if chunk_count != actual_chunk_artifact_count:
@@ -110,10 +109,10 @@ def emit_bronze_metadata(
         },
         "load_pattern": load_pattern.value,
     }
-    write_checksum_manifest(
+    manifest_path = write_checksum_manifest(
         out_dir,
         created_files + [metadata_path],
         load_pattern.value,
         checksum_metadata,
     )
-    return metadata_path
+    return metadata_path, manifest_path
