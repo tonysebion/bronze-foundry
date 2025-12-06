@@ -1,7 +1,7 @@
 """Tests for orchestration runner job module."""
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from datetime import date
 from pathlib import Path
 
@@ -12,6 +12,7 @@ from core.orchestration.runner.job import (
     _load_extractors,
 )
 from core.pipeline.runtime.context import RunContext
+from core.pipeline.runtime.metadata import Layer, RunStatus
 from core.primitives.foundations.patterns import LoadPattern
 from core.adapters.extractors.base import BaseExtractor, EXTRACTOR_REGISTRY
 from core.pipeline.bronze.models import StoragePlan
@@ -218,12 +219,16 @@ class TestExtractJob:
     @patch("core.orchestration.runner.job.report_schema_snapshot")
     @patch("core.orchestration.runner.job.report_quality_snapshot")
     @patch("core.orchestration.runner.job.report_run_metadata")
+    @patch("core.orchestration.runner.job.write_run_metadata")
+    @patch("core.orchestration.runner.job.build_run_metadata")
     @patch("core.orchestration.runner.job.ChunkWriter")
     @patch("core.orchestration.runner.job.ChunkProcessor")
     def test_run_with_records(
         self,
         mock_chunk_processor_cls,
         mock_chunk_writer_cls,
+        mock_build_run_metadata,
+        mock_write_run_metadata,
         mock_report_run,
         mock_report_quality,
         mock_report_schema,
@@ -244,6 +249,12 @@ class TestExtractJob:
         mock_chunk_processor_cls.return_value = mock_processor
 
         mock_emit_metadata.return_value = tmp_path / "metadata.json"
+
+        metadata_mock = Mock()
+        metadata_mock.complete.return_value = metadata_mock
+        mock_build_run_metadata.return_value = metadata_mock
+        run_metadata_path = tmp_path / "run_metadata.json"
+        mock_write_run_metadata.return_value = run_metadata_path
 
         ctx = RunContext(
             cfg={
@@ -286,6 +297,17 @@ class TestExtractJob:
 
         assert result == 0
         mock_processor.process.assert_called_once()
+        mock_build_run_metadata.assert_called_once()
+        called_args = mock_build_run_metadata.call_args
+        assert called_args.args[1] == Layer.BRONZE
+        assert called_args.kwargs["run_id"] == ctx.run_id
+        metadata_mock.complete.assert_called_once_with(
+            row_count_in=1, row_count_out=1, status=RunStatus.SUCCESS
+        )
+        mock_write_run_metadata.assert_called_once_with(
+            metadata_mock, ctx.local_output_dir
+        )
+        assert job.created_files[-1] == run_metadata_path
 
     @patch("core.orchestration.runner.job.verify_checksum_manifest")
     def test_existing_manifest_aborts_run(self, mock_verify, tmp_path):

@@ -15,6 +15,12 @@ from core.pipeline.bronze.models import (
     resolve_load_pattern,
 )
 from core.pipeline.runtime.context import RunContext
+from core.pipeline.runtime.metadata import (
+    Layer,
+    RunStatus,
+    build_run_metadata,
+    write_run_metadata,
+)
 from core.adapters.extractors.base import BaseExtractor
 from core.adapters.extractors.factory import (
     ensure_extractors_loaded,
@@ -274,6 +280,14 @@ class ExtractJob:
                 f"Details: {result.to_dict()}"
             )
 
+    def _metadata_config(self) -> Dict[str, Any]:
+        """Build a config dict that includes the user-specified schema evolution block."""
+        metadata_cfg: Dict[str, Any] = dict(self.cfg)
+        run_schema = self.source_cfg.get("run", {}).get("schema_evolution")
+        if run_schema:
+            metadata_cfg["schema_evolution"] = run_schema
+        return metadata_cfg
+
     def _emit_metadata(
         self, record_count: int, chunk_count: int, cursor: Optional[str]
     ) -> None:
@@ -300,6 +314,20 @@ class ExtractJob:
             self.created_files,
         )
         self.created_files.append(metadata_path)
+
+        metadata_cfg = self._metadata_config()
+        run_metadata = build_run_metadata(
+            metadata_cfg, Layer.BRONZE, run_id=self.ctx.run_id
+        )
+        run_metadata.complete(
+            row_count_in=record_count,
+            row_count_out=record_count,
+            status=RunStatus.SUCCESS,
+        )
+        run_metadata_path = write_run_metadata(
+            run_metadata, self.ctx.local_output_dir
+        )
+        self.created_files.append(run_metadata_path)
 
         stats = {
             "record_count": record_count,
