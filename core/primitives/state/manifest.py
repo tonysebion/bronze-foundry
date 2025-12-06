@@ -306,10 +306,10 @@ class ManifestTracker:
             else:
                 self._manifest = self._load_local()
         except FileNotFoundError:
-            logger.info(f"Manifest not found at {self.manifest_path}, creating new")
+            logger.info("Manifest not found at %s, creating new", self.manifest_path)
             self._manifest = FileManifest(manifest_path=self.manifest_path)
         except Exception as e:
-            logger.warning(f"Error loading manifest: {e}, creating new")
+            logger.warning("Error loading manifest: %s, creating new", e)
             self._manifest = FileManifest(manifest_path=self.manifest_path)
 
         return self._manifest
@@ -363,7 +363,7 @@ class ManifestTracker:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(self._manifest.to_dict(), f, indent=2)
 
-        logger.info(f"Saved manifest to {path}")
+        logger.info("Saved manifest to %s", path)
 
     def _save_s3(self) -> None:
         """Save manifest to S3."""
@@ -381,7 +381,7 @@ class ManifestTracker:
         body = json.dumps(self._manifest.to_dict(), indent=2)
         s3.put_object(Bucket=bucket, Key=key, Body=body.encode("utf-8"))
 
-        logger.info(f"Saved manifest to s3://{bucket}/{key}")
+        logger.info("Saved manifest to s3://%s/%s", bucket, key)
 
     def discover_files(
         self,

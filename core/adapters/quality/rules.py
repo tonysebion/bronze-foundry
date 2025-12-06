@@ -62,7 +62,7 @@ class RuleDefinition:
         try:
             level = RuleLevel(level_str)
         except ValueError:
-            logger.warning(f"Invalid rule level '{level_str}', using 'error'")
+            logger.warning("Invalid rule level '%s', using 'error'", level_str)
             level = RuleLevel.ERROR
 
         expression = data.get("expression")
@@ -157,9 +157,9 @@ class QualityRule:
             local_ns: Dict[str, Any] = {}
             exec(code, {"__builtins__": {"bool": bool, "len": len, "str": str, "int": int, "float": float}}, local_ns)
             self._evaluator = local_ns["_eval"]
-            logger.debug(f"Compiled rule '{self.definition.id}': {python_expr}")
+            logger.debug("Compiled rule '%s': %s", self.definition.id, python_expr)
         except Exception as e:
-            logger.warning(f"Could not compile rule '{self.definition.id}': {e}")
+            logger.warning("Could not compile rule '%s': %s", self.definition.id, e)
             # Fallback: create a rule that always passes (with warning)
             self._evaluator = lambda r: True
 
@@ -232,7 +232,7 @@ class QualityRule:
         try:
             return self._evaluator(record)
         except Exception as e:
-            logger.warning(f"Error evaluating rule '{self.definition.id}': {e}")
+            logger.warning("Error evaluating rule '%s': %s", self.definition.id, e)
             return True  # Don't fail on evaluation errors
 
     def evaluate_batch(self, records: List[Dict[str, Any]]) -> List[bool]:
@@ -282,7 +282,7 @@ def parse_rules(config: Dict[str, Any]) -> List[QualityRule]:
             definition = RuleDefinition.from_dict(rule_dict)
             rules.append(QualityRule(definition))
         except Exception as e:
-            logger.warning(f"Could not parse rule: {e}")
+            logger.warning("Could not parse rule: %s", e)
 
-    logger.info(f"Parsed {len(rules)} quality rules")
+    logger.info("Parsed %d quality rules", len(rules))
     return rules

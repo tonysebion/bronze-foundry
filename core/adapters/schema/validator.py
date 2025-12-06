@@ -229,7 +229,7 @@ class SchemaValidator:
             elif col_spec.type == DataType.DATE:
                 return pd.to_datetime(series, errors="coerce", format=col_spec.format).dt.date
         except Exception as e:
-            logger.warning(f"Could not coerce column '{col_spec.name}': {e}")
+            logger.warning("Could not coerce column '%s': %s", col_spec.name, e)
 
         return series
 

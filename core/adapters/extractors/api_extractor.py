@@ -105,7 +105,7 @@ class ApiExtractor(BaseExtractor):
                 )
 
             headers[key_header] = api_key
-            logger.debug(f"Added API key authentication in header '{key_header}'")
+            logger.debug("Added API key authentication in header '%s'", key_header)
 
         elif auth_type == "basic":
             username_env = api_cfg.get("auth_username_env")
@@ -140,7 +140,7 @@ class ApiExtractor(BaseExtractor):
         auth: Optional[Tuple[str, str]] = None,
     ) -> requests.Response:
         """Make HTTP request with retry logic (exponential backoff + jitter)."""
-        logger.debug(f"Making request to {url} with params {params}")
+        logger.debug("Making request to %s with params %s", url, params)
         # Rate limiter is derived from config per call site; fallback to none
         # The limiter is injected via closure when called from paginate
 
@@ -232,7 +232,7 @@ class ApiExtractor(BaseExtractor):
                 if isinstance(data, dict):
                     data = data.get(key, [])
                 else:
-                    logger.warning(f"Cannot navigate path '{data_path}' in response")
+                    logger.warning("Cannot navigate path '%s' in response", data_path)
                     break
 
         # Convert to list of records
@@ -248,7 +248,7 @@ class ApiExtractor(BaseExtractor):
             # If no common pattern, wrap single record
             return [data]
         else:
-            logger.warning(f"Unexpected data type: {type(data)}")
+            logger.warning("Unexpected data type: %s", type(data))
             return []
 
     def _paginate(
@@ -282,12 +282,15 @@ class ApiExtractor(BaseExtractor):
 
             all_records.extend(records)
             logger.info(
-                f"Fetched {len(records)} records {state.describe()} (total: {len(all_records)})"
+                "Fetched %d records %s (total: %d)",
+                len(records),
+                state.describe(),
+                len(all_records),
             )
 
             if state.max_records > 0 and len(all_records) >= state.max_records:
                 all_records = all_records[: state.max_records]
-                logger.info(f"Reached max_records limit of {state.max_records}")
+                logger.info("Reached max_records limit of %d", state.max_records)
                 break
 
             if not state.on_records(records, data):
@@ -298,7 +301,7 @@ class ApiExtractor(BaseExtractor):
             and state.max_pages
             and state.max_pages_limit_hit
         ):
-            logger.info(f"Reached max_pages limit of {state.max_pages}")
+            logger.info("Reached max_pages limit of %d", state.max_pages)
 
         return all_records
 
@@ -341,12 +344,15 @@ class ApiExtractor(BaseExtractor):
 
             all_records.extend(records)
             logger.info(
-                f"Fetched {len(records)} records {state.describe()} (total: {len(all_records)})"
+                "Fetched %d records %s (total: %d)",
+                len(records),
+                state.describe(),
+                len(all_records),
             )
 
             if state.max_records > 0 and len(all_records) >= state.max_records:
                 all_records = all_records[: state.max_records]
-                logger.info(f"Reached max_records limit of {state.max_records}")
+                logger.info("Reached max_records limit of %d", state.max_records)
                 break
 
             if not state.on_records(records, data):
@@ -357,7 +363,7 @@ class ApiExtractor(BaseExtractor):
             and state.max_pages
             and state.max_pages_limit_hit
         ):
-            logger.info(f"Reached max_pages limit of {state.max_pages}")
+            logger.info("Reached max_pages limit of %d", state.max_pages)
 
         return all_records
 
@@ -385,7 +391,7 @@ class ApiExtractor(BaseExtractor):
         base_url = api_cfg["base_url"]
         endpoint = api_cfg["endpoint"]
 
-        logger.info(f"Starting API extraction from {base_url}{endpoint}")
+        logger.info("Starting API extraction from %s%s", base_url, endpoint)
 
         try:
             if is_async_enabled(api_cfg):
@@ -399,7 +405,7 @@ class ApiExtractor(BaseExtractor):
                     session, base_url, endpoint, headers, api_cfg, run_cfg, auth
                 )
         except requests.exceptions.RequestException as e:
-            logger.error(f"API request failed: {e}")
+            logger.error("API request failed: %s", e)
             raise
         finally:
             session.close()
@@ -419,11 +425,11 @@ class ApiExtractor(BaseExtractor):
                 if cursor_values:
                     cursor_values_str = [str(v) for v in cursor_values]
                     new_cursor = str(max(cursor_values_str))
-                    logger.info(f"Computed new cursor: {new_cursor}")
+                    logger.info("Computed new cursor: %s", new_cursor)
             except (TypeError, ValueError) as e:
                 logger.warning(
-                    f"Could not compute cursor from field '{cursor_field}': {e}"
+                    "Could not compute cursor from field '%s': %s", cursor_field, e
                 )
 
-        logger.info(f"Successfully extracted {len(records)} records from API")
+        logger.info("Successfully extracted %d records from API", len(records))
         return records, new_cursor

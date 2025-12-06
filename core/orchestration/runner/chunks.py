@@ -38,10 +38,10 @@ class ChunkWriter:
                 created_files.append(parquet_path)
                 self.config.storage_plan.upload(parquet_path)
 
-            logger.debug(f"Completed processing chunk {chunk_index}")
+            logger.debug("Completed processing chunk %d", chunk_index)
             return created_files
         except Exception as exc:
-            logger.error(f"Failed to process chunk {chunk_index}: {exc}")
+            logger.error("Failed to process chunk %d: %s", chunk_index, exc)
             raise
 
 
@@ -59,7 +59,7 @@ class ChunkProcessor:
         created_files: List[Path] = []
         if self.parallel_workers > 1 and len(chunks) > 1:
             logger.info(
-                f"Processing {len(chunks)} chunks with {self.parallel_workers} workers"
+                "Processing %d chunks with %d workers", len(chunks), self.parallel_workers
             )
             with ThreadPoolExecutor(max_workers=self.parallel_workers) as executor:
                 futures = {

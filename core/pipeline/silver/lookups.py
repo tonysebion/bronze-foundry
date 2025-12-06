@@ -160,7 +160,7 @@ class LookupEnricher:
         cache_key = config.path
 
         if config.cache and cache_key in self._cache:
-            logger.debug(f"Using cached lookup '{config.name}'")
+            logger.debug("Using cached lookup '%s'", config.name)
             return self._cache[cache_key]
 
         lookup_path = Path(config.path)
@@ -172,7 +172,7 @@ class LookupEnricher:
         if config.cache:
             self._cache[cache_key] = df
 
-        logger.info(f"Loaded lookup '{config.name}' with {len(df)} rows")
+        logger.info("Loaded lookup '%s' with %d rows", config.name, len(df))
         return df
 
     def _read_lookup_data(self, path: Path) -> pd.DataFrame:
@@ -226,7 +226,7 @@ class LookupEnricher:
                 lookup_stats[config.name] = stats
                 all_columns_added.extend(columns_added)
             except Exception as e:
-                logger.error(f"Failed to apply lookup '{config.name}': {e}")
+                logger.error("Failed to apply lookup '%s': %s", config.name, e)
                 lookup_stats[config.name] = {
                     "status": "error",
                     "error": str(e),
@@ -320,7 +320,7 @@ class LookupEnricher:
         }
 
         logger.info(
-            f"Applied lookup '{config.name}': {matched}/{original_len} rows matched"
+            "Applied lookup '%s': %d/%d rows matched", config.name, matched, original_len
         )
 
         return result, stats, columns_added
@@ -351,9 +351,9 @@ def parse_lookup_configs(config: Dict[str, Any]) -> List[LookupConfig]:
         try:
             configs.append(LookupConfig.from_dict(lookup_data))
         except Exception as e:
-            logger.warning(f"Could not parse lookup config: {e}")
+            logger.warning("Could not parse lookup config: %s", e)
 
-    logger.info(f"Parsed {len(configs)} lookup configurations")
+    logger.info("Parsed %d lookup configurations", len(configs))
     return configs
 
 

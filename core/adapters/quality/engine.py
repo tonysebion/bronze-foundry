@@ -53,7 +53,7 @@ class QualityEngine:
         else:
             self.rules = []
 
-        logger.info(f"QualityEngine initialized with {len(self.rules)} rules")
+        logger.info("QualityEngine initialized with %d rules", len(self.rules))
 
     def evaluate(
         self,
@@ -95,13 +95,12 @@ class QualityEngine:
 
         if report.error_count > 0:
             logger.error(
-                f"Quality check found {report.error_count} error(s) "
-                f"in {report.failed_record_count} records"
+                "Quality check found %d error(s) in %d records",
+                report.error_count,
+                report.failed_record_count,
             )
         if report.warn_count > 0:
-            logger.warning(
-                f"Quality check found {report.warn_count} warning(s)"
-            )
+            logger.warning("Quality check found %d warning(s)", report.warn_count)
 
         return report
 

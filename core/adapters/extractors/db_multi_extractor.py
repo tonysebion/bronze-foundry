@@ -193,18 +193,18 @@ class DbMultiExtractor(BaseExtractor):
 
         This method is thread-safe and can be called in parallel.
         """
-        logger.info(f"Starting extraction for entity: {entity.name}")
+        logger.info("Starting extraction for entity: %s", entity.name)
 
         state_key = f"{system}_{entity.name}"
         last_cursor = None
         if entity.load_mode == "incremental_append" and entity.watermark_column:
             last_cursor = self._state_manager.load_cursor(state_key)
             if last_cursor:
-                logger.info(f"Entity {entity.name}: resuming from cursor {last_cursor}")
+                logger.info("Entity %s: resuming from cursor %s", entity.name, last_cursor)
 
         # Build query
         query, params = self._build_entity_query(entity, last_cursor)
-        logger.debug(f"Entity {entity.name} query: {query}")
+        logger.debug("Entity %s query: %s", entity.name, query)
 
         try:
             records, max_cursor = fetch_records_from_query(
@@ -218,14 +218,14 @@ class DbMultiExtractor(BaseExtractor):
                 else None,
             )
         except Exception as exc:
-            logger.error(f"Entity {entity.name} extraction failed: {exc}")
+            logger.error("Entity %s extraction failed: %s", entity.name, exc)
             return EntityResult(
                 entity_name=entity.name,
                 records=[],
                 error=str(exc),
             )
 
-        logger.info(f"Entity {entity.name}: extracted {len(records)} records")
+        logger.info("Entity %s: extracted %d records", entity.name, len(records))
         if max_cursor:
             self._state_manager.save_cursor(state_key, max_cursor, run_date)
 
@@ -301,7 +301,7 @@ class DbMultiExtractor(BaseExtractor):
             raise ValueError("db_multi source requires at least one entity in 'entities' list")
 
         entities = [EntityConfig.from_dict(e) for e in entities_raw]
-        logger.info(f"Extracting {len(entities)} entities with max_workers={self.max_workers}")
+        logger.info("Extracting %d entities with max_workers=%d", len(entities), self.max_workers)
 
         # Extract entities in parallel
         result = MultiEntityResult()
@@ -324,7 +324,7 @@ class DbMultiExtractor(BaseExtractor):
                     entity_result = future.result()
                     result.add_result(entity_result)
                 except Exception as e:
-                    logger.error(f"Entity {entity_name} failed with exception: {e}")
+                    logger.error("Entity %s failed with exception: %s", entity_name, e)
                     result.add_result(EntityResult(
                         entity_name=entity_name,
                         records=[],
@@ -333,12 +333,12 @@ class DbMultiExtractor(BaseExtractor):
 
         # Log summary
         logger.info(
-            f"Multi-entity extraction complete: "
-            f"{result.total_records} total records, "
-            f"{len(result.failed_entities)} failures"
+            "Multi-entity extraction complete: %d total records, %d failures",
+            result.total_records,
+            len(result.failed_entities),
         )
 
         if result.failed_entities:
-            logger.warning(f"Failed entities: {result.failed_entities}")
+            logger.warning("Failed entities: %s", result.failed_entities)
 
         return result

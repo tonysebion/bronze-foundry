@@ -63,7 +63,7 @@ class DataType(str, Enum):
         try:
             return cls(normalized)
         except ValueError:
-            logger.warning(f"Unknown data type '{value}', using ANY")
+            logger.warning("Unknown data type '%s', using ANY", value)
             return cls.ANY
 
 
@@ -226,5 +226,5 @@ def parse_schema_config(config: Dict[str, Any]) -> Optional[SchemaSpec]:
     try:
         return SchemaSpec.from_dict(schema_cfg)
     except Exception as e:
-        logger.warning(f"Could not parse schema config: {e}")
+        logger.warning("Could not parse schema config: %s", e)
         return None

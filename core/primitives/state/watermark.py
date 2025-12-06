@@ -256,14 +256,14 @@ class WatermarkStore:
             else:
                 return self._load_local(source_key, watermark_column, watermark_type)
         except FileNotFoundError:
-            logger.info(f"No existing watermark for {source_key}, creating new")
+            logger.info("No existing watermark for %s, creating new", source_key)
             return Watermark(
                 source_key=source_key,
                 watermark_column=watermark_column,
                 watermark_type=watermark_type,
             )
         except Exception as e:
-            logger.warning(f"Error loading watermark for {source_key}: {e}, creating new")
+            logger.warning("Error loading watermark for %s: %s, creating new", source_key, e)
             return Watermark(
                 source_key=source_key,
                 watermark_column=watermark_column,
@@ -323,7 +323,7 @@ class WatermarkStore:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(watermark.to_dict(), f, indent=2)
 
-        logger.info(f"Saved watermark to {path}")
+        logger.info("Saved watermark to %s", path)
 
     def _save_s3(self, watermark: Watermark) -> None:
         """Save watermark to S3."""
@@ -342,7 +342,7 @@ class WatermarkStore:
             Body=body.encode("utf-8"),
         )
 
-        logger.info(f"Saved watermark to s3://{self.s3_bucket}/{key}")
+        logger.info("Saved watermark to s3://%s/%s", self.s3_bucket, key)
 
     def delete(self, system: str, table: str) -> bool:
         """Delete watermark for a source.
@@ -358,7 +358,7 @@ class WatermarkStore:
             else:
                 return self._delete_local(source_key)
         except Exception as e:
-            logger.warning(f"Error deleting watermark for {source_key}: {e}")
+            logger.warning("Error deleting watermark for %s: %s", source_key, e)
             return False
 
     def _delete_local(self, source_key: str) -> bool:
@@ -366,7 +366,7 @@ class WatermarkStore:
         path = self._get_local_path(source_key)
         if path.exists():
             path.unlink()
-            logger.info(f"Deleted watermark at {path}")
+            logger.info("Deleted watermark at %s", path)
             return True
         return False
 
@@ -382,7 +382,7 @@ class WatermarkStore:
 
         try:
             s3.delete_object(Bucket=self.s3_bucket, Key=key)
-            logger.info(f"Deleted watermark from s3://{self.s3_bucket}/{key}")
+            logger.info("Deleted watermark from s3://%s/%s", self.s3_bucket, key)
             return True
         except Exception:
             return False
@@ -403,7 +403,7 @@ class WatermarkStore:
                     data = json.load(f)
                 watermarks.append(Watermark.from_dict(data))
             except Exception as e:
-                logger.warning(f"Could not load watermark from {path}: {e}")
+                logger.warning("Could not load watermark from %s: %s", path, e)
         return watermarks
 
     def _list_s3(self) -> list[Watermark]:
@@ -425,7 +425,7 @@ class WatermarkStore:
                         data = json.loads(response["Body"].read().decode("utf-8"))
                         watermarks.append(Watermark.from_dict(data))
                     except Exception as e:
-                        logger.warning(f"Could not load watermark from {obj['Key']}: {e}")
+                        logger.warning("Could not load watermark from %s: %s", obj['Key'], e)
 
         return watermarks
 

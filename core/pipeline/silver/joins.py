@@ -208,9 +208,9 @@ class MultiSourceJoiner:
             try:
                 df = df.query(source.filter_expression)
             except Exception as e:
-                logger.warning(f"Could not apply filter to '{source.name}': {e}")
+                logger.warning("Could not apply filter to '%s': %s", source.name, e)
 
-        logger.info(f"Loaded source '{source.name}' with {len(df)} rows")
+        logger.info("Loaded source '%s' with %d rows", source.name, len(df))
         return df
 
     def _read_source_data(self, path: Path) -> pd.DataFrame:
@@ -343,7 +343,7 @@ class MultiSourceJoiner:
         }
 
         logger.info(
-            f"Joined '{source.name}': {original_left_len} -> {len(result)} rows"
+            "Joined '%s': %d -> %d rows", source.name, original_left_len, len(result)
         )
 
         return result, stats
@@ -367,7 +367,7 @@ def parse_join_config(config: Dict[str, Any]) -> Optional[JoinConfig]:
     try:
         return JoinConfig.from_dict(join_cfg)
     except Exception as e:
-        logger.warning(f"Could not parse join config: {e}")
+        logger.warning("Could not parse join config: %s", e)
         return None
 
 

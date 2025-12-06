@@ -115,7 +115,7 @@ class EvolutionConfig:
         try:
             mode = SchemaEvolutionMode(mode_str)
         except ValueError:
-            logger.warning(f"Unknown evolution mode '{mode_str}', using strict")
+            logger.warning("Unknown evolution mode '%s', using strict", mode_str)
             mode = SchemaEvolutionMode.STRICT
 
         return cls(
@@ -447,7 +447,7 @@ def apply_evolution_rules(
             col_spec = expected_schema.get_column(col_name)
             if col_spec and col_spec.nullable:
                 result[col_name] = None
-                logger.info(f"Added missing nullable column '{col_name}' with nulls")
+                logger.info("Added missing nullable column '%s' with nulls", col_name)
             else:
                 raise ValueError(
                     f"Missing non-nullable column '{col_name}' cannot be added"
@@ -464,10 +464,10 @@ def apply_evolution_rules(
             col_spec = expected_schema.get_column(col_name)
             if col_spec and col_spec.nullable:
                 result[col_name] = None
-                logger.info(f"Added missing nullable column '{col_name}' with nulls")
+                logger.info("Added missing nullable column '%s' with nulls", col_name)
             elif col_spec and col_spec.default is not None:
                 result[col_name] = col_spec.default
-                logger.info(f"Added missing column '{col_name}' with default value")
+                logger.info("Added missing column '%s' with default value", col_name)
             else:
                 raise ValueError(
                     f"Missing non-nullable column '{col_name}' with no default"
@@ -498,5 +498,5 @@ def parse_evolution_config(config: Dict[str, Any]) -> Optional[EvolutionConfig]:
     try:
         return EvolutionConfig.from_dict(evolution_cfg)
     except Exception as e:
-        logger.warning(f"Could not parse evolution config: {e}")
+        logger.warning("Could not parse evolution config: %s", e)
         return None
