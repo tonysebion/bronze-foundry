@@ -11,16 +11,26 @@ from azure.core.exceptions import AzureError, ResourceNotFoundError
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient, ContainerClient
 
-from core.infrastructure.storage.backend import StorageBackend
-from core.infrastructure.resilience.retry import RetryPolicy, execute_with_retry, CircuitBreaker
+from core.infrastructure.storage.backend import BaseCloudStorage
 
 logger = logging.getLogger(__name__)
 
 
-class AzureStorage(StorageBackend):
-    """Azure Blob Storage / ADLS Gen2 backend."""
+class AzureStorage(BaseCloudStorage):
+    """Azure Blob Storage / ADLS Gen2 backend.
+
+    Inherits resilience patterns (circuit breakers, retry) from BaseCloudStorage.
+    """
 
     def __init__(self, config: Dict[str, Any]) -> None:
+        """Initialize Azure storage backend from configuration.
+
+        Args:
+            config: Platform configuration dictionary containing:
+                - bronze.azure_container: Azure container name
+                - bronze.azure_prefix: Optional prefix for all paths
+                - azure_connection: Connection configuration
+        """
         bronze_cfg = config.get("bronze", {})
         azure_cfg = config.get("azure_connection", {})
 
@@ -44,34 +54,8 @@ class AzureStorage(StorageBackend):
                 "Unable to verify Azure container %s: %s", self.container_name, exc
             )
 
-        # circuit breakers per operation
-        def _emit(state: str) -> None:
-            logger.info("metric=breaker_state component=azure_storage state=%s", state)
-
-        self._breaker_upload = CircuitBreaker(
-            failure_threshold=5,
-            cooldown_seconds=30.0,
-            half_open_max_calls=1,
-            on_state_change=_emit,
-        )
-        self._breaker_download = CircuitBreaker(
-            failure_threshold=5,
-            cooldown_seconds=30.0,
-            half_open_max_calls=1,
-            on_state_change=_emit,
-        )
-        self._breaker_list = CircuitBreaker(
-            failure_threshold=5,
-            cooldown_seconds=30.0,
-            half_open_max_calls=1,
-            on_state_change=_emit,
-        )
-        self._breaker_delete = CircuitBreaker(
-            failure_threshold=5,
-            cooldown_seconds=30.0,
-            half_open_max_calls=1,
-            on_state_change=_emit,
-        )
+        # Initialize circuit breakers from base class
+        super().__init__()
 
     def _build_client(self, azure_cfg: Dict[str, Any]) -> BlobServiceClient:
         """Build the BlobServiceClient using the first available credential."""
@@ -105,154 +89,152 @@ class AzureStorage(StorageBackend):
             "azure.account_url must be provided in config when connection_string or account_key are not used"
         )
 
-    def _remote_path(self, remote_path: str) -> str:
+    def get_backend_type(self) -> str:
+        """Get backend type identifier."""
+        return "azure"
+
+    def _build_remote_path(self, remote_path: str) -> str:
+        """Build full blob path from remote path and prefix."""
         clean = remote_path.lstrip("/")
         return f"{self.prefix}/{clean}" if self.prefix else clean
 
-    def upload_file(self, local_path: str, remote_path: str) -> bool:
-        blob_path = self._remote_path(remote_path)
+    def _should_retry(self, exc: BaseException) -> bool:
+        """Determine if an Azure exception should trigger a retry."""
+        if isinstance(exc, ResourceNotFoundError):
+            return False
+        return isinstance(exc, AzureError)
 
-        def _retry_if(exc: BaseException) -> bool:
-            if isinstance(exc, ResourceNotFoundError):
-                return False
-            return isinstance(exc, AzureError)
-
-        policy = RetryPolicy(
-            max_attempts=5,
-            base_delay=0.5,
-            max_delay=8.0,
-            backoff_multiplier=2.0,
-            jitter=0.2,
-            retry_on_exceptions=(),
-            retry_if=_retry_if,
+    def _do_upload(self, local_path: str, remote_key: str) -> bool:
+        """Perform the actual Azure upload."""
+        with open(local_path, "rb") as handle:
+            self.container.upload_blob(remote_key, handle, overwrite=True)
+        logger.info(
+            "Uploaded %s to azure://%s/%s",
+            Path(local_path).name,
+            self.container_name,
+            remote_key,
         )
+        return True
 
+    def _do_download(self, remote_key: str, local_path: str) -> bool:
+        """Perform the actual Azure download."""
+        blob = self.container.get_blob_client(remote_key)
+        with open(local_path, "wb") as handle:
+            stream = blob.download_blob()
+            stream.readinto(handle)
+        logger.info(
+            "Downloaded azure://%s/%s to %s",
+            self.container_name,
+            remote_key,
+            local_path,
+        )
+        return True
+
+    def _do_list(self, prefix: str) -> List[str]:
+        """Perform the actual Azure list operation."""
+        files = [blob.name for blob in self.container.list_blobs(name_starts_with=prefix)]
+        logger.debug("Listed %d files with prefix '%s'", len(files), prefix)
+        return files
+
+    def _do_delete(self, remote_key: str) -> bool:
+        """Perform the actual Azure delete."""
+        self.container.delete_blob(remote_key)
+        logger.info("Deleted azure://%s/%s", self.container_name, remote_key)
+        return True
+
+    def upload_file(self, local_path: str, remote_path: str) -> bool:
+        """Upload a file to Azure Blob Storage.
+
+        Args:
+            local_path: Path to local file
+            remote_path: Destination path (relative to container/prefix)
+
+        Returns:
+            True if upload succeeded
+
+        Raises:
+            AzureError: If upload fails after retries
+        """
+        remote_key = self._build_remote_path(remote_path)
         try:
-
-            def _once() -> bool:
-                with open(local_path, "rb") as handle:
-                    self.container.upload_blob(blob_path, handle, overwrite=True)
-                return True
-
-            return execute_with_retry(
-                _once,
-                policy=policy,
-                breaker=self._breaker_upload,
-                operation_name="azure_upload",
+            return self._execute_with_resilience(
+                lambda: self._do_upload(local_path, remote_key),
+                self._breaker_upload,
+                "azure_upload",
             )
         except AzureError as exc:
-            logger.error("Azure upload failed [%s]: %s", blob_path, exc)
+            logger.error("Azure upload failed [%s]: %s", remote_key, exc)
             raise
 
     def download_file(self, remote_path: str, local_path: str) -> bool:
-        blob_path = self._remote_path(remote_path)
+        """Download a file from Azure Blob Storage.
 
-        def _retry_if(exc: BaseException) -> bool:
-            if isinstance(exc, ResourceNotFoundError):
-                return False
-            return isinstance(exc, AzureError)
+        Args:
+            remote_path: Path in Azure (relative to container/prefix)
+            local_path: Destination path on local filesystem
 
-        policy = RetryPolicy(
-            max_attempts=5,
-            base_delay=0.5,
-            max_delay=8.0,
-            backoff_multiplier=2.0,
-            jitter=0.2,
-            retry_on_exceptions=(),
-            retry_if=_retry_if,
-        )
+        Returns:
+            True if download succeeded
 
+        Raises:
+            AzureError: If download fails after retries
+        """
+        remote_key = self._build_remote_path(remote_path)
         try:
-
-            def _once() -> bool:
-                blob = self.container.get_blob_client(blob_path)
-                with open(local_path, "wb") as handle:
-                    stream = blob.download_blob()
-                    stream.readinto(handle)
-                return True
-
-            return execute_with_retry(
-                _once,
-                policy=policy,
-                breaker=self._breaker_download,
-                operation_name="azure_download",
+            return self._execute_with_resilience(
+                lambda: self._do_download(remote_key, local_path),
+                self._breaker_download,
+                "azure_download",
             )
         except AzureError as exc:
-            logger.error("Azure download failed [%s]: %s", blob_path, exc)
+            logger.error("Azure download failed [%s]: %s", remote_key, exc)
             raise
 
     def list_files(self, prefix: str) -> List[str]:
-        blob_prefix = self._remote_path(prefix)
+        """List files in Azure Blob Storage with given prefix.
 
-        def _retry_if(exc: BaseException) -> bool:
-            return isinstance(exc, AzureError) and not isinstance(
-                exc, ResourceNotFoundError
-            )
+        Args:
+            prefix: Path prefix to filter files
 
-        policy = RetryPolicy(
-            max_attempts=5,
-            base_delay=0.5,
-            max_delay=8.0,
-            backoff_multiplier=2.0,
-            jitter=0.2,
-            retry_on_exceptions=(),
-            retry_if=_retry_if,
-        )
+        Returns:
+            List of blob names matching the prefix
 
+        Raises:
+            AzureError: If listing fails
+        """
+        full_prefix = self._build_remote_path(prefix)
         try:
-
-            def _once() -> List[str]:
-                return [
-                    blob.name
-                    for blob in self.container.list_blobs(name_starts_with=blob_prefix)
-                ]
-
-            return execute_with_retry(
-                _once,
-                policy=policy,
-                breaker=self._breaker_list,
-                operation_name="azure_list",
+            return self._execute_with_resilience(
+                lambda: self._do_list(full_prefix),
+                self._breaker_list,
+                "azure_list",
             )
         except AzureError as exc:
-            logger.error("Azure list failed [%s]: %s", blob_prefix, exc)
+            logger.error("Azure list failed [%s]: %s", full_prefix, exc)
             raise
 
     def delete_file(self, remote_path: str) -> bool:
-        blob_path = self._remote_path(remote_path)
+        """Delete a file from Azure Blob Storage.
 
-        def _retry_if(exc: BaseException) -> bool:
-            return isinstance(exc, AzureError) and not isinstance(
-                exc, ResourceNotFoundError
-            )
+        Args:
+            remote_path: Path to file in Azure
 
-        policy = RetryPolicy(
-            max_attempts=5,
-            base_delay=0.5,
-            max_delay=8.0,
-            backoff_multiplier=2.0,
-            jitter=0.2,
-            retry_on_exceptions=(),
-            retry_if=_retry_if,
-        )
+        Returns:
+            True if deletion succeeded
 
+        Raises:
+            AzureError: If deletion fails after retries
+        """
+        remote_key = self._build_remote_path(remote_path)
         try:
-
-            def _once() -> bool:
-                self.container.delete_blob(blob_path)
-                return True
-
-            return execute_with_retry(
-                _once,
-                policy=policy,
-                breaker=self._breaker_delete,
-                operation_name="azure_delete",
+            return self._execute_with_resilience(
+                lambda: self._do_delete(remote_key),
+                self._breaker_delete,
+                "azure_delete",
             )
         except AzureError as exc:
-            logger.error("Azure delete failed [%s]: %s", blob_path, exc)
+            logger.error("Azure delete failed [%s]: %s", remote_key, exc)
             raise
-
-    def get_backend_type(self) -> str:
-        return "azure"
 
 
 class AzureStorageBackend(AzureStorage):

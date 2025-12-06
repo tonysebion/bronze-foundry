@@ -28,7 +28,9 @@ def run_parallel_extracts(
         max_workers = 1
 
     logger.info(
-        f"Starting parallel extraction with {max_workers} workers for {len(contexts)} configs"
+        "Starting parallel extraction with %d workers for %d configs",
+        max_workers,
+        len(contexts),
     )
 
     results = []
@@ -50,15 +52,15 @@ def run_parallel_extracts(
 
                 if status_code == 0:
                     logger.info(
-                        f"Successfully completed extraction for {context.config_name}"
+                        "Successfully completed extraction for %s", context.config_name
                     )
                 else:
                     logger.error(
-                        f"Failed extraction for {context.config_name}: {error}"
+                        "Failed extraction for %s: %s", context.config_name, error
                     )
             except Exception as e:
                 logger.error(
-                    f"Unexpected error for {context.config_name}: {e}", exc_info=True
+                    "Unexpected error for %s: %s", context.config_name, e, exc_info=True
                 )
                 results.append((context.config_name, -1, e))
 
@@ -67,7 +69,10 @@ def run_parallel_extracts(
     failed = len(results) - successful
 
     logger.info(
-        f"Parallel extraction complete: {successful} successful, {failed} failed out of {len(contexts)} total"
+        "Parallel extraction complete: %d successful, %d failed out of %d total",
+        successful,
+        failed,
+        len(contexts),
     )
 
     return results
@@ -82,9 +87,11 @@ def _safe_run_extract(context: RunContext) -> Tuple[int, Optional[Exception]]:
         status_code = 0 for success, -1 for failure
     """
     try:
-        logger.info(f"Starting extraction for {context.config_name}")
+        logger.info("Starting extraction for %s", context.config_name)
         status = run_extract(context)
         return (status, None)
     except Exception as e:
-        logger.error(f"Extraction failed for {context.config_name}: {e}", exc_info=True)
+        logger.error(
+            "Extraction failed for %s: %s", context.config_name, e, exc_info=True
+        )
         return (-1, e)

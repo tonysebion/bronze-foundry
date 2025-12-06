@@ -2,6 +2,7 @@
 
 This module provides:
 - StorageBackend: Abstract base class for all storage backends
+- BaseCloudStorage: Abstract base for cloud backends with resilience patterns
 - Backend registry: Register and retrieve backend factories
 - get_storage_backend(): Factory function to get configured backend
 """
@@ -11,13 +12,16 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from abc import abstractmethod
 from enum import Enum
-from typing import Any, Callable, Dict, List, Union, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, TypeVar, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.infrastructure.config.typed_models import RootConfig
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 
 # =============================================================================
@@ -42,6 +46,271 @@ class StorageBackend:
 
     def get_backend_type(self) -> str:
         raise NotImplementedError
+
+
+# =============================================================================
+# Cloud Storage Base Class with Resilience
+# =============================================================================
+
+
+class BaseCloudStorage(StorageBackend):
+    """Abstract base class for cloud storage backends with resilience patterns.
+
+    Provides:
+    - Circuit breakers per operation (upload, download, list, delete)
+    - Retry policy with exponential backoff
+    - Common execute_with_resilience wrapper
+
+    Subclasses must implement:
+    - _do_upload(local_path, remote_key) -> bool
+    - _do_download(remote_key, local_path) -> bool
+    - _do_list(prefix) -> List[str]
+    - _do_delete(remote_key) -> bool
+    - _build_remote_path(remote_path) -> str
+    - _should_retry(exc) -> bool
+    - get_backend_type() -> str
+    """
+
+    def __init__(self) -> None:
+        """Initialize circuit breakers for each operation."""
+        from core.infrastructure.resilience.retry import CircuitBreaker
+
+        def _emit_state(state: str) -> None:
+            logger.info(
+                "metric=breaker_state component=%s state=%s",
+                self.get_backend_type(),
+                state,
+            )
+
+        self._breaker_upload = CircuitBreaker(
+            failure_threshold=5,
+            cooldown_seconds=30.0,
+            half_open_max_calls=1,
+            on_state_change=_emit_state,
+        )
+        self._breaker_download = CircuitBreaker(
+            failure_threshold=5,
+            cooldown_seconds=30.0,
+            half_open_max_calls=1,
+            on_state_change=_emit_state,
+        )
+        self._breaker_list = CircuitBreaker(
+            failure_threshold=5,
+            cooldown_seconds=30.0,
+            half_open_max_calls=1,
+            on_state_change=_emit_state,
+        )
+        self._breaker_delete = CircuitBreaker(
+            failure_threshold=5,
+            cooldown_seconds=30.0,
+            half_open_max_calls=1,
+            on_state_change=_emit_state,
+        )
+
+    def _build_retry_policy(
+        self,
+        retry_if: Callable[[BaseException], bool] | None = None,
+        delay_from_exception: Callable[[BaseException, int, float], float | None] | None = None,
+    ) -> "RetryPolicy":
+        """Build a standard retry policy for cloud operations.
+
+        Args:
+            retry_if: Custom predicate to determine if exception is retryable
+            delay_from_exception: Optional callback to extract delay from exception
+
+        Returns:
+            Configured RetryPolicy instance
+        """
+        from core.infrastructure.resilience.retry import RetryPolicy
+
+        return RetryPolicy(
+            max_attempts=5,
+            base_delay=0.5,
+            max_delay=8.0,
+            backoff_multiplier=2.0,
+            jitter=0.2,
+            retry_on_exceptions=(),
+            retry_if=retry_if or self._should_retry,
+            delay_from_exception=delay_from_exception,
+        )
+
+    def _execute_with_resilience(
+        self,
+        operation: Callable[[], T],
+        breaker: "CircuitBreaker",
+        operation_name: str,
+        retry_if: Callable[[BaseException], bool] | None = None,
+        delay_from_exception: Callable[[BaseException, int, float], float | None] | None = None,
+    ) -> T:
+        """Execute an operation with circuit breaker and retry logic.
+
+        Args:
+            operation: The operation to execute
+            breaker: Circuit breaker for this operation type
+            operation_name: Name for logging
+            retry_if: Optional custom retry predicate
+            delay_from_exception: Optional delay extraction callback
+
+        Returns:
+            Result of the operation
+
+        Raises:
+            Exception from operation if all retries exhausted
+        """
+        from core.infrastructure.resilience.retry import execute_with_retry
+
+        policy = self._build_retry_policy(retry_if, delay_from_exception)
+        return execute_with_retry(
+            operation,
+            policy=policy,
+            breaker=breaker,
+            operation_name=operation_name,
+        )
+
+    @abstractmethod
+    def _should_retry(self, exc: BaseException) -> bool:
+        """Determine if an exception should trigger a retry.
+
+        Args:
+            exc: The exception that was raised
+
+        Returns:
+            True if the operation should be retried
+        """
+        ...
+
+    @abstractmethod
+    def _build_remote_path(self, remote_path: str) -> str:
+        """Build the full remote path including any prefix.
+
+        Args:
+            remote_path: The relative remote path
+
+        Returns:
+            Full remote path with prefix applied
+        """
+        ...
+
+    @abstractmethod
+    def _do_upload(self, local_path: str, remote_key: str) -> bool:
+        """Perform the actual upload operation.
+
+        Args:
+            local_path: Path to local file
+            remote_key: Full remote key/path
+
+        Returns:
+            True if upload succeeded
+        """
+        ...
+
+    @abstractmethod
+    def _do_download(self, remote_key: str, local_path: str) -> bool:
+        """Perform the actual download operation.
+
+        Args:
+            remote_key: Full remote key/path
+            local_path: Path to save file locally
+
+        Returns:
+            True if download succeeded
+        """
+        ...
+
+    @abstractmethod
+    def _do_list(self, prefix: str) -> List[str]:
+        """Perform the actual list operation.
+
+        Args:
+            prefix: Full prefix to filter files
+
+        Returns:
+            List of file keys matching the prefix
+        """
+        ...
+
+    @abstractmethod
+    def _do_delete(self, remote_key: str) -> bool:
+        """Perform the actual delete operation.
+
+        Args:
+            remote_key: Full remote key/path
+
+        Returns:
+            True if deletion succeeded
+        """
+        ...
+
+    def upload_file(self, local_path: str, remote_path: str) -> bool:
+        """Upload a file with resilience.
+
+        Args:
+            local_path: Path to local file
+            remote_path: Destination path (relative to prefix)
+
+        Returns:
+            True if upload succeeded
+        """
+        remote_key = self._build_remote_path(remote_path)
+        return self._execute_with_resilience(
+            lambda: self._do_upload(local_path, remote_key),
+            self._breaker_upload,
+            f"{self.get_backend_type()}_upload",
+        )
+
+    def download_file(self, remote_path: str, local_path: str) -> bool:
+        """Download a file with resilience.
+
+        Args:
+            remote_path: Path in storage (relative to prefix)
+            local_path: Destination path on local filesystem
+
+        Returns:
+            True if download succeeded
+        """
+        remote_key = self._build_remote_path(remote_path)
+        return self._execute_with_resilience(
+            lambda: self._do_download(remote_key, local_path),
+            self._breaker_download,
+            f"{self.get_backend_type()}_download",
+        )
+
+    def list_files(self, prefix: str) -> List[str]:
+        """List files with resilience.
+
+        Args:
+            prefix: Path prefix to filter files
+
+        Returns:
+            List of file keys matching the prefix
+        """
+        full_prefix = self._build_remote_path(prefix)
+        return self._execute_with_resilience(
+            lambda: self._do_list(full_prefix),
+            self._breaker_list,
+            f"{self.get_backend_type()}_list",
+        )
+
+    def delete_file(self, remote_path: str) -> bool:
+        """Delete a file with resilience.
+
+        Args:
+            remote_path: Path to file in storage
+
+        Returns:
+            True if deletion succeeded
+        """
+        remote_key = self._build_remote_path(remote_path)
+        return self._execute_with_resilience(
+            lambda: self._do_delete(remote_key),
+            self._breaker_delete,
+            f"{self.get_backend_type()}_delete",
+        )
+
+
+# Need to import RetryPolicy and CircuitBreaker for type hints
+if TYPE_CHECKING:
+    from core.infrastructure.resilience.retry import RetryPolicy, CircuitBreaker
 
 
 # =============================================================================
