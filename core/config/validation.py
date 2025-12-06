@@ -420,6 +420,40 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     f"quality_rules[{i}].level must be one of {valid_rule_levels}, got '{rule_level}'"
                 )
 
+    # Validate schema config per spec Section 6
+    schema_cfg = cfg.get("schema")
+    if schema_cfg is not None:
+        if not isinstance(schema_cfg, dict):
+            raise ValueError("schema must be a dictionary")
+        expected_columns = schema_cfg.get("expected_columns", [])
+        if expected_columns:
+            if not isinstance(expected_columns, list):
+                raise ValueError("schema.expected_columns must be a list")
+            valid_column_types = [
+                "string", "integer", "bigint", "decimal", "float", "double",
+                "boolean", "date", "timestamp", "datetime", "binary", "array", "map", "struct", "any"
+            ]
+            for i, col in enumerate(expected_columns):
+                if not isinstance(col, dict):
+                    raise ValueError(f"schema.expected_columns[{i}] must be a dictionary")
+                if "name" not in col:
+                    raise ValueError(f"schema.expected_columns[{i}] requires 'name'")
+                col_type = col.get("type", "string").lower()
+                if col_type not in valid_column_types:
+                    raise ValueError(
+                        f"schema.expected_columns[{i}].type must be one of {valid_column_types}, got '{col_type}'"
+                    )
+                if "nullable" in col and not isinstance(col["nullable"], bool):
+                    raise ValueError(f"schema.expected_columns[{i}].nullable must be a boolean")
+                if "primary_key" in col and not isinstance(col["primary_key"], bool):
+                    raise ValueError(f"schema.expected_columns[{i}].primary_key must be a boolean")
+        primary_keys = schema_cfg.get("primary_keys", [])
+        if primary_keys and not isinstance(primary_keys, list):
+            raise ValueError("schema.primary_keys must be a list")
+        partition_columns = schema_cfg.get("partition_columns", [])
+        if partition_columns and not isinstance(partition_columns, list):
+            raise ValueError("schema.partition_columns must be a list")
+
     normalized_silver = _normalize_silver_config(cfg.get("silver"), source, pattern)
     run_cfg["silver"] = normalized_silver
     cfg["silver"] = normalized_silver
