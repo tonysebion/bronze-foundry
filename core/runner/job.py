@@ -12,12 +12,12 @@ from core.bronze.plan import (
     compute_output_formats,
     resolve_load_pattern,
 )
-from core.catalog import (
+from core.catalog.hooks import (
     report_quality_snapshot,
     report_run_metadata,
     report_schema_snapshot,
 )
-from core.context import RunContext
+from core.runtime.context import RunContext
 from core.extractors.api_extractor import ApiExtractor
 from core.extractors.base import BaseExtractor
 from core.extractors.db_extractor import DbExtractor
@@ -25,7 +25,7 @@ from core.extractors.db_multi_extractor import DbMultiExtractor
 from core.config.environment import EnvironmentConfig
 from core.extractors.file_extractor import FileExtractor
 from core.bronze.io import chunk_records
-from core.patterns import LoadPattern
+from core.foundations.patterns import LoadPattern
 from core.runner.chunks import ChunkProcessor, ChunkWriter
 from core.storage import get_storage_backend
 

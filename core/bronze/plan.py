@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Any, Tuple
 
-from core.patterns import LoadPattern
+from core.foundations.patterns import LoadPattern
 from core.runner.chunks import ChunkWriterConfig, StoragePlan
 from core.storage.backend import StorageBackend
 

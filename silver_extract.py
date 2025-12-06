@@ -20,24 +20,24 @@ from core.config import (
     ensure_root_config,
 )
 from core.config.typed_models import RootConfig
-from core.context import RunContext, build_run_context, load_run_context
+from core.runtime.context import RunContext, build_run_context, load_run_context
 from core.bronze.io import (
     write_batch_metadata,
     verify_checksum_manifest,
     write_checksum_manifest,
 )
-from core.logging import setup_logging
-from core.patterns import LoadPattern
-from core.paths import build_silver_partition_path, build_bronze_partition
-from core.catalog import (
+from core.foundations.logging import setup_logging
+from core.foundations.patterns import LoadPattern
+from core.runtime.paths import build_silver_partition_path, build_bronze_partition
+from core.catalog.hooks import (
     notify_catalog,
     report_schema_snapshot,
     report_quality_snapshot,
     report_run_metadata,
     report_lineage,
 )
-from core.hooks import fire_webhooks
-from core.run_options import RunOptions
+from core.catalog.webhooks import fire_webhooks
+from core.runtime.options import RunOptions
 from core.storage.policy import enforce_storage_scope
 from core.storage.locks import file_lock
 from core.silver.artifacts import (

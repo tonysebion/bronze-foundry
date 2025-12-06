@@ -17,8 +17,8 @@ from .dataset import (
 )
 from .env_substitution import apply_env_substitution
 from .typed_models import RootConfig, parse_root_config
-from core.exceptions import emit_compat
-from core.paths import build_bronze_relative_path
+from core.foundations.exceptions import emit_compat
+from core.runtime.paths import build_bronze_relative_path
 from core.config.environment import EnvironmentConfig, S3ConnectionConfig
 from .validation import validate_config_dict
 from .v2_validation import validate_v2_config_dict

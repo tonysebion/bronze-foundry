@@ -29,9 +29,9 @@ from core.bronze.io import (
     merge_parquet_records,
     merge_csv_records,
 )
-from core.patterns import LoadPattern
+from core.foundations.patterns import LoadPattern
 from core.config.validation import validate_config_dict
-from core.manifest import ManifestTracker
+from core.state.manifest import ManifestTracker
 
 
 class TestLoadPatterns:

@@ -18,8 +18,8 @@ from datetime import date
 
 import requests
 
-from core.resilience import RetryPolicy, execute_with_retry, CircuitBreaker, RateLimiter
-from core.tracing import trace_span
+from core.resilience.retry import RetryPolicy, execute_with_retry, CircuitBreaker, RateLimiter
+from core.catalog.tracing import trace_span
 from .async_http import AsyncApiClient, is_async_enabled
 
 from core.extractors.base import BaseExtractor

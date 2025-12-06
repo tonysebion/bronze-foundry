@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from core.patterns import LoadPattern
+from core.foundations.patterns import LoadPattern
 
 
 @dataclass

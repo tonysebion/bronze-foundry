@@ -9,8 +9,8 @@ from .watermark import (
     Watermark,
     WatermarkStore,
     WatermarkType,
-    load_watermark,
-    save_watermark,
+    build_watermark_store,
+    compute_max_watermark,
 )
 from .manifest import (
     FileEntry,
@@ -23,8 +23,8 @@ __all__ = [
     "Watermark",
     "WatermarkStore",
     "WatermarkType",
-    "load_watermark",
-    "save_watermark",
+    "build_watermark_store",
+    "compute_max_watermark",
     # Manifest
     "FileEntry",
     "FileManifest",

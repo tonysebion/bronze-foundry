@@ -22,13 +22,13 @@ from typing import Any, Dict, List, Optional, cast
 from core.config import load_configs, ensure_root_config
 from core.runner import run_extract
 from core.parallel import run_parallel_extracts
-from core.logging import setup_logging
+from core.foundations.logging import setup_logging
 from core.storage import get_storage_backend
-from core.patterns import LoadPattern
-from core.catalog import notify_catalog, report_run_metadata
-from core.context import build_run_context, RunContext
-from core.hooks import fire_webhooks
-from core.run_options import RunOptions
+from core.foundations.patterns import LoadPattern
+from core.catalog.hooks import notify_catalog, report_run_metadata
+from core.runtime.context import build_run_context, RunContext
+from core.catalog.webhooks import fire_webhooks
+from core.runtime.options import RunOptions
 from core.config.typed_models import RootConfig
 from core.storage.policy import enforce_storage_scope
 

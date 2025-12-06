@@ -8,7 +8,12 @@ This package contains execution context and run configuration:
 """
 
 from .context import RunContext, build_run_context, run_context_to_dict, load_run_context
-from .options import RunOptions, default_artifacts
+from .options import RunOptions
+
+# Expose default_artifacts as a module-level function for backward compatibility
+def default_artifacts():
+    """Return default artifact names dictionary."""
+    return RunOptions.default_artifacts()
 from .paths import (
     BronzePartition,
     SilverPartition,

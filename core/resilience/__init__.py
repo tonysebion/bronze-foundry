@@ -22,8 +22,10 @@ from .late_data import (
     LateDataMode,
     LateDataConfig,
     LateDataResult,
-    detect_late_data,
-    handle_late_data,
+    LateDataHandler,
+    BackfillWindow,
+    build_late_data_handler,
+    parse_backfill_window,
 )
 
 __all__ = [
@@ -45,6 +47,8 @@ __all__ = [
     "LateDataMode",
     "LateDataConfig",
     "LateDataResult",
-    "detect_late_data",
-    "handle_late_data",
+    "LateDataHandler",
+    "BackfillWindow",
+    "build_late_data_handler",
+    "parse_backfill_window",
 ]
