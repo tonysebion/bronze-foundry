@@ -26,10 +26,9 @@ from core.bronze.io import (
     verify_checksum_manifest,
     write_checksum_manifest,
 )
-from core.logging_config import setup_logging
+from core.logging import setup_logging
 from core.patterns import LoadPattern
-from core.paths import build_silver_partition_path
-from core.partitioning import build_bronze_partition
+from core.paths import build_silver_partition_path, build_bronze_partition
 from core.catalog import (
     notify_catalog,
     report_schema_snapshot,

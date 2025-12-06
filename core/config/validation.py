@@ -6,7 +6,7 @@ from typing import Any, Dict
 
 from .typed_models import SilverConfig, DataClassification
 from pydantic import ValidationError
-from core.deprecation import emit_compat, emit_deprecation, DeprecationSpec
+from core.exceptions import emit_compat, emit_deprecation, DeprecationSpec
 from core.patterns import LoadPattern
 from core.storage.policy import validate_storage_metadata
 

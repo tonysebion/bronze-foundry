@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional, cast
 from core.config import load_configs, ensure_root_config
 from core.runner import run_extract
 from core.parallel import run_parallel_extracts
-from core.logging_config import setup_logging
+from core.logging import setup_logging
 from core.storage import get_storage_backend
 from core.patterns import LoadPattern
 from core.catalog import notify_catalog, report_run_metadata

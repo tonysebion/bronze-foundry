@@ -366,3 +366,49 @@ class RetryExhaustedError(BronzeFoundryError):
 
         super().__init__(message, details)
         self.last_error = last_error
+
+
+# =============================================================================
+# Deprecation Warnings and Utilities
+# =============================================================================
+
+import warnings
+from dataclasses import dataclass
+
+
+class BronzeFoundryDeprecationWarning(DeprecationWarning):
+    """Base category for deprecation notices."""
+
+
+class BronzeFoundryCompatibilityWarning(UserWarning):
+    """Non-breaking compatibility fallback triggered."""
+
+
+warnings.simplefilter("default", BronzeFoundryDeprecationWarning)
+warnings.simplefilter("default", BronzeFoundryCompatibilityWarning)
+
+
+@dataclass(frozen=True)
+class DeprecationSpec:
+    """Specification for a deprecation notice."""
+
+    code: str
+    message: str
+    since: str
+    remove_in: Optional[str] = None
+
+    def format(self) -> str:
+        suffix = f" (scheduled removal: {self.remove_in})" if self.remove_in else ""
+        return f"[{self.code}] {self.message} (since {self.since}){suffix}"
+
+
+def emit_deprecation(spec: DeprecationSpec) -> None:
+    """Emit a deprecation warning."""
+    warnings.warn(spec.format(), BronzeFoundryDeprecationWarning, stacklevel=2)
+
+
+def emit_compat(message: str, code: str) -> None:
+    """Emit a compatibility warning."""
+    warnings.warn(
+        f"[{code}] {message}", BronzeFoundryCompatibilityWarning, stacklevel=2
+    )

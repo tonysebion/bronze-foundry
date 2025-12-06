@@ -8,7 +8,7 @@ focus on semantic intent so higher-level orchestration can remain simple.
 from __future__ import annotations
 
 import logging
-from core.deprecation import emit_compat
+from core.exceptions import emit_compat
 from core.patterns import LoadPattern
 from dataclasses import dataclass, field
 from enum import Enum

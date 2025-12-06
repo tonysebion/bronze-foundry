@@ -18,8 +18,7 @@ from datetime import date
 
 import requests
 
-from core.retry import RetryPolicy, execute_with_retry, CircuitBreaker
-from core.rate_limit import RateLimiter
+from core.resilience import RetryPolicy, execute_with_retry, CircuitBreaker, RateLimiter
 from core.tracing import trace_span
 from .async_http import AsyncApiClient, is_async_enabled
 
