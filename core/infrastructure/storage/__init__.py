@@ -35,6 +35,10 @@ from .checksum import (
     write_checksum_manifest,
     verify_checksum_manifest,
 )
+from .path_utils import (
+    sanitize_partition_value,
+    build_partition_path,
+)
 
 # Re-export concrete backends for direct import
 from .s3 import S3Storage, S3StorageBackend
@@ -67,6 +71,9 @@ __all__ = [
     "compute_file_sha256",
     "write_checksum_manifest",
     "verify_checksum_manifest",
+    # Path utilities
+    "sanitize_partition_value",
+    "build_partition_path",
     # Concrete backends
     "S3Storage",
     "S3StorageBackend",
