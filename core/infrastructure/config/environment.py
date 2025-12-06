@@ -7,52 +7,15 @@ that can be shared across multiple pattern configurations.
 from __future__ import annotations
 
 import logging
-import os
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import yaml
 
+from core.infrastructure.config.env_utils import resolve_env_vars
+
 logger = logging.getLogger(__name__)
-
-
-def resolve_env_vars(value: Any) -> Any:
-    """Recursively resolve ${VAR_NAME} patterns in config values.
-
-    Args:
-        value: Config value that may contain environment variable references
-
-    Returns:
-        Value with environment variables resolved
-
-    Example:
-        >>> os.environ["MY_KEY"] = "secret123"
-        >>> resolve_env_vars("${MY_KEY}")
-        'secret123'
-        >>> resolve_env_vars({"key": "${MY_KEY}"})
-        {'key': 'secret123'}
-    """
-    if isinstance(value, str):
-        pattern = re.compile(r"\$\{([^}]+)\}")
-
-        def replacer(match: re.Match) -> str:
-            var_name = match.group(1)
-            env_value = os.environ.get(var_name)
-            if env_value is None:
-                logger.warning(
-                    f"Environment variable {var_name} not found, keeping placeholder"
-                )
-                return match.group(0)
-            return env_value
-
-        return pattern.sub(replacer, value)
-    elif isinstance(value, dict):
-        return {k: resolve_env_vars(v) for k, v in value.items()}
-    elif isinstance(value, list):
-        return [resolve_env_vars(item) for item in value]
-    return value
 
 
 @dataclass
