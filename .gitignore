@@ -245,3 +245,5 @@ CLAUDE.md
 .vscode/
 .vscode/settings.json
 .codex/instructions.md
+.codex/story_backlog.md
+.vscode/settings.json

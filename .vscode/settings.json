@@ -13,6 +13,6 @@
     "python-envs.pythonProjects": [],
     "makefile.configureOnOpen": false,
     "claudeCode.respectGitIgnore": false,
-    "codex.systemPrompt": "Load the instructions from .codex/instructions.md and follow them for every request.",
+    "codex.systemPrompt": "Load the instructions from .codex/instructions.md and follow them for every request.  Load the .codex/story_backlog to understand the tasks that we'll be working on together.  As the stories are completed, suggest that they be removed and new ones to be added.",
     "codex.alwaysSendContext": true
 }
