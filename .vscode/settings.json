@@ -12,5 +12,7 @@
     "python.testing.cwd": "${workspaceFolder}",
     "python-envs.pythonProjects": [],
     "makefile.configureOnOpen": false,
-    "claudeCode.respectGitIgnore": false
+    "claudeCode.respectGitIgnore": false,
+    "codex.systemPrompt": "Load the instructions from .codex/instructions.md and follow them for every request.",
+    "codex.alwaysSendContext": true
 }
