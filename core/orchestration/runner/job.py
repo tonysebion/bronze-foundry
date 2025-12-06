@@ -144,7 +144,7 @@ class ExtractJob:
         writer = ChunkWriter(writer_config)
         processor = ChunkProcessor(writer, parallel_workers)
         chunk_files = processor.process(chunks)
-        return len(chunks), chunk_files
+        return len(chunk_files), chunk_files
 
     def _emit_metadata(
         self, record_count: int, chunk_count: int, cursor: Optional[str]

@@ -66,6 +66,20 @@ def emit_bronze_metadata(
     created_files: List[Path],
 ) -> Path:
     run_date_str = run_date.date().isoformat()
+    actual_chunk_artifact_count = len(created_files)
+    if chunk_count != actual_chunk_artifact_count:
+        raise RuntimeError(
+            (
+                "Chunk count %d does not match %d created artifacts for %s.%s partition %s"
+                % (
+                    chunk_count,
+                    actual_chunk_artifact_count,
+                    system,
+                    table,
+                    relative_path,
+                )
+            )
+        )
     metadata_payload = {
         "batch_timestamp": utc_isoformat(),
         "run_date": run_date_str,
