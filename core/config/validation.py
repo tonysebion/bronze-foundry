@@ -180,7 +180,8 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
             raise ValueError(f"Missing required key 'source.{key}' in config")
 
     source_type = source.get("type", "api")
-    valid_source_types = ["api", "db", "custom", "file"]
+    # Per spec Section 3: db_table, db_query, db_multi, file_batch, api
+    valid_source_types = ["api", "db", "db_table", "db_query", "db_multi", "file", "file_batch", "custom"]
     if source_type not in valid_source_types:
         raise ValueError(
             f"Invalid source.type: '{source_type}'. Must be one of {valid_source_types}"
@@ -188,14 +189,16 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     if source_type == "api" and "api" not in source:
         raise ValueError("source.type='api' requires 'source.api' section")
-    if source_type == "db" and "db" not in source:
-        raise ValueError("source.type='db' requires 'source.db' section")
+    if source_type in ("db", "db_table", "db_query") and "db" not in source:
+        raise ValueError(f"source.type='{source_type}' requires 'source.db' section")
+    if source_type == "db_multi" and "entities" not in source:
+        raise ValueError("source.type='db_multi' requires 'source.entities' list")
     if source_type == "custom" and "custom_extractor" not in source:
         raise ValueError(
             "source.type='custom' requires 'source.custom_extractor' section"
         )
-    if source_type == "file" and "file" not in source:
-        raise ValueError("source.type='file' requires 'source.file' section")
+    if source_type in ("file", "file_batch") and "file" not in source:
+        raise ValueError(f"source.type='{source_type}' requires 'source.file' section")
 
     if source_type == "custom":
         custom = source["custom_extractor"]
@@ -225,7 +228,7 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
             if not isinstance(limit_rows, int) or limit_rows <= 0:
                 raise ValueError("source.file.limit_rows must be a positive integer")
 
-    if source_type == "db":
+    if source_type in ("db", "db_table", "db_query"):
         db = source["db"]
         if "conn_str_env" not in db:
             raise ValueError(
@@ -233,6 +236,23 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
             )
         if "base_query" not in db:
             raise ValueError("source.db requires 'base_query' for SQL query")
+
+    if source_type == "db_multi":
+        entities = source.get("entities", [])
+        if not entities:
+            raise ValueError("source.type='db_multi' requires at least one entity")
+        if not isinstance(entities, list):
+            raise ValueError("source.entities must be a list")
+        for i, entity in enumerate(entities):
+            if not isinstance(entity, dict):
+                raise ValueError(f"source.entities[{i}] must be a dictionary")
+            if "name" not in entity:
+                raise ValueError(f"source.entities[{i}] requires 'name'")
+        # db_multi requires connection_ref or db.conn_str_env
+        if "connection_ref" not in source and "db" not in source:
+            raise ValueError(
+                "source.type='db_multi' requires 'connection_ref' or 'source.db.conn_str_env'"
+            )
 
     if source_type == "api":
         api = source["api"]
@@ -313,6 +333,62 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
             "cadence_days": cadence,
             "delta_patterns": delta_patterns,
         }
+
+    # Validate late_data config per spec Section 4
+    late_data = run_cfg.get("late_data")
+    if late_data is not None:
+        if not isinstance(late_data, dict):
+            raise ValueError("source.run.late_data must be a dictionary")
+        mode = late_data.get("mode", "allow")
+        valid_late_data_modes = ["allow", "reject", "quarantine"]
+        if mode not in valid_late_data_modes:
+            raise ValueError(
+                f"source.run.late_data.mode must be one of {valid_late_data_modes}, got '{mode}'"
+            )
+        threshold_days = late_data.get("threshold_days", 7)
+        if not isinstance(threshold_days, int) or threshold_days <= 0:
+            raise ValueError(
+                "source.run.late_data.threshold_days must be a positive integer"
+            )
+        quarantine_path = late_data.get("quarantine_path", "_quarantine")
+        if not isinstance(quarantine_path, str):
+            raise ValueError("source.run.late_data.quarantine_path must be a string")
+        timestamp_column = late_data.get("timestamp_column")
+        if timestamp_column is not None and not isinstance(timestamp_column, str):
+            raise ValueError(
+                "source.run.late_data.timestamp_column must be a string when provided"
+            )
+
+    # Validate backfill config per spec Section 4
+    backfill = run_cfg.get("backfill")
+    if backfill is not None:
+        if not isinstance(backfill, dict):
+            raise ValueError("source.run.backfill must be a dictionary")
+        start_date = backfill.get("start_date")
+        end_date = backfill.get("end_date")
+        if start_date is None or end_date is None:
+            raise ValueError(
+                "source.run.backfill requires both 'start_date' and 'end_date'"
+            )
+        # Validate date format
+        from datetime import date as date_cls
+        if isinstance(start_date, str):
+            try:
+                date_cls.fromisoformat(start_date)
+            except ValueError:
+                raise ValueError(
+                    "source.run.backfill.start_date must be a valid ISO date (YYYY-MM-DD)"
+                )
+        if isinstance(end_date, str):
+            try:
+                date_cls.fromisoformat(end_date)
+            except ValueError:
+                raise ValueError(
+                    "source.run.backfill.end_date must be a valid ISO date (YYYY-MM-DD)"
+                )
+        force_full = backfill.get("force_full", False)
+        if not isinstance(force_full, bool):
+            raise ValueError("source.run.backfill.force_full must be a boolean")
 
     partition_strategy = (
         platform.get("bronze", {})

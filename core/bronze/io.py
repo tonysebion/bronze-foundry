@@ -300,3 +300,169 @@ def verify_checksum_manifest(
         )
 
     return manifest
+
+
+def merge_parquet_records(
+    existing_path: Path,
+    new_records: List[Dict[str, Any]],
+    primary_keys: List[str],
+    out_path: Optional[Path] = None,
+    compression: str = "snappy",
+) -> int:
+    """Merge new records with existing Parquet file using primary keys.
+
+    Implements INCREMENTAL_MERGE pattern: upsert semantics where new records
+    replace existing records with matching primary keys.
+
+    Args:
+        existing_path: Path to existing Parquet file
+        new_records: New records to merge
+        primary_keys: List of columns that form the primary key
+        out_path: Output path (defaults to existing_path, overwriting)
+        compression: Parquet compression codec
+
+    Returns:
+        Total record count after merge
+    """
+    if not new_records:
+        logger.info("No new records to merge")
+        if existing_path.exists():
+            return len(pd.read_parquet(existing_path))
+        return 0
+
+    new_df = pd.DataFrame.from_records(new_records)
+
+    if not existing_path.exists():
+        # No existing data, just write new records
+        target = out_path or existing_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        new_df.to_parquet(target, index=False, compression=compression)
+        logger.info(f"Created new Parquet with {len(new_df)} records at {target}")
+        return len(new_df)
+
+    # Load existing data
+    existing_df = pd.read_parquet(existing_path)
+
+    # Verify primary keys exist in both DataFrames
+    missing_in_existing = [k for k in primary_keys if k not in existing_df.columns]
+    missing_in_new = [k for k in primary_keys if k not in new_df.columns]
+
+    if missing_in_existing:
+        raise ValueError(f"Primary keys missing in existing data: {missing_in_existing}")
+    if missing_in_new:
+        raise ValueError(f"Primary keys missing in new data: {missing_in_new}")
+
+    # Create composite key for matching
+    if len(primary_keys) == 1:
+        pk_col = primary_keys[0]
+        existing_keys = set(existing_df[pk_col].astype(str))
+        new_keys = set(new_df[pk_col].astype(str))
+    else:
+        # Multi-column key: create tuple index
+        existing_keys = set(
+            existing_df[primary_keys].apply(lambda r: tuple(str(v) for v in r), axis=1)
+        )
+        new_keys = set(
+            new_df[primary_keys].apply(lambda r: tuple(str(v) for v in r), axis=1)
+        )
+
+    # Identify records to keep from existing (those not in new)
+    if len(primary_keys) == 1:
+        pk_col = primary_keys[0]
+        keep_mask = ~existing_df[pk_col].astype(str).isin(new_keys)
+    else:
+        keep_mask = ~existing_df[primary_keys].apply(
+            lambda r: tuple(str(v) for v in r), axis=1
+        ).isin(new_keys)
+
+    kept_existing = existing_df[keep_mask]
+
+    # Concatenate kept existing with new records
+    merged_df = pd.concat([kept_existing, new_df], ignore_index=True)
+
+    # Write merged result
+    target = out_path or existing_path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    merged_df.to_parquet(target, index=False, compression=compression)
+
+    updated_count = len(existing_keys & new_keys)
+    inserted_count = len(new_keys - existing_keys)
+    logger.info(
+        f"Merged Parquet: {len(merged_df)} total records "
+        f"({updated_count} updated, {inserted_count} inserted) at {target}"
+    )
+
+    return len(merged_df)
+
+
+def merge_csv_records(
+    existing_path: Path,
+    new_records: List[Dict[str, Any]],
+    primary_keys: List[str],
+    out_path: Optional[Path] = None,
+) -> int:
+    """Merge new records with existing CSV file using primary keys.
+
+    Implements INCREMENTAL_MERGE pattern for CSV files.
+
+    Args:
+        existing_path: Path to existing CSV file
+        new_records: New records to merge
+        primary_keys: List of columns that form the primary key
+        out_path: Output path (defaults to existing_path, overwriting)
+
+    Returns:
+        Total record count after merge
+    """
+    if not new_records:
+        logger.info("No new records to merge")
+        if existing_path.exists():
+            with existing_path.open("r", encoding="utf-8") as f:
+                return sum(1 for _ in f) - 1  # Subtract header
+        return 0
+
+    new_df = pd.DataFrame.from_records(new_records)
+
+    if not existing_path.exists():
+        # No existing data, just write new records
+        target = out_path or existing_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        new_df.to_csv(target, index=False)
+        logger.info(f"Created new CSV with {len(new_df)} records at {target}")
+        return len(new_df)
+
+    # Load existing data
+    existing_df = pd.read_csv(existing_path)
+
+    # Verify primary keys exist
+    missing_in_existing = [k for k in primary_keys if k not in existing_df.columns]
+    missing_in_new = [k for k in primary_keys if k not in new_df.columns]
+
+    if missing_in_existing:
+        raise ValueError(f"Primary keys missing in existing data: {missing_in_existing}")
+    if missing_in_new:
+        raise ValueError(f"Primary keys missing in new data: {missing_in_new}")
+
+    # Create key set from new records
+    if len(primary_keys) == 1:
+        pk_col = primary_keys[0]
+        new_keys = set(new_df[pk_col].astype(str))
+        keep_mask = ~existing_df[pk_col].astype(str).isin(new_keys)
+    else:
+        new_keys = set(
+            new_df[primary_keys].apply(lambda r: tuple(str(v) for v in r), axis=1)
+        )
+        keep_mask = ~existing_df[primary_keys].apply(
+            lambda r: tuple(str(v) for v in r), axis=1
+        ).isin(new_keys)
+
+    kept_existing = existing_df[keep_mask]
+
+    # Concatenate and write
+    merged_df = pd.concat([kept_existing, new_df], ignore_index=True)
+    target = out_path or existing_path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    merged_df.to_csv(target, index=False)
+
+    logger.info(f"Merged CSV: {len(merged_df)} total records at {target}")
+    return len(merged_df)

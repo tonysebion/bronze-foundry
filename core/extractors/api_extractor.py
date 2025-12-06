@@ -1,4 +1,12 @@
-"""API-based extraction with authentication and pagination support."""
+"""API-based extraction with authentication and pagination support per spec Section 3.
+
+Supports api source type with:
+- Multiple authentication methods (bearer, api_key, basic, none)
+- Pagination (offset, page, cursor, none)
+- Rate limiting and retry logic
+- Async HTTP support
+- Watermark-based incremental extraction
+"""
 
 from __future__ import annotations
 
@@ -21,7 +29,29 @@ logger = logging.getLogger(__name__)
 
 
 class ApiExtractor(BaseExtractor):
-    """Extractor for REST API sources with authentication and pagination."""
+    """Extractor for REST API sources with authentication and pagination.
+
+    Supports bearer token, API key, and basic authentication. Handles
+    various pagination strategies and includes rate limiting support.
+    """
+
+    def get_watermark_config(self, cfg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Get watermark configuration for API extraction.
+
+        Returns watermark config based on cursor_field in source.api.
+        """
+        source = cfg.get("source", {})
+        api_cfg = source.get("api", {})
+
+        cursor_field = api_cfg.get("cursor_field")
+        if not cursor_field:
+            return None
+
+        return {
+            "enabled": True,
+            "column": cursor_field,
+            "type": api_cfg.get("cursor_type", "timestamp"),
+        }
 
     _breaker = CircuitBreaker(
         failure_threshold=5, cooldown_seconds=30.0, half_open_max_calls=1

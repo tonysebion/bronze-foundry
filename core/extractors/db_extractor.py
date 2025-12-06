@@ -1,4 +1,11 @@
-"""Database extraction with incremental cursor support."""
+"""Database extraction with incremental cursor support per spec Section 3.
+
+Supports db_table and db_query source types with:
+- Incremental loading via watermark columns
+- Parameterized queries with cursor substitution
+- Connection string from environment variables
+- Retry logic with exponential backoff
+"""
 
 import logging
 import os
@@ -21,7 +28,33 @@ logger = logging.getLogger(__name__)
 
 
 class DbExtractor(BaseExtractor):
-    """Extractor for database sources with incremental loading support."""
+    """Extractor for database sources with incremental loading support.
+
+    Supports both db_table and db_query source types. Watermark handling
+    allows for incremental extraction based on a timestamp or sequence column.
+    """
+
+    def get_watermark_config(self, cfg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Get watermark configuration for database extraction.
+
+        Returns watermark config based on the incremental settings in source.db.
+        """
+        source = cfg.get("source", {})
+        db_cfg = source.get("db", {})
+        incremental = db_cfg.get("incremental", {})
+
+        if not incremental.get("enabled", False):
+            return None
+
+        cursor_column = incremental.get("cursor_column")
+        if not cursor_column:
+            return None
+
+        return {
+            "enabled": True,
+            "column": cursor_column,
+            "type": incremental.get("cursor_type", "timestamp"),
+        }
 
     def _get_state_file_path(self, cfg: Dict[str, Any]) -> Path:
         """Get the path to the state file for incremental loads."""
