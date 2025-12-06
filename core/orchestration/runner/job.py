@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 from pathlib import Path
@@ -13,11 +14,6 @@ from core.pipeline.bronze.models import (
     compute_output_formats,
     resolve_load_pattern,
 )
-from core.primitives.catalog.hooks import (
-    report_quality_snapshot,
-    report_run_metadata,
-    report_schema_snapshot,
-)
 from core.pipeline.runtime.context import RunContext
 from core.adapters.extractors.base import BaseExtractor
 from core.adapters.extractors.factory import (
@@ -28,6 +24,17 @@ from core.pipeline.bronze.io import chunk_records, verify_checksum_manifest
 from core.primitives.foundations.patterns import LoadPattern
 from core.orchestration.runner.chunks import ChunkProcessor, ChunkWriter
 from core.infrastructure.storage import get_storage_backend
+from core.adapters.schema.evolution import (
+    EvolutionConfig,
+    SchemaEvolution,
+    SchemaEvolutionMode,
+)
+from core.adapters.schema.types import ColumnSpec, DataType, SchemaSpec
+from core.primitives.catalog.hooks import (
+    report_quality_snapshot,
+    report_run_metadata,
+    report_schema_snapshot,
+)
 
 logger = logging.getLogger(__name__)
 ensure_extractors_loaded()
@@ -64,6 +71,7 @@ class ExtractJob:
 
         self.storage_plan: Optional[StoragePlan] = None
         self.schema_snapshot: List[Dict[str, str]] = []
+        self.previous_manifest_schema: Optional[List[Dict[str, Any]]] = None
 
     @property
     def source_cfg(self) -> Dict[str, Any]:
@@ -155,11 +163,16 @@ class ExtractJob:
 
         expected_pattern = self.load_pattern.value if self.load_pattern else None
         try:
-            verify_checksum_manifest(
+            manifest = verify_checksum_manifest(
                 self._out_dir,
                 expected_pattern=expected_pattern,
             )
+            self._store_previous_manifest_schema(manifest)
+            self._assert_schema_compatible()
         except (ValueError, FileNotFoundError) as exc:
+            manifest = self._load_manifest_json()
+            if manifest:
+                self._store_previous_manifest_schema(manifest)
             logger.warning(
                 "Detected incomplete Bronze partition at %s: %s; resetting artifacts for a clean rerun.",
                 self._out_dir,
@@ -180,9 +193,91 @@ class ExtractJob:
         self._out_dir.mkdir(parents=True, exist_ok=True)
         self.created_files = []
 
+    def _load_manifest_json(self) -> Optional[Dict[str, Any]]:
+        manifest_path = self._out_dir / "_checksums.json"
+        if not manifest_path.exists():
+            return None
+        try:
+            text = manifest_path.read_text(encoding="utf-8")
+            return json.loads(text)
+        except Exception:
+            return None
+
+    def _store_previous_manifest_schema(self, manifest: Optional[Dict[str, Any]]) -> None:
+        if not manifest:
+            return
+        schema = manifest.get("schema")
+        if isinstance(schema, list):
+            self.previous_manifest_schema = schema
+
+    def _schema_spec_from_snapshot(
+        self, snapshot: List[Dict[str, Any]]
+    ) -> SchemaSpec:
+        columns: List[ColumnSpec] = []
+        for entry in snapshot:
+            name = entry.get("name")
+            if not name:
+                continue
+            dtype = entry.get("dtype", "any")
+            columns.append(
+                ColumnSpec(
+                    name=name,
+                    type=DataType.from_string(dtype),
+                    nullable=entry.get("nullable", True),
+                )
+            )
+        return SchemaSpec(columns=columns)
+
+    def _resolve_schema_evolution_config(self) -> EvolutionConfig:
+        schema_cfg = self.source_cfg.get("run", {}).get("schema_evolution")
+        if not schema_cfg or not isinstance(schema_cfg, dict):
+            schema_cfg = self.cfg.get("schema_evolution") or {}
+        if not isinstance(schema_cfg, dict):
+            schema_cfg = {}
+
+        mode_str = schema_cfg.get("mode", "strict")
+        try:
+            mode = SchemaEvolutionMode(mode_str)
+        except ValueError:
+            logger.warning(
+                "Unknown schema_evolution.mode '%s', defaulting to strict", mode_str
+            )
+            mode = SchemaEvolutionMode.STRICT
+
+        protected_columns = schema_cfg.get("protected_columns", [])
+        if not isinstance(protected_columns, list):
+            protected_columns = []
+
+        return EvolutionConfig(
+            mode=mode,
+            allow_type_relaxation=schema_cfg.get("allow_type_relaxation", False),
+            allow_precision_increase=schema_cfg.get("allow_precision_increase", True),
+            protected_columns=protected_columns,
+        )
+
+    def _assert_schema_compatible(self) -> None:
+        if not self.previous_manifest_schema or not self.schema_snapshot:
+            return
+
+        config = self._resolve_schema_evolution_config()
+        evolution = SchemaEvolution(config)
+        previous_spec = self._schema_spec_from_snapshot(self.previous_manifest_schema)
+        current_spec = self._schema_spec_from_snapshot(self.schema_snapshot)
+        result = evolution.check_evolution(previous_spec, current_spec)
+
+        if not result.compatible:
+            logger.error(
+                "Schema drift blocked by evolution rules: %s", result.to_dict()
+            )
+            raise RuntimeError(
+                "Schema drift detected and blocked by configured evolution rules. "
+                f"Details: {result.to_dict()}"
+            )
+
     def _emit_metadata(
         self, record_count: int, chunk_count: int, cursor: Optional[str]
     ) -> None:
+        self._assert_schema_compatible()
         reference_mode = self.source_cfg["run"].get("reference_mode")
         from datetime import datetime
 

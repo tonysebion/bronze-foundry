@@ -297,6 +297,7 @@ class TestExtractJob:
         ctx.relative_path = "system=test/table=test_table"
         job = ExtractJob(ctx)
         job._out_dir.mkdir(parents=True, exist_ok=True)
+        (job._out_dir / "_checksums.json").write_text("{}", encoding="utf-8")
         (job._out_dir / "_checksums.json").write_text("{}")
 
         with pytest.raises(RuntimeError, match="already contains a verified checksum manifest"):
@@ -331,6 +332,33 @@ class TestExtractJob:
         assert chunk_count == 0
         assert chunk_files == []
         assert not manifest.exists()
+
+    @patch("core.orchestration.runner.job.verify_checksum_manifest")
+    @patch("core.orchestration.runner.job.ChunkProcessor")
+    def test_schema_drift_detected_before_chunks(
+        self,
+        mock_chunk_processor_cls,
+        mock_verify,
+        tmp_path,
+    ):
+        """Runs with incompatible schema should abort before chunking."""
+        mock_verify.return_value = {"schema": [{"name": "id", "dtype": "integer"}]}
+        mock_processor = Mock()
+        mock_processor.process.return_value = []
+        mock_chunk_processor_cls.return_value = mock_processor
+
+        ctx = self._make_context()
+        job = ExtractJob(ctx)
+        job._out_dir.mkdir(parents=True, exist_ok=True)
+        (job._out_dir / "_checksums.json").write_text("{}", encoding="utf-8")
+        job.schema_snapshot = [
+            {"name": "id", "dtype": "integer"},
+            {"name": "extra", "dtype": "string"},
+        ]
+        job.load_pattern = LoadPattern.SNAPSHOT
+
+        with pytest.raises(RuntimeError, match="Schema drift detected"):
+            job._inspect_existing_manifest()
 
     def test_process_chunks_requires_output_format(self):
         """Bronze chunking should fail if both CSV and Parquet are disabled."""
