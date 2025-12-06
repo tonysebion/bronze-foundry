@@ -7,7 +7,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from core.infrastructure.config import build_relative_path
+from core.pipeline.runtime.paths import build_bronze_relative_path
 from core.infrastructure.config.typed_models import RootConfig
 from core.infrastructure.config.environment import EnvironmentConfig
 from core.primitives.foundations.patterns import LoadPattern
@@ -70,7 +70,7 @@ def build_run_context(
     local_output_dir = Path(
         local_output_override or run_cfg.get("local_output_dir", "./output")
     ).resolve()
-    relative_path = relative_override or build_relative_path(cfg_dict, run_date)
+    relative_path = relative_override or build_bronze_relative_path(cfg_dict, run_date)
     bronze_path = (
         Path(bronze_path_override).resolve()
         if bronze_path_override

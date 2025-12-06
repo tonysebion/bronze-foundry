@@ -2,11 +2,13 @@
 
 This package contains shared primitives with no internal dependencies:
 - patterns: LoadPattern enum (SNAPSHOT, INCREMENTAL_APPEND, INCREMENTAL_MERGE)
+- models: SilverModel enum (SCD_TYPE_1, SCD_TYPE_2, etc.)
 - exceptions: Domain exception hierarchy and deprecation utilities
 - logging: Logging configuration (JSONFormatter, setup_logging)
 """
 
 from .patterns import LoadPattern
+from .models import SilverModel, SILVER_MODEL_ALIASES
 from .exceptions import (
     BronzeFoundryError,
     ConfigValidationError,
@@ -28,6 +30,9 @@ from .logging import setup_logging
 __all__ = [
     # Patterns
     "LoadPattern",
+    # Models
+    "SilverModel",
+    "SILVER_MODEL_ALIASES",
     # Exceptions
     "BronzeFoundryError",
     "ConfigValidationError",

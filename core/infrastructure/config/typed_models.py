@@ -28,7 +28,13 @@ from pydantic import (
 from enum import Enum
 
 from core.primitives.foundations.patterns import LoadPattern
-from core.pipeline.silver.models import SilverModel, resolve_profile
+from core.primitives.foundations.models import SilverModel
+
+# resolve_profile is in pipeline layer, import lazily if needed
+def resolve_profile(profile_name: str | None) -> SilverModel | None:
+    """Resolve a profile name to a SilverModel (lazy import)."""
+    from core.pipeline.silver.models import resolve_profile as _resolve
+    return _resolve(profile_name)
 
 from .dataset import DatasetConfig
 

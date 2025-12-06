@@ -18,7 +18,6 @@ from .dataset import (
 from .env_substitution import apply_env_substitution
 from .typed_models import RootConfig, parse_root_config
 from core.primitives.foundations.exceptions import emit_compat
-from core.pipeline.runtime.paths import build_bronze_relative_path
 from core.infrastructure.config.environment import EnvironmentConfig, S3ConnectionConfig
 from .validation import validate_config_dict
 from .v2_validation import validate_v2_config_dict
@@ -194,10 +193,6 @@ def load_configs(
         results.append(parse_root_config(validated))
 
     return results
-
-
-def build_relative_path(cfg: Dict[str, Any], run_date: _date) -> str:
-    return build_bronze_relative_path(cfg, run_date)
 
 
 def _load_environment_config(

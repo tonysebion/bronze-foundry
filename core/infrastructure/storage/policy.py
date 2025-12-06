@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Any, Optional, Union
-from core.infrastructure.config.typed_models import PlatformConfig
+from typing import TYPE_CHECKING, Dict, Any, Optional, Union
+
+if TYPE_CHECKING:
+    from core.infrastructure.config.typed_models import PlatformConfig
 
 
 # =============================================================================
@@ -31,9 +33,10 @@ class StorageMetadata:
 
 
 def validate_storage_metadata(
-    platform_cfg: Union[Dict[str, Any], PlatformConfig],
+    platform_cfg: Union[Dict[str, Any], "PlatformConfig"],
 ) -> None:
-    if isinstance(platform_cfg, PlatformConfig):
+    # Duck-type check: if it has model_dump, it's a Pydantic model
+    if hasattr(platform_cfg, "model_dump"):
         platform_cfg = platform_cfg.model_dump()
     bronze_cfg = platform_cfg.get("bronze", {})
     metadata = bronze_cfg.get("storage_metadata")
@@ -59,9 +62,10 @@ def validate_storage_metadata(
 
 
 def enforce_storage_scope(
-    platform_cfg: Union[Dict[str, Any], PlatformConfig], scope: str | None
+    platform_cfg: Union[Dict[str, Any], "PlatformConfig"], scope: str | None
 ) -> None:
-    if isinstance(platform_cfg, PlatformConfig):
+    # Duck-type check: if it has model_dump, it's a Pydantic model
+    if hasattr(platform_cfg, "model_dump"):
         platform_cfg = platform_cfg.model_dump()
     if not scope or scope == "any":
         return
