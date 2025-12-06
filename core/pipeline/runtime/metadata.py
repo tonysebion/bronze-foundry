@@ -424,12 +424,18 @@ def build_run_metadata(
     except ValueError:
         data_classification = DataClassification.INTERNAL
 
-    # Extract schema evolution mode
-    schema_cfg = config.get("schema_evolution", {})
-    if isinstance(schema_cfg, dict):
-        schema_evolution_mode = schema_cfg.get("mode", "strict")
-    else:
-        schema_evolution_mode = "strict"
+    # Extract schema evolution mode (supports root-level or source.run overrides)
+    schema_cfg = config.get("schema_evolution")
+    if not isinstance(schema_cfg, dict):
+        schema_cfg = {}
+
+    if not schema_cfg:
+        run_cfg = config.get("source", {}).get("run", {})
+        run_schema_cfg = run_cfg.get("schema_evolution")
+        if isinstance(run_schema_cfg, dict):
+            schema_cfg = run_schema_cfg
+
+    schema_evolution_mode = schema_cfg.get("mode", "strict") if isinstance(schema_cfg, dict) else "strict"
 
     # Extract owners
     owners = OwnerInfo.from_dict(config.get("owners"))
