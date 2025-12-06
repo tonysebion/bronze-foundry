@@ -54,6 +54,42 @@ class SchemaEvolutionConfig(BaseModel):
 
     mode: str = "strict"  # strict | allow_new_nullable | ignore_unknown
     allow_type_relaxation: bool = False
+    allow_precision_increase: bool = True
+    protected_columns: List[str] = Field(default_factory=list)
+
+
+class ExpectedColumn(BaseModel):
+    """Expected column specification per spec Section 6."""
+
+    name: str
+    type: str = "string"  # string, integer, bigint, decimal, float, double, boolean, date, timestamp, datetime
+    nullable: bool = True
+    primary_key: bool = False
+    precision: Optional[int] = None  # For decimal
+    scale: Optional[int] = None  # For decimal
+    description: Optional[str] = None
+    format: Optional[str] = None  # For date/timestamp parsing
+
+
+class SchemaConfig(BaseModel):
+    """Schema configuration per spec Section 6."""
+
+    expected_columns: List[ExpectedColumn] = Field(default_factory=list)
+    primary_keys: List[str] = Field(default_factory=list)
+    partition_columns: List[str] = Field(default_factory=list)
+    version: int = 1
+
+    def to_schema_spec(self) -> Optional[Any]:
+        """Convert to SchemaSpec for validation."""
+        if not self.expected_columns:
+            return None
+        from core.schema.types import SchemaSpec
+        return SchemaSpec.from_dict({
+            "expected_columns": [col.model_dump() for col in self.expected_columns],
+            "primary_keys": self.primary_keys,
+            "partition_columns": self.partition_columns,
+            "version": self.version,
+        })
 
 
 class StorageBackend(str, Enum):
@@ -319,6 +355,7 @@ class RootConfig(BaseModel):
     data_classification: DataClassification = DataClassification.INTERNAL
     owners: OwnerConfig = Field(default_factory=OwnerConfig)
     schema_evolution: SchemaEvolutionConfig = Field(default_factory=SchemaEvolutionConfig)
+    schema_config: SchemaConfig = Field(default_factory=SchemaConfig, alias="schema")
 
     # Existing config structure
     platform: PlatformConfig
