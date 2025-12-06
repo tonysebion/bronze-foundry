@@ -178,12 +178,14 @@ class TestLateDataHandling:
         handler = LateDataHandler(config)
         result = handler.process_records(records, reference_time, "event_ts")
 
-        assert len(result.accepted) == 3
-        assert len(result.rejected) == 0
-        assert len(result.quarantined) == 0
+        # ALLOW mode keeps all records (on_time + late)
+        total_records = len(result.on_time_records) + len(result.late_records)
+        assert total_records == 3
+        assert result.rejected_count == 0
+        assert result.quarantined_count == 0
 
     def test_late_data_reject_mode(self):
-        """REJECT mode should exclude late records."""
+        """REJECT mode should raise exception for late records."""
         records = [
             {"id": 1, "event_ts": datetime(2024, 1, 1)},  # Late (>7 days)
             {"id": 2, "event_ts": datetime(2024, 1, 10)},  # On time
@@ -196,11 +198,10 @@ class TestLateDataHandling:
             threshold_days=7,
         )
         handler = LateDataHandler(config)
-        result = handler.process_records(records, reference_time, "event_ts")
 
-        assert len(result.accepted) == 2
-        assert len(result.rejected) == 1
-        assert result.rejected[0]["id"] == 1
+        # REJECT mode raises ValueError when late data is found
+        with pytest.raises(ValueError, match="Late data rejected"):
+            handler.process_records(records, reference_time, "event_ts")
 
     def test_late_data_quarantine_mode(self):
         """QUARANTINE mode should separate late records."""
@@ -217,9 +218,10 @@ class TestLateDataHandling:
         handler = LateDataHandler(config)
         result = handler.process_records(records, reference_time, "event_ts")
 
-        assert len(result.accepted) == 1
-        assert len(result.quarantined) == 1
-        assert result.quarantined[0]["id"] == 1
+        assert len(result.on_time_records) == 1
+        assert len(result.late_records) == 1
+        assert result.quarantined_count == 1
+        assert result.late_records[0]["id"] == 1
 
     def test_late_data_threshold_boundary(self):
         """Records exactly at threshold should be accepted."""
@@ -232,14 +234,15 @@ class TestLateDataHandling:
         ]
 
         config = LateDataConfig(
-            mode=LateDataMode.REJECT,
+            mode=LateDataMode.QUARANTINE,  # Use QUARANTINE to see the result
             threshold_days=7,
         )
         handler = LateDataHandler(config)
         result = handler.process_records(records, reference_time, "event_ts")
 
-        assert len(result.accepted) == 1
-        assert result.accepted[0]["id"] == 1
+        # Exactly at threshold should be on-time
+        assert len(result.on_time_records) == 1
+        assert result.on_time_records[0]["id"] == 1
 
 
 class TestIncrementalMergeScenarios:

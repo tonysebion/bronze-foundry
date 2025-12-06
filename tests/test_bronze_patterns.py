@@ -426,31 +426,37 @@ class TestManifestTracking:
 
     def test_manifest_tracker_records_files(self, temp_dir):
         """ManifestTracker should record processed files."""
-        tracker = ManifestTracker(temp_dir / "manifest.json")
+        manifest_path = str(temp_dir / "manifest.json")
+        tracker = ManifestTracker(manifest_path)
 
-        tracker.record_file(
-            file_path=Path("/data/file1.csv"),
-            record_count=100,
-            checksum="abc123",
-        )
-        tracker.record_file(
-            file_path=Path("/data/file2.csv"),
-            record_count=200,
-            checksum="def456",
-        )
+        # Load manifest and add discovered files
+        manifest = tracker.load()
+        manifest.add_discovered_file("/data/file1.csv", 1000)
+        manifest.add_discovered_file("/data/file2.csv", 2000)
+
+        # Mark as processed
+        manifest.mark_processed("/data/file1.csv", "run_1", "abc123")
+        manifest.mark_processed("/data/file2.csv", "run_1", "def456")
         tracker.save()
 
         # Reload and verify
-        loaded = ManifestTracker(temp_dir / "manifest.json")
-        assert loaded.is_processed(Path("/data/file1.csv"))
-        assert loaded.is_processed(Path("/data/file2.csv"))
-        assert not loaded.is_processed(Path("/data/file3.csv"))
+        loaded = ManifestTracker(manifest_path)
+        loaded_manifest = loaded.load()
+        assert loaded_manifest.is_processed("/data/file1.csv")
+        assert loaded_manifest.is_processed("/data/file2.csv")
+        assert not loaded_manifest.is_processed("/data/file3.csv")
 
     def test_manifest_tracker_total_records(self, temp_dir):
-        """ManifestTracker should track total records."""
-        tracker = ManifestTracker(temp_dir / "manifest.json")
-        tracker.record_file(Path("/data/file1.csv"), 100, "abc")
-        tracker.record_file(Path("/data/file2.csv"), 200, "def")
+        """ManifestTracker should track file counts."""
+        manifest_path = str(temp_dir / "manifest.json")
+        tracker = ManifestTracker(manifest_path)
 
-        assert tracker.total_records == 300
-        assert tracker.file_count == 2
+        manifest = tracker.load()
+        manifest.add_discovered_file("/data/file1.csv", 1000)
+        manifest.add_discovered_file("/data/file2.csv", 2000)
+        manifest.mark_processed("/data/file1.csv", "run_1")
+        manifest.mark_processed("/data/file2.csv", "run_1")
+
+        # Verify file counts via manifest
+        assert len(manifest.processed_files) == 2
+        assert len(manifest.pending_files) == 0

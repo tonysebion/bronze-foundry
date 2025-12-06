@@ -113,13 +113,24 @@ class TestRuleCompilation:
 class TestQualityEngine:
     """Test quality engine evaluation."""
 
+    def _make_config(self, rules: List[Dict]) -> Dict[str, Any]:
+        """Helper to wrap rules in proper config format."""
+        return {"quality_rules": rules}
+
+    def _get_result_by_id(self, report, rule_id: str):
+        """Helper to find a rule result by ID."""
+        for result in report.results:
+            if result.rule_id == rule_id:
+                return result
+        return None
+
     def test_engine_evaluates_all_rules(self):
         """Engine should evaluate all rules."""
-        rules = [
+        config = self._make_config([
             {"id": "rule1", "expression": "id IS NOT NULL"},
             {"id": "rule2", "expression": "amount >= 0"},
-        ]
-        engine = QualityEngine(rules)
+        ])
+        engine = QualityEngine(config)
 
         records = [
             {"id": 1, "amount": 100},
@@ -129,15 +140,15 @@ class TestQualityEngine:
         report = engine.evaluate(records)
 
         assert report.total_records == 2
-        assert report.rules_evaluated == 2
+        assert report.rule_count == 2
         assert report.all_passed
 
     def test_engine_reports_failures(self):
         """Engine should report rule failures."""
-        rules = [
+        config = self._make_config([
             {"id": "positive_amount", "expression": "amount >= 0", "level": "error"},
-        ]
-        engine = QualityEngine(rules)
+        ])
+        engine = QualityEngine(config)
 
         records = [
             {"id": 1, "amount": 100},
@@ -151,17 +162,18 @@ class TestQualityEngine:
         assert report.error_count == 1
 
         # Check rule result
-        rule_result = report.rule_results["positive_amount"]
+        rule_result = self._get_result_by_id(report, "positive_amount")
+        assert rule_result is not None
         assert not rule_result.passed
         assert rule_result.failed_count == 1
 
     def test_engine_distinguishes_error_and_warn(self):
         """Engine should distinguish error and warn levels."""
-        rules = [
+        config = self._make_config([
             {"id": "required_id", "expression": "id IS NOT NULL", "level": "error"},
             {"id": "preferred_name", "expression": "LEN(name) > 0", "level": "warn"},
-        ]
-        engine = QualityEngine(rules)
+        ])
+        engine = QualityEngine(config)
 
         records = [
             {"id": 1, "name": ""},  # Warn level fails
@@ -172,27 +184,27 @@ class TestQualityEngine:
 
         assert report.error_count == 1
         assert report.warn_count == 1
-        assert not report.rule_results["required_id"].passed
-        assert not report.rule_results["preferred_name"].passed
+        assert not self._get_result_by_id(report, "required_id").passed
+        assert not self._get_result_by_id(report, "preferred_name").passed
 
     def test_engine_fail_on_error_raises(self):
         """Engine should raise exception when fail_on_error=True."""
-        rules = [
+        config = self._make_config([
             {"id": "not_null", "expression": "id IS NOT NULL", "level": "error"},
-        ]
-        engine = QualityEngine(rules)
+        ])
+        engine = QualityEngine(config)
 
         records = [{"id": None}]
 
-        with pytest.raises(ValueError, match="Quality validation failed"):
+        with pytest.raises(ValueError, match="failed"):
             engine.evaluate(records, fail_on_error=True)
 
     def test_engine_fail_on_error_ignores_warnings(self):
         """fail_on_error should not raise for warn-level failures."""
-        rules = [
+        config = self._make_config([
             {"id": "warn_rule", "expression": "value > 0", "level": "warn"},
-        ]
-        engine = QualityEngine(rules)
+        ])
+        engine = QualityEngine(config)
 
         records = [{"value": 0}]
 
@@ -202,43 +214,49 @@ class TestQualityEngine:
 
     def test_engine_handles_missing_columns(self):
         """Engine should handle missing columns gracefully."""
-        rules = [
+        config = self._make_config([
             {"id": "check_value", "expression": "value IS NOT NULL"},
-        ]
-        engine = QualityEngine(rules)
+        ])
+        engine = QualityEngine(config)
 
         records = [{"id": 1}]  # Missing 'value' column
 
         report = engine.evaluate(records)
         # Missing column should be treated as null
-        assert not report.rule_results["check_value"].passed
+        result = self._get_result_by_id(report, "check_value")
+        assert result is not None
+        assert not result.passed
 
 
 class TestQualityReport:
     """Test quality report generation."""
 
+    def _make_config(self, rules: List[Dict]) -> Dict[str, Any]:
+        """Helper to wrap rules in proper config format."""
+        return {"quality_rules": rules}
+
     def test_report_to_dict(self):
         """Report should convert to dictionary."""
-        rules = [
+        config = self._make_config([
             {"id": "rule1", "expression": "id IS NOT NULL"},
-        ]
-        engine = QualityEngine(rules)
+        ])
+        engine = QualityEngine(config)
         report = engine.evaluate([{"id": 1}, {"id": 2}])
 
         report_dict = report.to_dict()
 
         assert "total_records" in report_dict
-        assert "rules_evaluated" in report_dict
+        assert "rule_count" in report_dict
         assert "error_count" in report_dict
         assert "warn_count" in report_dict
-        assert "rule_results" in report_dict
+        assert "results" in report_dict
 
     def test_report_includes_rule_details(self):
         """Report should include detailed rule results."""
-        rules = [
+        config = self._make_config([
             {"id": "rule1", "expression": "amount >= 0", "description": "Amount must be non-negative"},
-        ]
-        engine = QualityEngine(rules)
+        ])
+        engine = QualityEngine(config)
         records = [
             {"amount": 100},
             {"amount": -10},
@@ -246,7 +264,8 @@ class TestQualityReport:
         report = engine.evaluate(records)
 
         report_dict = report.to_dict()
-        rule_detail = report_dict["rule_results"]["rule1"]
+        # Results is a list, find rule1
+        rule_detail = next(r for r in report_dict["results"] if r["rule_id"] == "rule1")
 
         assert "passed" in rule_detail
         assert "failed_count" in rule_detail

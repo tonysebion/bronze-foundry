@@ -13,7 +13,7 @@ from typing import Any, Dict, List
 import pandas as pd
 import pytest
 
-from core.silver.lookups import LookupConfig, LookupEnricher, LookupResult
+from core.silver.lookups import LookupConfig, LookupEnricher, LookupResult, LookupJoinKey
 from core.silver.joins import (
     JoinConfig,
     JoinSource,
@@ -199,15 +199,15 @@ class TestSingleSourceWithLookupsPattern:
         config_dict = {
             "name": "status_lookup",
             "path": "reference/statuses",
-            "join_key": "status_code",
-            "lookup_key": "code",
-            "columns": ["status_name", "status_description"],
+            "join_keys": [{"source": "status_code", "lookup": "code"}],
+            "select_columns": ["status_name", "status_description"],
         }
 
         config = LookupConfig.from_dict(config_dict)
         assert config.name == "status_lookup"
-        assert config.join_key == "status_code"
-        assert len(config.columns) == 2
+        assert len(config.join_keys) == 1
+        assert config.join_keys[0].source == "status_code"
+        assert len(config.select_columns) == 2
 
     def test_lookup_enrichment(self, temp_dir):
         """Should enrich main data with lookup values."""
@@ -232,9 +232,8 @@ class TestSingleSourceWithLookupsPattern:
         lookup_config = LookupConfig(
             name="status",
             path=str(lookup_dir),
-            join_key="status_code",
-            lookup_key="code",
-            columns=["status_name", "priority"],
+            join_keys=[LookupJoinKey(source="status_code", lookup="code")],
+            select_columns=["status_name", "priority"],
         )
 
         # Enrich
@@ -273,17 +272,15 @@ class TestSingleSourceWithLookupsPattern:
             LookupConfig(
                 name="status",
                 path=str(status_dir),
-                join_key="status_code",
-                lookup_key="code",
-                columns=["name"],
+                join_keys=[LookupJoinKey(source="status_code", lookup="code")],
+                select_columns=["name"],
                 prefix="status_",
             ),
             LookupConfig(
                 name="region",
                 path=str(region_dir),
-                join_key="region_code",
-                lookup_key="code",
-                columns=["name"],
+                join_keys=[LookupJoinKey(source="region_code", lookup="code")],
+                select_columns=["name"],
                 prefix="region_",
             ),
         ]
@@ -311,9 +308,8 @@ class TestSingleSourceWithLookupsPattern:
         config = LookupConfig(
             name="status",
             path=str(lookup_dir),
-            join_key="status_code",
-            lookup_key="code",
-            columns=["name"],
+            join_keys=[LookupJoinKey(source="status_code", lookup="code")],
+            select_columns=["name"],
         )
 
         enricher = LookupEnricher(base_path=temp_dir)
