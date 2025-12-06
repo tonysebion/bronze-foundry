@@ -3,9 +3,10 @@ from __future__ import annotations
 import copy
 import logging
 import os
+import re
 from datetime import date as _date
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import yaml
 
@@ -15,7 +16,6 @@ from .dataset import (
     is_new_intent_config,
     legacy_to_dataset,
 )
-from .env_substitution import apply_env_substitution
 from .typed_models import RootConfig, parse_root_config
 from core.primitives.foundations.exceptions import emit_compat
 from core.infrastructure.config.environment import EnvironmentConfig, S3ConnectionConfig
@@ -23,6 +23,35 @@ from .validation import validate_config_dict
 from .v2_validation import validate_v2_config_dict
 
 logger = logging.getLogger(__name__)
+
+_ENV_VAR_PATTERN = re.compile(r"\$\{([^}:]+)(?::([^}]*))?\}")
+
+
+def substitute_env_vars(value: Any) -> Any:
+    """Recursively substitute ${VAR} references in config values."""
+    if isinstance(value, str):
+        def replacer(match: re.Match[str]) -> str:
+            var_name = match.group(1)
+            default_value = match.group(2)
+            env_value = os.environ.get(var_name)
+            if env_value is not None:
+                return env_value
+            if default_value is not None:
+                return str(default_value)
+            raise ValueError(
+                f"Environment variable '{var_name}' is not set and no default provided"
+            )
+        return _ENV_VAR_PATTERN.sub(replacer, value)
+    if isinstance(value, dict):
+        return {k: substitute_env_vars(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [substitute_env_vars(item) for item in value]
+    return value
+
+
+def apply_env_substitution(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Substitute environment variables for every value in the config."""
+    return cast(Dict[str, Any], substitute_env_vars(config))
 
 
 def _read_yaml(path: str) -> Dict[str, Any]:
