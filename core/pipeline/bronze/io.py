@@ -5,9 +5,10 @@ import hashlib
 import json
 import logging
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
+
+from core.primitives.time_utils import utc_isoformat as _utc_isoformat
 
 import pandas as pd
 
@@ -136,11 +137,6 @@ def write_parquet_chunk(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out_path, index=False, compression=compression)
     logger.info(f"Wrote {len(chunk)} rows to Parquet at {out_path}")
-
-
-def _utc_isoformat() -> str:
-    """Return current time in UTC ISO format with Z suffix."""
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def write_batch_metadata(

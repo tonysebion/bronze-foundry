@@ -10,17 +10,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+from core.primitives.time_utils import utc_isoformat as _utc_isoformat
 
 from .rules import RuleLevel
 
 logger = logging.getLogger(__name__)
-
-
-def _utc_isoformat() -> str:
-    """Return UTC-aware ISO timestamp with Z suffix."""
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 @dataclass

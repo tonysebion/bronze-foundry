@@ -48,16 +48,12 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from core.primitives.time_utils import utc_isoformat as _utc_isoformat
+
 logger = logging.getLogger(__name__)
-
-def _utc_isoformat() -> str:
-    """Return UTC-aware ISO timestamp with Z suffix."""
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
 
 
 @dataclass
