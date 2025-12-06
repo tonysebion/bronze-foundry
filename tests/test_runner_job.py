@@ -14,6 +14,7 @@ from core.orchestration.runner.job import (
 from core.pipeline.runtime.context import RunContext
 from core.primitives.foundations.patterns import LoadPattern
 from core.adapters.extractors.base import BaseExtractor, EXTRACTOR_REGISTRY
+from core.pipeline.bronze.models import StoragePlan
 
 
 class TestBuildExtractor:
@@ -371,6 +372,31 @@ class TestExtractJob:
         assert test_file.exists()
         job._cleanup_on_failure()
         assert not test_file.exists()
+
+    def test_cleanup_on_failure_deletes_remote_artifacts(self, tmp_path):
+        """Cleanup should delete remote files via the storage plan."""
+        ctx = self._make_context()
+        ctx.local_output_dir = tmp_path
+        ctx.bronze_path = tmp_path / "output"
+        ctx.relative_path = "system=test/table=test_table/"
+        job = ExtractJob(ctx)
+
+        chunk_file = job._out_dir / "chunk.json"
+        chunk_file.parent.mkdir(parents=True, exist_ok=True)
+        chunk_file.write_text("payload")
+        job.created_files.append(chunk_file)
+
+        backend = Mock()
+        backend.delete_file.return_value = True
+        job.storage_plan = StoragePlan(
+            enabled=True,
+            backend=backend,
+            relative_path="system=test/table=test_table/",
+        )
+
+        job._cleanup_on_failure()
+
+        backend.delete_file.assert_called_once_with("system=test/table=test_table/chunk.json")
 
 
 class TestRunExtract:

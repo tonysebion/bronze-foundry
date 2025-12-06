@@ -241,6 +241,24 @@ class ExtractJob:
             except Exception as cleanup_error:  # pragma: no cover - best effort
                 logger.warning("Failed to cleanup %s: %s", file_path, cleanup_error)
 
+            plan = self.storage_plan
+            if plan:
+                remote_path = plan.remote_path_for(file_path)
+                try:
+                    if plan.delete(file_path):
+                        logger.info("Deleted remote artifact %s", remote_path)
+                    else:
+                        logger.debug(
+                            "Remote artifact %s was not deleted (disabled or missing)",
+                            remote_path,
+                        )
+                except Exception as remote_error:  # pragma: no cover
+                    logger.warning(
+                        "Failed to delete remote artifact %s: %s",
+                        remote_path,
+                        remote_error,
+                    )
+
 
 def run_extract(context: RunContext) -> int:
     job = ExtractJob(context)
