@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
@@ -23,7 +24,7 @@ from core.adapters.extractors.factory import (
     ensure_extractors_loaded,
     get_extractor,
 )
-from core.pipeline.bronze.io import chunk_records
+from core.pipeline.bronze.io import chunk_records, verify_checksum_manifest
 from core.primitives.foundations.patterns import LoadPattern
 from core.orchestration.runner.chunks import ChunkProcessor, ChunkWriter
 from core.infrastructure.storage import get_storage_backend
@@ -129,6 +130,7 @@ class ExtractJob:
             )
 
         self._out_dir.mkdir(parents=True, exist_ok=True)
+        self._inspect_existing_manifest()
 
         writer_config, self.storage_plan = build_chunk_writer_config(
             bronze_output,
@@ -145,6 +147,38 @@ class ExtractJob:
         processor = ChunkProcessor(writer, parallel_workers)
         chunk_files = processor.process(chunks)
         return len(chunk_files), chunk_files
+
+    def _inspect_existing_manifest(self) -> None:
+        manifest_path = self._out_dir / "_checksums.json"
+        if not manifest_path.exists():
+            return
+
+        expected_pattern = self.load_pattern.value if self.load_pattern else None
+        try:
+            verify_checksum_manifest(
+                self._out_dir,
+                expected_pattern=expected_pattern,
+            )
+        except (ValueError, FileNotFoundError) as exc:
+            logger.warning(
+                "Detected incomplete Bronze partition at %s: %s; resetting artifacts for a clean rerun.",
+                self._out_dir,
+                exc,
+            )
+            self._cleanup_existing_artifacts()
+            return
+
+        raise RuntimeError(
+            f"Bronze partition {self._out_dir} already contains a verified checksum manifest; aborting to avoid duplicates."
+        )
+
+    def _cleanup_existing_artifacts(self) -> None:
+        if not self._out_dir.exists():
+            return
+        logger.info("Clearing existing Bronze artifacts at %s before rerun", self._out_dir)
+        shutil.rmtree(self._out_dir, ignore_errors=True)
+        self._out_dir.mkdir(parents=True, exist_ok=True)
+        self.created_files = []
 
     def _emit_metadata(
         self, record_count: int, chunk_count: int, cursor: Optional[str]

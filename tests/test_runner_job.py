@@ -286,6 +286,63 @@ class TestExtractJob:
         assert result == 0
         mock_processor.process.assert_called_once()
 
+    @patch("core.orchestration.runner.job.verify_checksum_manifest")
+    def test_existing_manifest_aborts_run(self, mock_verify, tmp_path):
+        """Bronze run should fail if a verified manifest already exists."""
+        mock_verify.return_value = {"load_pattern": "snapshot"}
+        ctx = self._make_context()
+        ctx.local_output_dir = tmp_path
+        ctx.bronze_path = tmp_path / "system=test/table=test_table"
+        ctx.relative_path = "system=test/table=test_table"
+        job = ExtractJob(ctx)
+        job._out_dir.mkdir(parents=True, exist_ok=True)
+        (job._out_dir / "_checksums.json").write_text("{}")
+
+        with pytest.raises(RuntimeError, match="already contains a verified checksum manifest"):
+            job._process_chunks([{"id": 1}])
+
+    @patch("core.orchestration.runner.job.verify_checksum_manifest")
+    @patch("core.orchestration.runner.job.ChunkProcessor")
+    def test_partial_manifest_resets_and_proceeds(
+        self,
+        mock_chunk_processor_cls,
+        mock_verify,
+        tmp_path,
+    ):
+        """Partial Bronze runs should clear artifacts before continuing."""
+        mock_verify.side_effect = ValueError("missing files")
+        mock_processor = Mock()
+        mock_processor.process.return_value = []
+        mock_chunk_processor_cls.return_value = mock_processor
+
+        ctx = self._make_context()
+        ctx.local_output_dir = tmp_path
+        ctx.bronze_path = tmp_path / "system=test/table=test_table"
+        ctx.relative_path = "system=test/table=test_table"
+        job = ExtractJob(ctx)
+        job._out_dir.mkdir(parents=True, exist_ok=True)
+        manifest = job._out_dir / "_checksums.json"
+        manifest.write_text("{}")
+        assert manifest.exists()
+
+        chunk_count, chunk_files = job._process_chunks([{"id": 1}])
+
+        assert chunk_count == 0
+        assert chunk_files == []
+        assert not manifest.exists()
+
+    def test_process_chunks_requires_output_format(self):
+        """Bronze chunking should fail if both CSV and Parquet are disabled."""
+        ctx = self._make_context()
+        ctx.cfg["source"]["run"].update({"write_csv": False, "write_parquet": False})
+        ctx.cfg["platform"]["bronze"]["output_defaults"].update(
+            {"allow_csv": False, "allow_parquet": False}
+        )
+        job = ExtractJob(ctx)
+
+        with pytest.raises(ValueError, match="output format"):
+            job._process_chunks([{"id": 1}])
+
     def test_cleanup_on_failure_removes_files(self, tmp_path):
         """Test cleanup removes created files on failure."""
         ctx = self._make_context()

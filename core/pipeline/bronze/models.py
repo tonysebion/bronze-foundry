@@ -27,6 +27,17 @@ class StoragePlan:
         remote_path = f"{self.relative_path}{file_path.name}"
         self.backend.upload_file(str(file_path), remote_path)
 
+    def remote_path_for(self, file_path: Path) -> str:
+        """Return the remote path that would be used for a given local file."""
+        return f"{self.relative_path}{file_path.name}"
+
+    def delete(self, file_path: Path) -> bool:
+        """Delete the remote artifact that corresponds to the provided local file."""
+        if not (self.enabled and self.backend):
+            return False
+        remote_path = self.remote_path_for(file_path)
+        return self.backend.delete_file(remote_path)
+
 
 @dataclass
 class ChunkWriterConfig:
@@ -51,6 +62,10 @@ def compute_output_formats(
     write_parquet = run_cfg.get("write_parquet", True) and bronze_output.get(
         "allow_parquet", True
     )
+    if not (write_csv or write_parquet):
+        raise ValueError(
+            "Bronze runs must enable at least one output format (csv or parquet)."
+        )
     return {"csv": write_csv, "parquet": write_parquet}
 
 
