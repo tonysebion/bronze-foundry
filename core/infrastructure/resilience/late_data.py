@@ -30,21 +30,17 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, ClassVar, Dict, List, Optional, Tuple
 
 from core.primitives.time_utils import utc_now
 
 from core.primitives.foundations.base import RichEnumMixin
+from core.infrastructure.resilience.constants import (
+    DEFAULT_LATE_DATA_THRESHOLD_DAYS,
+    DEFAULT_QUARANTINE_PATH,
+)
 
 logger = logging.getLogger(__name__)
-
-
-# Module-level descriptions (can't be class attributes due to Enum metaclass)
-_LATE_DATA_MODE_DESCRIPTIONS: Dict[str, str] = {
-    "allow": "Accept late data and write to appropriate partition",
-    "reject": "Reject late data entirely (fail the job)",
-    "quarantine": "Write late data to a separate quarantine location",
-}
 
 
 class LateDataMode(RichEnumMixin, str, Enum):
@@ -54,29 +50,14 @@ class LateDataMode(RichEnumMixin, str, Enum):
     REJECT = "reject"
     QUARANTINE = "quarantine"
 
-    @classmethod
-    def choices(cls) -> List[str]:
-        """Return list of valid enum values."""
-        return [member.value for member in cls]
 
-    @classmethod
-    def normalize(cls, raw: str | None) -> "LateDataMode":
-        """Normalize a late data mode value."""
-        if isinstance(raw, cls):
-            return raw
-        if raw is None:
-            return cls.ALLOW  # Default to allow
-        candidate = raw.strip().lower()
-        for member in cls:
-            if member.value == candidate:
-                return member
-        raise ValueError(
-            f"Invalid LateDataMode '{raw}'. Valid options: {', '.join(cls.choices())}"
-        )
-
-    def describe(self) -> str:
-        """Return human-readable description."""
-        return _LATE_DATA_MODE_DESCRIPTIONS.get(self.value, self.value)
+# Class variables for RichEnumMixin (must be set outside class due to Enum metaclass)
+LateDataMode._default = "ALLOW"
+LateDataMode._descriptions = {
+    "allow": "Accept late data and write to appropriate partition",
+    "reject": "Reject late data entirely (fail the job)",
+    "quarantine": "Write late data to a separate quarantine location",
+}
 
 
 @dataclass
@@ -84,8 +65,8 @@ class LateDataConfig:
     """Configuration for late data handling."""
 
     mode: LateDataMode = LateDataMode.ALLOW
-    threshold_days: int = 7
-    quarantine_path: str = "_quarantine"
+    threshold_days: int = DEFAULT_LATE_DATA_THRESHOLD_DAYS
+    quarantine_path: str = DEFAULT_QUARANTINE_PATH
     timestamp_column: Optional[str] = None
 
     @classmethod
@@ -103,8 +84,8 @@ class LateDataConfig:
 
         return cls(
             mode=mode,
-            threshold_days=data.get("threshold_days", 7),
-            quarantine_path=data.get("quarantine_path", "_quarantine"),
+            threshold_days=data.get("threshold_days", DEFAULT_LATE_DATA_THRESHOLD_DAYS),
+            quarantine_path=data.get("quarantine_path", DEFAULT_QUARANTINE_PATH),
             timestamp_column=data.get("timestamp_column"),
         )
 

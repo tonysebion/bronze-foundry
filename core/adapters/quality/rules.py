@@ -18,18 +18,11 @@ import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, ClassVar, Dict, List, Optional, Union
 
 from core.primitives.foundations.base import RichEnumMixin
 
 logger = logging.getLogger(__name__)
-
-
-# Module-level descriptions (can't be class attributes due to Enum metaclass)
-_RULE_LEVEL_DESCRIPTIONS: Dict[str, str] = {
-    "error": "Fails the job if rule fails",
-    "warn": "Logs warning but continues processing",
-}
 
 
 class RuleLevel(RichEnumMixin, str, Enum):
@@ -38,29 +31,13 @@ class RuleLevel(RichEnumMixin, str, Enum):
     ERROR = "error"  # Fails the job if rule fails
     WARN = "warn"  # Logs warning but continues
 
-    @classmethod
-    def choices(cls) -> List[str]:
-        """Return list of valid enum values."""
-        return [member.value for member in cls]
 
-    @classmethod
-    def normalize(cls, raw: str | None) -> "RuleLevel":
-        """Normalize a rule level value."""
-        if isinstance(raw, cls):
-            return raw
-        if raw is None:
-            return cls.ERROR  # Default to error
-        candidate = raw.strip().lower()
-        for member in cls:
-            if member.value == candidate:
-                return member
-        raise ValueError(
-            f"Invalid RuleLevel '{raw}'. Valid options: {', '.join(cls.choices())}"
-        )
-
-    def describe(self) -> str:
-        """Return human-readable description."""
-        return _RULE_LEVEL_DESCRIPTIONS.get(self.value, self.value)
+# Class variables for RichEnumMixin (must be set outside class due to Enum metaclass)
+RuleLevel._default = "ERROR"
+RuleLevel._descriptions = {
+    "error": "Fails the job if rule fails",
+    "warn": "Logs warning but continues processing",
+}
 
 
 @dataclass

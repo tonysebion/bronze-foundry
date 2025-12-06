@@ -22,13 +22,20 @@ class RichEnumMixin:
     All enums in bronze-foundry should inherit from this mixin AND (str, Enum)
     to ensure they provide:
     - choices(): List of valid string values
-    - normalize(): Case-insensitive parsing with alias support
+    - normalize(): Case-insensitive parsing with alias support and default
     - describe(): Human-readable description
+
+    Class Variables:
+        _aliases: Dict mapping alternative names to canonical values
+        _descriptions: Dict mapping values to human-readable descriptions
+        _default: Optional default member name (e.g., "ALLOW") when raw is None
 
     Example:
         class MyEnum(RichEnumMixin, str, Enum):
             VALUE_A = "value_a"
             VALUE_B = "value_b"
+
+            _default: ClassVar[str] = "VALUE_A"  # Default when None passed
 
             _aliases: ClassVar[Dict[str, str]] = {
                 "a": "value_a",
@@ -39,11 +46,17 @@ class RichEnumMixin:
                 "value_a": "First value option",
                 "value_b": "Second value option",
             }
+
+    Note:
+        Subclasses should NOT override choices(), normalize(), or describe()
+        unless they need truly custom behavior. Instead, set the class
+        variables above to customize behavior.
     """
 
     # Subclasses can override these class variables
     _aliases: ClassVar[Dict[str, str]] = {}
     _descriptions: ClassVar[Dict[str, str]] = {}
+    _default: ClassVar[str | None] = None  # Member name for default (e.g., "ALLOW")
 
     @classmethod
     def choices(cls) -> List[str]:
@@ -58,14 +71,19 @@ class RichEnumMixin:
             raw: String value, enum instance, or None
 
         Returns:
-            Enum member matching the input
+            Enum member matching the input, or default if raw is None
 
         Raises:
-            ValueError: If raw is None or doesn't match any member/alias
+            ValueError: If raw is None with no default, or doesn't match any member/alias
         """
         if isinstance(raw, cls):
             return raw
+
+        # Handle None - return default if defined
         if raw is None:
+            default_name = getattr(cls, "_default", None)
+            if default_name is not None:
+                return cls[default_name]  # type: ignore[attr-defined]
             raise ValueError(f"{cls.__name__} value must be provided")
 
         candidate = raw.strip().lower()

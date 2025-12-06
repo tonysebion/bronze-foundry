@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, ClassVar, Dict, List, Optional, Set
 
 import pandas as pd
 
@@ -29,14 +29,6 @@ from .types import ColumnSpec, DataType, SchemaSpec
 logger = logging.getLogger(__name__)
 
 
-# Module-level descriptions (can't be class attributes due to Enum metaclass)
-_SCHEMA_EVOLUTION_MODE_DESCRIPTIONS: Dict[str, str] = {
-    "strict": "Reject any schema differences",
-    "allow_new_nullable": "Allow new nullable columns to be added",
-    "ignore_unknown": "Ignore unexpected columns in the data",
-}
-
-
 class SchemaEvolutionMode(RichEnumMixin, str, Enum):
     """Schema evolution modes per spec Section 6."""
 
@@ -44,29 +36,14 @@ class SchemaEvolutionMode(RichEnumMixin, str, Enum):
     ALLOW_NEW_NULLABLE = "allow_new_nullable"  # Allow new nullable columns
     IGNORE_UNKNOWN = "ignore_unknown"  # Ignore unexpected columns
 
-    @classmethod
-    def choices(cls) -> List[str]:
-        """Return list of valid enum values."""
-        return [member.value for member in cls]
 
-    @classmethod
-    def normalize(cls, raw: str | None) -> "SchemaEvolutionMode":
-        """Normalize a schema evolution mode value."""
-        if isinstance(raw, cls):
-            return raw
-        if raw is None:
-            return cls.STRICT  # Default to strict
-        candidate = raw.strip().lower()
-        for member in cls:
-            if member.value == candidate:
-                return member
-        raise ValueError(
-            f"Invalid SchemaEvolutionMode '{raw}'. Valid options: {', '.join(cls.choices())}"
-        )
-
-    def describe(self) -> str:
-        """Return human-readable description."""
-        return _SCHEMA_EVOLUTION_MODE_DESCRIPTIONS.get(self.value, self.value)
+# Class variables for RichEnumMixin (must be set outside class due to Enum metaclass)
+SchemaEvolutionMode._default = "STRICT"
+SchemaEvolutionMode._descriptions = {
+    "strict": "Reject any schema differences",
+    "allow_new_nullable": "Allow new nullable columns to be added",
+    "ignore_unknown": "Ignore unexpected columns in the data",
+}
 
 
 @dataclass

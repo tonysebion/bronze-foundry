@@ -8,77 +8,26 @@ focus on semantic intent so higher-level orchestration can remain simple.
 from __future__ import annotations
 
 import logging
-from core.primitives.foundations.base import RichEnumMixin
-from core.primitives.foundations.exceptions import emit_compat
-from core.primitives.foundations.patterns import LoadPattern
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 
-
-# Module-level descriptions for enums (can't be class attributes due to Enum metaclass)
-_ENTITY_KIND_DESCRIPTIONS: Dict[str, str] = {
-    "event": "Immutable event records (append-only)",
-    "state": "Mutable state records (current snapshot)",
-    "derived_state": "State derived from other entities",
-    "derived_event": "Events derived from other entities",
-}
-
-_HISTORY_MODE_DESCRIPTIONS: Dict[str, str] = {
-    "scd2": "Type 2 slowly changing dimension - full history with date ranges",
-    "scd1": "Type 1 slowly changing dimension - overwrite with latest values",
-    "latest_only": "Keep only the most recent version of each record",
-}
-
-_INPUT_MODE_DESCRIPTIONS: Dict[str, str] = {
-    "append_log": "Append new records to existing data",
-    "replace_daily": "Replace all data for each daily partition",
-}
-
-_DELETE_MODE_DESCRIPTIONS: Dict[str, str] = {
-    "ignore": "Ignore delete markers in source data",
-    "tombstone_state": "Apply tombstone logic for state entities",
-    "tombstone_event": "Apply tombstone logic for event entities",
-}
-
-_SCHEMA_MODE_DESCRIPTIONS: Dict[str, str] = {
-    "strict": "Reject any schema changes",
-    "allow_new_columns": "Allow new columns to be added",
-}
+from core.primitives.foundations.base import RichEnumMixin
+from core.primitives.foundations.exceptions import emit_compat
+from core.primitives.foundations.patterns import LoadPattern
 
 
 class EntityKind(RichEnumMixin, str, Enum):
-    """Kind of entity for Silver layer processing."""
+    """Kind of entity for Silver layer processing.
+
+    No default - must be explicitly provided.
+    """
 
     EVENT = "event"
     STATE = "state"
     DERIVED_STATE = "derived_state"
     DERIVED_EVENT = "derived_event"
-
-    @classmethod
-    def choices(cls) -> List[str]:
-        """Return list of valid enum values."""
-        return [member.value for member in cls]
-
-    @classmethod
-    def normalize(cls, raw: str | None) -> "EntityKind":
-        """Normalize an entity kind value."""
-        if isinstance(raw, cls):
-            return raw
-        if raw is None:
-            raise ValueError("EntityKind value must be provided")
-        candidate = raw.strip().lower()
-        for member in cls:
-            if member.value == candidate:
-                return member
-        raise ValueError(
-            f"Invalid EntityKind '{raw}'. Valid options: {', '.join(cls.choices())}"
-        )
-
-    def describe(self) -> str:
-        """Return human-readable description."""
-        return _ENTITY_KIND_DESCRIPTIONS.get(self.value, self.value)
 
     @property
     def is_event_like(self) -> bool:
@@ -91,6 +40,16 @@ class EntityKind(RichEnumMixin, str, Enum):
         return self in {self.STATE, self.DERIVED_STATE}
 
 
+# Class variables for RichEnumMixin (must be set outside class due to Enum metaclass)
+# No _default for EntityKind - it's a required field
+EntityKind._descriptions = {
+    "event": "Immutable event records (append-only)",
+    "state": "Mutable state records (current snapshot)",
+    "derived_state": "State derived from other entities",
+    "derived_event": "Events derived from other entities",
+}
+
+
 class HistoryMode(RichEnumMixin, str, Enum):
     """History tracking mode for state entities."""
 
@@ -98,29 +57,14 @@ class HistoryMode(RichEnumMixin, str, Enum):
     SCD1 = "scd1"
     LATEST_ONLY = "latest_only"
 
-    @classmethod
-    def choices(cls) -> List[str]:
-        """Return list of valid enum values."""
-        return [member.value for member in cls]
 
-    @classmethod
-    def normalize(cls, raw: str | None) -> "HistoryMode":
-        """Normalize a history mode value."""
-        if isinstance(raw, cls):
-            return raw
-        if raw is None:
-            return cls.SCD2  # Default to SCD2
-        candidate = raw.strip().lower()
-        for member in cls:
-            if member.value == candidate:
-                return member
-        raise ValueError(
-            f"Invalid HistoryMode '{raw}'. Valid options: {', '.join(cls.choices())}"
-        )
-
-    def describe(self) -> str:
-        """Return human-readable description."""
-        return _HISTORY_MODE_DESCRIPTIONS.get(self.value, self.value)
+# Class variables for RichEnumMixin (must be set outside class due to Enum metaclass)
+HistoryMode._default = "SCD2"
+HistoryMode._descriptions = {
+    "scd2": "Type 2 slowly changing dimension - full history with date ranges",
+    "scd1": "Type 1 slowly changing dimension - overwrite with latest values",
+    "latest_only": "Keep only the most recent version of each record",
+}
 
 
 class InputMode(RichEnumMixin, str, Enum):
@@ -129,29 +73,13 @@ class InputMode(RichEnumMixin, str, Enum):
     APPEND_LOG = "append_log"
     REPLACE_DAILY = "replace_daily"
 
-    @classmethod
-    def choices(cls) -> List[str]:
-        """Return list of valid enum values."""
-        return [member.value for member in cls]
 
-    @classmethod
-    def normalize(cls, raw: str | None) -> "InputMode":
-        """Normalize an input mode value."""
-        if isinstance(raw, cls):
-            return raw
-        if raw is None:
-            return cls.APPEND_LOG  # Default to append_log
-        candidate = raw.strip().lower()
-        for member in cls:
-            if member.value == candidate:
-                return member
-        raise ValueError(
-            f"Invalid InputMode '{raw}'. Valid options: {', '.join(cls.choices())}"
-        )
-
-    def describe(self) -> str:
-        """Return human-readable description."""
-        return _INPUT_MODE_DESCRIPTIONS.get(self.value, self.value)
+# Class variables for RichEnumMixin (must be set outside class due to Enum metaclass)
+InputMode._default = "APPEND_LOG"
+InputMode._descriptions = {
+    "append_log": "Append new records to existing data",
+    "replace_daily": "Replace all data for each daily partition",
+}
 
 
 class DeleteMode(RichEnumMixin, str, Enum):
@@ -161,29 +89,14 @@ class DeleteMode(RichEnumMixin, str, Enum):
     TOMBSTONE_STATE = "tombstone_state"
     TOMBSTONE_EVENT = "tombstone_event"
 
-    @classmethod
-    def choices(cls) -> List[str]:
-        """Return list of valid enum values."""
-        return [member.value for member in cls]
 
-    @classmethod
-    def normalize(cls, raw: str | None) -> "DeleteMode":
-        """Normalize a delete mode value."""
-        if isinstance(raw, cls):
-            return raw
-        if raw is None:
-            return cls.IGNORE  # Default to ignore
-        candidate = raw.strip().lower()
-        for member in cls:
-            if member.value == candidate:
-                return member
-        raise ValueError(
-            f"Invalid DeleteMode '{raw}'. Valid options: {', '.join(cls.choices())}"
-        )
-
-    def describe(self) -> str:
-        """Return human-readable description."""
-        return _DELETE_MODE_DESCRIPTIONS.get(self.value, self.value)
+# Class variables for RichEnumMixin (must be set outside class due to Enum metaclass)
+DeleteMode._default = "IGNORE"
+DeleteMode._descriptions = {
+    "ignore": "Ignore delete markers in source data",
+    "tombstone_state": "Apply tombstone logic for state entities",
+    "tombstone_event": "Apply tombstone logic for event entities",
+}
 
 
 class SchemaMode(RichEnumMixin, str, Enum):
@@ -192,29 +105,13 @@ class SchemaMode(RichEnumMixin, str, Enum):
     STRICT = "strict"
     ALLOW_NEW_COLUMNS = "allow_new_columns"
 
-    @classmethod
-    def choices(cls) -> List[str]:
-        """Return list of valid enum values."""
-        return [member.value for member in cls]
 
-    @classmethod
-    def normalize(cls, raw: str | None) -> "SchemaMode":
-        """Normalize a schema mode value."""
-        if isinstance(raw, cls):
-            return raw
-        if raw is None:
-            return cls.STRICT  # Default to strict
-        candidate = raw.strip().lower()
-        for member in cls:
-            if member.value == candidate:
-                return member
-        raise ValueError(
-            f"Invalid SchemaMode '{raw}'. Valid options: {', '.join(cls.choices())}"
-        )
-
-    def describe(self) -> str:
-        """Return human-readable description."""
-        return _SCHEMA_MODE_DESCRIPTIONS.get(self.value, self.value)
+# Class variables for RichEnumMixin (must be set outside class due to Enum metaclass)
+SchemaMode._default = "STRICT"
+SchemaMode._descriptions = {
+    "strict": "Reject any schema changes",
+    "allow_new_columns": "Allow new columns to be added",
+}
 
 
 DEFAULT_BRONZE_BASE = Path("sampledata") / "bronze_samples"

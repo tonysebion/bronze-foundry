@@ -1,0 +1,385 @@
+"""Tests for orchestration runner job module."""
+
+import pytest
+from unittest.mock import Mock, patch, MagicMock
+from datetime import date
+from pathlib import Path
+
+from core.orchestration.runner.job import (
+    build_extractor,
+    ExtractJob,
+    run_extract,
+    _load_extractors,
+)
+from core.pipeline.runtime.context import RunContext
+from core.primitives.foundations.patterns import LoadPattern
+from core.adapters.extractors.base import BaseExtractor, EXTRACTOR_REGISTRY
+
+
+class TestBuildExtractor:
+    """Tests for build_extractor function."""
+
+    def test_builds_api_extractor(self):
+        """Test building API extractor."""
+        cfg = {
+            "source": {
+                "type": "api",
+                "system": "test",
+                "table": "test_table",
+                "api": {
+                    "base_url": "https://api.example.com",
+                    "endpoint": "/data",
+                },
+                "run": {},
+            }
+        }
+        extractor = build_extractor(cfg)
+        assert extractor is not None
+        assert hasattr(extractor, "fetch_records")
+
+    def test_builds_file_extractor(self):
+        """Test building file extractor."""
+        cfg = {
+            "source": {
+                "type": "file",
+                "system": "test",
+                "table": "test_table",
+                "file": {"path": "/path/to/file.csv"},
+                "run": {},
+            }
+        }
+        extractor = build_extractor(cfg)
+        assert extractor is not None
+
+    def test_builds_db_extractor(self):
+        """Test building database extractor."""
+        cfg = {
+            "source": {
+                "type": "db",
+                "system": "test",
+                "table": "test_table",
+                "db": {
+                    "conn_str_env": "TEST_DB_CONN",
+                    "base_query": "SELECT * FROM table",
+                },
+                "run": {},
+            }
+        }
+        extractor = build_extractor(cfg)
+        assert extractor is not None
+
+    def test_raises_for_unknown_type(self):
+        """Test that unknown type raises ValueError."""
+        cfg = {
+            "source": {
+                "type": "unknown_type",
+                "system": "test",
+                "table": "test_table",
+                "run": {},
+            }
+        }
+        with pytest.raises(ValueError, match="Unknown source.type"):
+            build_extractor(cfg)
+
+    def test_custom_extractor_requires_module_and_class(self):
+        """Test custom extractor requires module and class_name."""
+        cfg = {
+            "source": {
+                "type": "custom",
+                "system": "test",
+                "table": "test_table",
+                "custom_extractor": {},
+                "run": {},
+            }
+        }
+        with pytest.raises(ValueError, match="custom extractor requires both"):
+            build_extractor(cfg)
+
+    def test_custom_extractor_missing_class(self):
+        """Test custom extractor missing class_name raises error."""
+        cfg = {
+            "source": {
+                "type": "custom",
+                "system": "test",
+                "table": "test_table",
+                "custom_extractor": {"module": "some.module"},
+                "run": {},
+            }
+        }
+        with pytest.raises(ValueError, match="custom extractor requires both"):
+            build_extractor(cfg)
+
+    def test_db_multi_extractor_with_workers(self):
+        """Test db_multi extractor uses parallel_workers config."""
+        cfg = {
+            "source": {
+                "type": "db_multi",
+                "system": "test",
+                "table": "test_table",
+                "db": {
+                    "conn_str_env": "TEST_DB_CONN",
+                    "base_query": "SELECT * FROM table",
+                },
+                "run": {"parallel_workers": 8},
+            }
+        }
+        extractor = build_extractor(cfg)
+        assert extractor is not None
+
+
+class TestExtractJob:
+    """Tests for ExtractJob class."""
+
+    def _make_context(self, records_to_return: list = None) -> RunContext:
+        """Create a RunContext for testing."""
+        return RunContext(
+            cfg={
+                "source": {
+                    "system": "test",
+                    "table": "test_table",
+                    "type": "api",
+                    "api": {"base_url": "https://api.example.com"},
+                    "run": {
+                        "load_pattern": "snapshot",
+                        "max_rows_per_file": 0,
+                    },
+                },
+                "platform": {
+                    "bronze": {
+                        "output_defaults": {
+                            "allow_csv": True,
+                            "allow_parquet": True,
+                            "parquet_compression": "snappy",
+                        }
+                    },
+                    "s3_connection": {},
+                },
+            },
+            run_date=date(2024, 1, 15),
+            relative_path="system=test/table=test_table",
+            local_output_dir=Path("/tmp/bronze"),
+            bronze_path=Path("/tmp/bronze/system=test/table=test_table"),
+            source_system="test",
+            source_table="test_table",
+            dataset_id="test.test_table",
+            config_name="test.test_table",
+            load_pattern=LoadPattern.SNAPSHOT,
+            env_config=None,
+            run_id="test-run-123",
+        )
+
+    def test_job_initialization(self):
+        """Test ExtractJob initializes correctly."""
+        ctx = self._make_context()
+        job = ExtractJob(ctx)
+
+        assert job.ctx == ctx
+        assert job.run_date == date(2024, 1, 15)
+        assert job.load_pattern == LoadPattern.SNAPSHOT
+        assert job.created_files == []
+
+    def test_source_cfg_property(self):
+        """Test source_cfg property returns correct config."""
+        ctx = self._make_context()
+        job = ExtractJob(ctx)
+
+        source_cfg = job.source_cfg
+        assert source_cfg["system"] == "test"
+        assert source_cfg["table"] == "test_table"
+
+    @patch("core.orchestration.runner.job.build_extractor")
+    @patch("core.orchestration.runner.job.emit_bronze_metadata")
+    @patch("core.orchestration.runner.job.report_schema_snapshot")
+    @patch("core.orchestration.runner.job.report_quality_snapshot")
+    @patch("core.orchestration.runner.job.report_run_metadata")
+    def test_run_with_empty_records(
+        self,
+        mock_report_run,
+        mock_report_quality,
+        mock_report_schema,
+        mock_emit_metadata,
+        mock_build_extractor,
+    ):
+        """Test run returns 0 when extractor returns empty records."""
+        mock_extractor = Mock()
+        mock_extractor.fetch_records.return_value = ([], None)
+        mock_build_extractor.return_value = mock_extractor
+
+        ctx = self._make_context()
+        job = ExtractJob(ctx)
+        result = job.run()
+
+        assert result == 0
+        mock_extractor.fetch_records.assert_called_once()
+
+    @patch("core.orchestration.runner.job.build_extractor")
+    @patch("core.orchestration.runner.job.emit_bronze_metadata")
+    @patch("core.orchestration.runner.job.report_schema_snapshot")
+    @patch("core.orchestration.runner.job.report_quality_snapshot")
+    @patch("core.orchestration.runner.job.report_run_metadata")
+    @patch("core.orchestration.runner.job.ChunkWriter")
+    @patch("core.orchestration.runner.job.ChunkProcessor")
+    def test_run_with_records(
+        self,
+        mock_chunk_processor_cls,
+        mock_chunk_writer_cls,
+        mock_report_run,
+        mock_report_quality,
+        mock_report_schema,
+        mock_emit_metadata,
+        mock_build_extractor,
+        tmp_path,
+    ):
+        """Test run processes records and returns 0."""
+        mock_extractor = Mock()
+        mock_extractor.fetch_records.return_value = (
+            [{"id": 1, "name": "test"}],
+            "cursor_123",
+        )
+        mock_build_extractor.return_value = mock_extractor
+
+        mock_processor = Mock()
+        mock_processor.process.return_value = [tmp_path / "chunk_001.parquet"]
+        mock_chunk_processor_cls.return_value = mock_processor
+
+        mock_emit_metadata.return_value = tmp_path / "metadata.json"
+
+        ctx = RunContext(
+            cfg={
+                "source": {
+                    "system": "test",
+                    "table": "test_table",
+                    "type": "api",
+                    "api": {"base_url": "https://api.example.com"},
+                    "run": {
+                        "load_pattern": "snapshot",
+                        "max_rows_per_file": 0,
+                    },
+                },
+                "platform": {
+                    "bronze": {
+                        "output_defaults": {
+                            "allow_csv": True,
+                            "allow_parquet": True,
+                            "parquet_compression": "snappy",
+                        }
+                    },
+                    "s3_connection": {},
+                },
+            },
+            run_date=date(2024, 1, 15),
+            relative_path="system=test/table=test_table",
+            local_output_dir=tmp_path,
+            bronze_path=tmp_path / "system=test/table=test_table",
+            source_system="test",
+            source_table="test_table",
+            dataset_id="test.test_table",
+            config_name="test.test_table",
+            load_pattern=LoadPattern.SNAPSHOT,
+            env_config=None,
+            run_id="test-run-123",
+        )
+
+        job = ExtractJob(ctx)
+        result = job.run()
+
+        assert result == 0
+        mock_processor.process.assert_called_once()
+
+    def test_cleanup_on_failure_removes_files(self, tmp_path):
+        """Test cleanup removes created files on failure."""
+        ctx = self._make_context()
+        ctx = RunContext(
+            cfg=ctx.cfg,
+            run_date=ctx.run_date,
+            relative_path=ctx.relative_path,
+            local_output_dir=tmp_path,
+            bronze_path=tmp_path / "output",
+            source_system="test",
+            source_table="test_table",
+            dataset_id="test.test_table",
+            config_name="test.test_table",
+            load_pattern=LoadPattern.SNAPSHOT,
+            env_config=None,
+            run_id="test-run-123",
+        )
+
+        job = ExtractJob(ctx)
+
+        # Create some temporary files
+        test_file = tmp_path / "test_file.txt"
+        test_file.write_text("test data")
+        job.created_files.append(test_file)
+
+        assert test_file.exists()
+        job._cleanup_on_failure()
+        assert not test_file.exists()
+
+
+class TestRunExtract:
+    """Tests for run_extract function."""
+
+    @patch("core.orchestration.runner.job.ExtractJob")
+    def test_run_extract_creates_job_and_runs(self, mock_job_cls):
+        """Test run_extract creates job and calls run."""
+        mock_job = Mock()
+        mock_job.run.return_value = 0
+        mock_job_cls.return_value = mock_job
+
+        ctx = RunContext(
+            cfg={"source": {"system": "test", "table": "t"}},
+            run_date=date(2024, 1, 15),
+            relative_path="test/path",
+            local_output_dir=Path("/tmp"),
+            bronze_path=Path("/tmp/bronze"),
+            source_system="test",
+            source_table="t",
+            dataset_id="test.t",
+            config_name="test.t",
+            load_pattern=LoadPattern.SNAPSHOT,
+            env_config=None,
+            run_id="run-123",
+        )
+
+        result = run_extract(ctx)
+
+        assert result == 0
+        mock_job_cls.assert_called_once_with(ctx)
+        mock_job.run.assert_called_once()
+
+    @patch("core.orchestration.runner.job.ExtractJob")
+    def test_run_extract_propagates_exceptions(self, mock_job_cls):
+        """Test run_extract propagates exceptions from job."""
+        mock_job = Mock()
+        mock_job.run.side_effect = RuntimeError("Test error")
+        mock_job_cls.return_value = mock_job
+
+        ctx = RunContext(
+            cfg={"source": {"system": "test", "table": "t"}},
+            run_date=date(2024, 1, 15),
+            relative_path="test/path",
+            local_output_dir=Path("/tmp"),
+            bronze_path=Path("/tmp/bronze"),
+            source_system="test",
+            source_table="t",
+            dataset_id="test.t",
+            config_name="test.t",
+            load_pattern=LoadPattern.SNAPSHOT,
+            env_config=None,
+            run_id="run-123",
+        )
+
+        with pytest.raises(RuntimeError, match="Test error"):
+            run_extract(ctx)
+
+
+class TestLoadExtractors:
+    """Tests for _load_extractors function."""
+
+    def test_load_extractors_populates_registry(self):
+        """Test that _load_extractors populates the registry."""
+        # This should already be called at module import time
+        # Just verify registry has expected types
+        assert "api" in EXTRACTOR_REGISTRY
+        assert "db" in EXTRACTOR_REGISTRY
+        assert "file" in EXTRACTOR_REGISTRY

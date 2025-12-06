@@ -31,6 +31,16 @@ from core.primitives.foundations.exceptions import (
     RetryExhaustedError,
     StorageError,
 )
+from core.infrastructure.resilience.constants import (
+    DEFAULT_MAX_ATTEMPTS,
+    DEFAULT_BASE_DELAY,
+    DEFAULT_MAX_DELAY,
+    DEFAULT_BACKOFF_MULTIPLIER,
+    DEFAULT_JITTER,
+    DEFAULT_FAILURE_THRESHOLD,
+    DEFAULT_COOLDOWN_SECONDS,
+    DEFAULT_HALF_OPEN_MAX_CALLS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,11 +58,11 @@ DelayCallback = Callable[[BaseException, int, float], Optional[float]]
 class RetryPolicy:
     """Configuration for retry behavior with exponential backoff."""
 
-    max_attempts: int = 5
-    base_delay: float = 0.5
-    max_delay: float = 8.0
-    backoff_multiplier: float = 2.0
-    jitter: float = 0.2  # fraction of delay as jitter (0.0-1.0)
+    max_attempts: int = DEFAULT_MAX_ATTEMPTS
+    base_delay: float = DEFAULT_BASE_DELAY
+    max_delay: float = DEFAULT_MAX_DELAY
+    backoff_multiplier: float = DEFAULT_BACKOFF_MULTIPLIER
+    jitter: float = DEFAULT_JITTER  # fraction of delay as jitter (0.0-1.0)
     retry_on_exceptions: Tuple[Type[BaseException], ...] = field(
         default_factory=lambda: (
             TimeoutError,
@@ -113,11 +123,11 @@ class RetryPolicy:
         exc_types = tuple(exc_name_map.get(name, Exception) for name in exc_names)
 
         return cls(
-            max_attempts=data.get("max_attempts", 5),
-            base_delay=data.get("base_delay", 0.5),
-            max_delay=data.get("max_delay", 8.0),
-            backoff_multiplier=data.get("backoff_multiplier", 2.0),
-            jitter=data.get("jitter", 0.2),
+            max_attempts=data.get("max_attempts", DEFAULT_MAX_ATTEMPTS),
+            base_delay=data.get("base_delay", DEFAULT_BASE_DELAY),
+            max_delay=data.get("max_delay", DEFAULT_MAX_DELAY),
+            backoff_multiplier=data.get("backoff_multiplier", DEFAULT_BACKOFF_MULTIPLIER),
+            jitter=data.get("jitter", DEFAULT_JITTER),
             retry_on_exceptions=exc_types if exc_types else (TimeoutError, ConnectionError, OSError),
         )
 
@@ -134,9 +144,9 @@ class CircuitState:
 class CircuitBreaker:
     """Circuit breaker with open/half-open/closed states."""
 
-    failure_threshold: int = 5
-    cooldown_seconds: float = 30.0
-    half_open_max_calls: int = 1
+    failure_threshold: int = DEFAULT_FAILURE_THRESHOLD
+    cooldown_seconds: float = DEFAULT_COOLDOWN_SECONDS
+    half_open_max_calls: int = DEFAULT_HALF_OPEN_MAX_CALLS
     on_state_change: Optional[Callable[[str], None]] = None
 
     _state: str = field(default=CircuitState.CLOSED, init=False)
@@ -213,9 +223,9 @@ class CircuitBreaker:
         Note: on_state_change callback is not restored.
         """
         breaker = cls(
-            failure_threshold=data.get("failure_threshold", 5),
-            cooldown_seconds=data.get("cooldown_seconds", 30.0),
-            half_open_max_calls=data.get("half_open_max_calls", 1),
+            failure_threshold=data.get("failure_threshold", DEFAULT_FAILURE_THRESHOLD),
+            cooldown_seconds=data.get("cooldown_seconds", DEFAULT_COOLDOWN_SECONDS),
+            half_open_max_calls=data.get("half_open_max_calls", DEFAULT_HALF_OPEN_MAX_CALLS),
         )
         breaker._state = data.get("state", CircuitState.CLOSED)
         breaker._failures = data.get("failures", 0)
