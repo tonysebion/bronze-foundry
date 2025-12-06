@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, cast
 
 from core.pipeline.bronze.base import emit_bronze_metadata, infer_schema
-from core.pipeline.bronze.plan import (
+from core.pipeline.bronze.models import (
     build_chunk_writer_config,
     compute_output_formats,
     resolve_load_pattern,
@@ -115,7 +115,7 @@ class ExtractJob:
         self.created_files: List[Path] = []
         self.load_pattern: Optional[LoadPattern] = context.load_pattern
         self.output_formats: Dict[str, bool] = {}
-        from core.pipeline.bronze.plan import StoragePlan
+        from core.pipeline.bronze.models import StoragePlan
 
         self.storage_plan: Optional[StoragePlan] = None
         self.schema_snapshot: List[Dict[str, str]] = []

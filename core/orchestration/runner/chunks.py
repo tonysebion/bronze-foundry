@@ -8,7 +8,7 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from core.pipeline.bronze.io import write_csv_chunk, write_parquet_chunk
-from core.pipeline.bronze.plan import StoragePlan, ChunkWriterConfig
+from core.pipeline.bronze.models import StoragePlan, ChunkWriterConfig
 
 logger = logging.getLogger(__name__)
 

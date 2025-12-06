@@ -1,4 +1,4 @@
-from .artifacts import (
+from .io import (
     apply_schema_settings,
     build_current_view,
     normalize_dataframe,

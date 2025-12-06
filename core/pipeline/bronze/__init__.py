@@ -2,10 +2,10 @@
 
 Primary modules:
 - io: CSV/Parquet file writing utilities
-- plan: Storage and chunk configuration dataclasses
+- models: Storage and chunk configuration dataclasses
 """
 
-from .plan import StoragePlan, ChunkWriterConfig
+from .models import StoragePlan, ChunkWriterConfig
 
 __all__ = [
     "StoragePlan",

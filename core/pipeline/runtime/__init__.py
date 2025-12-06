@@ -30,6 +30,13 @@ from .metadata import (
     generate_run_id,
     build_run_metadata,
 )
+from .file_io import (
+    DataFrameLoader,
+    DataFrameWriter,
+    write_records_to_csv,
+    write_records_to_parquet,
+    compute_file_sha256,
+)
 
 __all__ = [
     # Context
@@ -54,4 +61,10 @@ __all__ = [
     "RunMetadata",
     "generate_run_id",
     "build_run_metadata",
+    # File I/O
+    "DataFrameLoader",
+    "DataFrameWriter",
+    "write_records_to_csv",
+    "write_records_to_parquet",
+    "compute_file_sha256",
 ]

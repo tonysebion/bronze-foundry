@@ -41,7 +41,7 @@ from core.primitives.time_utils import utc_isoformat
 from core.pipeline.runtime.options import RunOptions
 from core.infrastructure.storage.policy import enforce_storage_scope
 from core.infrastructure.storage.locks import file_lock
-from core.pipeline.silver.artifacts import (
+from core.pipeline.silver.io import (
     apply_schema_settings,
     build_current_view,
     handle_error_rows,

@@ -34,6 +34,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
+from core.pipeline.runtime.file_io import DataFrameLoader
+
 logger = logging.getLogger(__name__)
 
 
@@ -215,28 +217,7 @@ class MultiSourceJoiner:
 
     def _read_source_data(self, path: Path) -> pd.DataFrame:
         """Read source data from path."""
-        if path.is_file():
-            if path.suffix == ".parquet":
-                return pd.read_parquet(path)
-            elif path.suffix == ".csv":
-                return pd.read_csv(path)
-            else:
-                raise ValueError(f"Unsupported source file format: {path.suffix}")
-
-        # Directory: read all files
-        parquet_files = sorted(path.glob("**/*.parquet"))
-        csv_files = sorted(path.glob("**/*.csv"))
-
-        frames: List[pd.DataFrame] = []
-        for pf in parquet_files:
-            frames.append(pd.read_parquet(pf))
-        for cf in csv_files:
-            frames.append(pd.read_csv(cf))
-
-        if not frames:
-            raise FileNotFoundError(f"No data files found at {path}")
-
-        return pd.concat(frames, ignore_index=True)
+        return DataFrameLoader.from_directory(path, recursive=True)
 
     def join(self, config: JoinConfig) -> JoinResult:
         """Execute multi-source join.
