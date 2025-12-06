@@ -356,3 +356,301 @@ def compute_file_sha256(path: Path) -> str:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             hasher.update(chunk)
     return hasher.hexdigest()
+
+
+# =============================================================================
+# Chunk Sizing and Record Chunking
+# =============================================================================
+
+
+class ChunkSizer:
+    """Estimates memory size of records for chunk sizing heuristics.
+
+    Used to create memory-aware chunks that respect both row count
+    and approximate memory limits.
+
+    Example:
+        size = ChunkSizer.size_of({"name": "test", "value": 123})
+    """
+
+    @staticmethod
+    def size_of(record: Any) -> int:
+        """Estimate the memory size of a record in bytes.
+
+        Args:
+            record: Any Python object (dict, str, bytes, list, etc.)
+
+        Returns:
+            Estimated size in bytes
+        """
+        import sys
+
+        if record is None:
+            return 0
+
+        if isinstance(record, bytes):
+            return len(record)
+
+        if isinstance(record, str):
+            return len(record.encode("utf-8"))
+
+        if isinstance(record, dict):
+            try:
+                payload = json.dumps(record, ensure_ascii=False)
+            except TypeError:
+                payload = str(record)
+            return len(payload.encode("utf-8"))
+
+        if isinstance(record, (list, tuple)):
+            return sum(ChunkSizer.size_of(item) for item in record) + len(record)
+
+        return sys.getsizeof(record)
+
+
+def chunk_records(
+    records: list[dict[str, Any]],
+    max_rows: int = 0,
+    max_size_mb: float | None = None,
+) -> list[list[dict[str, Any]]]:
+    """Chunk records based on row count and/or memory size.
+
+    Creates chunks that respect both maximum row count and approximate
+    memory size limits. Useful for processing large datasets in manageable
+    pieces.
+
+    Args:
+        records: List of records to chunk
+        max_rows: Maximum rows per chunk (0 = no limit)
+        max_size_mb: Maximum size per chunk in MB (None = no limit)
+
+    Returns:
+        List of record chunks
+    """
+    if not records:
+        return []
+
+    # Simple row-based chunking if no size limit
+    if max_size_mb is None or max_size_mb <= 0:
+        if max_rows <= 0:
+            return [records]
+        return [records[i : i + max_rows] for i in range(0, len(records), max_rows)]
+
+    # Size-aware chunking
+    max_size_bytes = max_size_mb * 1024 * 1024
+    chunks: list[list[dict[str, Any]]] = []
+    current_chunk: list[dict[str, Any]] = []
+    current_size = 0
+
+    for record in records:
+        record_size = ChunkSizer.size_of(record)
+
+        # Check if adding this record would exceed limits
+        would_exceed_size = (current_size + record_size) > max_size_bytes
+        would_exceed_rows = max_rows > 0 and len(current_chunk) >= max_rows
+
+        if current_chunk and (would_exceed_size or would_exceed_rows):
+            chunks.append(current_chunk)
+            current_chunk = []
+            current_size = 0
+
+        current_chunk.append(record)
+        current_size += record_size
+
+    # Add final chunk
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    logger.info(
+        "Chunked %d records into %d chunks (max_rows=%d, max_size_mb=%s)",
+        len(records),
+        len(chunks),
+        max_rows,
+        max_size_mb,
+    )
+    return chunks
+
+
+# =============================================================================
+# DataFrame Merge and Key Operations
+# =============================================================================
+
+
+class DataFrameMerger:
+    """Primary key operations for DataFrame merging and deduplication.
+
+    Provides utilities for validating primary keys, building composite keys,
+    and performing upsert/merge operations on DataFrames.
+
+    Example:
+        # Merge with upsert semantics
+        merged, updated, inserted = DataFrameMerger.merge_upsert(
+            existing_df, new_df, ["id"]
+        )
+
+        # Deduplicate by key
+        deduped = DataFrameMerger.deduplicate(df, ["id"], order_by="updated_at")
+    """
+
+    @staticmethod
+    def validate_keys(
+        df: pd.DataFrame,
+        primary_keys: list[str],
+        context: str = "data",
+    ) -> None:
+        """Validate that primary key columns exist in DataFrame.
+
+        Args:
+            df: DataFrame to validate
+            primary_keys: List of column names that form the primary key
+            context: Description for error messages
+
+        Raises:
+            ValueError: If any primary key columns are missing
+        """
+        missing = [k for k in primary_keys if k not in df.columns]
+        if missing:
+            raise ValueError(f"Primary keys missing in {context}: {missing}")
+
+    @staticmethod
+    def build_composite_key(df: pd.DataFrame, primary_keys: list[str]) -> pd.Series:
+        """Build a composite key series from multiple columns.
+
+        Args:
+            df: DataFrame containing key columns
+            primary_keys: List of column names to combine
+
+        Returns:
+            Series of string or tuple keys
+        """
+        if len(primary_keys) == 1:
+            return df[primary_keys[0]].astype(str)
+        return df[primary_keys].astype(str).apply(lambda row: tuple(row), axis=1)
+
+    @staticmethod
+    def merge_upsert(
+        existing_df: pd.DataFrame,
+        new_df: pd.DataFrame,
+        primary_keys: list[str],
+    ) -> tuple[pd.DataFrame, int, int]:
+        """Merge DataFrames with upsert semantics.
+
+        New records replace existing records with matching primary keys.
+        Records in existing that don't match are preserved.
+
+        Args:
+            existing_df: Existing DataFrame
+            new_df: New records to merge
+            primary_keys: List of columns forming the primary key
+
+        Returns:
+            Tuple of (merged DataFrame, updated count, inserted count)
+
+        Raises:
+            ValueError: If primary keys are missing in either DataFrame
+        """
+        DataFrameMerger.validate_keys(existing_df, primary_keys, "existing data")
+        DataFrameMerger.validate_keys(new_df, primary_keys, "new data")
+
+        existing_series = DataFrameMerger.build_composite_key(existing_df, primary_keys)
+        new_series = DataFrameMerger.build_composite_key(new_df, primary_keys)
+
+        existing_keys = set(existing_series)
+        new_keys = set(new_series)
+
+        keep_mask = ~existing_series.isin(new_keys)
+        kept_existing = existing_df[keep_mask]
+
+        merged_df = pd.concat([kept_existing, new_df], ignore_index=True)
+        updated_count = len(existing_keys & new_keys)
+        inserted_count = len(new_keys - existing_keys)
+
+        return merged_df, updated_count, inserted_count
+
+    @staticmethod
+    def deduplicate(
+        df: pd.DataFrame,
+        primary_keys: list[str],
+        order_by: str | None = None,
+        keep: str = "last",
+    ) -> pd.DataFrame:
+        """Deduplicate DataFrame by primary keys.
+
+        Args:
+            df: DataFrame to deduplicate
+            primary_keys: List of columns forming the primary key
+            order_by: Optional column to sort by before deduplication
+            keep: Which duplicate to keep ('first' or 'last')
+
+        Returns:
+            Deduplicated DataFrame
+        """
+        if not primary_keys or any(pk not in df.columns for pk in primary_keys):
+            logger.warning(
+                "Primary keys missing or not present; returning original DataFrame"
+            )
+            return df
+
+        working = df.copy()
+        if order_by and order_by in df.columns:
+            working = working.sort_values(order_by)
+        else:
+            working = working.reset_index()
+
+        result = working.drop_duplicates(subset=primary_keys, keep=keep)
+        return result.drop(columns=["index"], errors="ignore")
+
+
+# =============================================================================
+# DataFrame Normalization
+# =============================================================================
+
+
+def normalize_dataframe(
+    df: pd.DataFrame,
+    trim_strings: bool = False,
+    empty_strings_as_null: bool = False,
+) -> pd.DataFrame:
+    """Normalize DataFrame string columns.
+
+    Applies common string normalization operations:
+    - Trim leading/trailing whitespace
+    - Convert empty strings to null
+
+    Args:
+        df: DataFrame to normalize
+        trim_strings: Whether to trim whitespace from string columns
+        empty_strings_as_null: Whether to convert empty strings to None
+
+    Returns:
+        Normalized DataFrame (copy)
+    """
+    result = df.copy()
+    if trim_strings or empty_strings_as_null:
+        object_cols = result.select_dtypes(include="object").columns
+        for col in object_cols:
+            if trim_strings:
+                result[col] = result[col].apply(
+                    lambda val: val.strip() if isinstance(val, str) else val
+                )
+            if empty_strings_as_null:
+                result[col] = result[col].apply(
+                    lambda val: None if isinstance(val, str) and val == "" else val
+                )
+    return result
+
+
+def sanitize_partition_value(value: Any) -> str:
+    """Sanitize a value for use in partition paths.
+
+    Replaces any characters that are not alphanumeric, dot, underscore,
+    or hyphen with underscores.
+
+    Args:
+        value: Value to sanitize
+
+    Returns:
+        Sanitized string safe for filesystem paths
+    """
+    import re
+
+    return re.sub(r"[^0-9A-Za-z._-]", "_", str(value))

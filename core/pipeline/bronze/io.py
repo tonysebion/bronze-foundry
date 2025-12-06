@@ -1,102 +1,29 @@
-"""Functions for chunking records and writing CSV/Parquet."""
+"""Functions for chunking records and writing CSV/Parquet.
+
+This module provides Bronze-layer I/O utilities. Many utilities are now
+shared with Silver via the runtime layer. This module re-exports them
+for backward compatibility and adds Bronze-specific functions.
+"""
+
+from __future__ import annotations
 
 import csv
-import hashlib
 import json
 import logging
-import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
 from core.primitives.time_utils import utc_isoformat as _utc_isoformat
+from core.pipeline.runtime.file_io import (
+    ChunkSizer,
+    chunk_records,
+    DataFrameMerger,
+    compute_file_sha256,
+)
 
 import pandas as pd
 
 logger = logging.getLogger(__name__)
-
-
-class ChunkSizer:
-    """Estimates memory size of records for chunk sizing heuristics."""
-
-    @staticmethod
-    def size_of(record: Any) -> int:
-        if record is None:
-            return 0
-
-        if isinstance(record, bytes):
-            return len(record)
-
-        if isinstance(record, str):
-            return len(record.encode("utf-8"))
-
-        if isinstance(record, dict):
-            try:
-                payload = json.dumps(record, ensure_ascii=False)
-            except TypeError:
-                payload = str(record)
-            return len(payload.encode("utf-8"))
-
-        if isinstance(record, (list, tuple)):
-            return sum(ChunkSizer.size_of(item) for item in record) + len(record)
-
-        return sys.getsizeof(record)
-
-
-def chunk_records(
-    records: List[Dict[str, Any]],
-    max_rows: int = 0,
-    max_size_mb: Optional[float] = None,
-) -> List[List[Dict[str, Any]]]:
-    """
-    Chunk records based on row count and/or file size.
-
-    Args:
-        records: List of records to chunk
-        max_rows: Maximum rows per chunk (0 = no limit)
-        max_size_mb: Maximum size per chunk in MB (None = no limit)
-
-    Returns:
-        List of record chunks
-    """
-    if not records:
-        return []
-
-    # Simple row-based chunking if no size limit
-    if max_size_mb is None or max_size_mb <= 0:
-        if max_rows <= 0:
-            return [records]
-        return [records[i : i + max_rows] for i in range(0, len(records), max_rows)]
-
-    # Size-aware chunking
-    max_size_bytes = max_size_mb * 1024 * 1024
-    chunks = []
-    current_chunk: List[Dict[str, Any]] = []
-    current_size = 0
-
-    for record in records:
-        record_size = ChunkSizer.size_of(record)
-
-        # Check if adding this record would exceed limits
-        would_exceed_size = (current_size + record_size) > max_size_bytes
-        would_exceed_rows = max_rows > 0 and len(current_chunk) >= max_rows
-
-        if current_chunk and (would_exceed_size or would_exceed_rows):
-            chunks.append(current_chunk)
-            current_chunk = []
-            current_size = 0
-
-        current_chunk.append(record)
-        current_size += record_size
-
-    # Add final chunk
-    if current_chunk:
-        chunks.append(current_chunk)
-
-    logger.info(
-        f"Chunked {len(records)} records into {len(chunks)} chunks "
-        f"(max_rows={max_rows}, max_size_mb={max_size_mb})"
-    )
-    return chunks
 
 
 def write_csv_chunk(chunk: List[Any], out_path: Path) -> None:
@@ -192,11 +119,10 @@ def write_checksum_manifest(
     load_pattern: str,
     extra_metadata: Optional[Dict[str, Any]] = None,
 ) -> Path:
-    """
-    Write a checksum manifest containing hashes of produced files.
-    """
-    import json
+    """Write a checksum manifest containing hashes of produced files.
 
+    Uses compute_file_sha256() from runtime layer for consistent hashing.
+    """
     manifest: Dict[str, Any] = {
         "timestamp": _utc_isoformat(),
         "load_pattern": load_pattern,
@@ -206,15 +132,11 @@ def write_checksum_manifest(
     for file_path in files:
         if not file_path.exists():
             continue
-        hasher = hashlib.sha256()
-        with file_path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                hasher.update(chunk)
         manifest["files"].append(
             {
                 "path": file_path.name,
                 "size_bytes": file_path.stat().st_size,
-                "sha256": hasher.hexdigest(),
+                "sha256": compute_file_sha256(file_path),
             }
         )
 
@@ -234,8 +156,9 @@ def verify_checksum_manifest(
     manifest_name: str = "_checksums.json",
     expected_pattern: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """
-    Validate that the files in a Bronze partition match the recorded checksums.
+    """Validate that the files in a Bronze partition match the recorded checksums.
+
+    Uses compute_file_sha256() from runtime layer for consistent hashing.
 
     Args:
         bronze_dir: The Bronze partition directory to verify.
@@ -283,11 +206,7 @@ def verify_checksum_manifest(
         expected_hash = entry.get("sha256")
 
         actual_size = target.stat().st_size
-        hasher = hashlib.sha256()
-        with target.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                hasher.update(chunk)
-        actual_hash = hasher.hexdigest()
+        actual_hash = compute_file_sha256(target)
 
         if actual_size != expected_size or actual_hash != expected_hash:
             mismatched_files.append(rel_name)
@@ -305,48 +224,29 @@ def verify_checksum_manifest(
     return manifest
 
 
+# Backward compatibility aliases for internal merge functions
+# Now delegating to the shared DataFrameMerger in runtime layer
 def _validate_primary_keys(
     existing_df: pd.DataFrame, new_df: pd.DataFrame, primary_keys: List[str]
 ) -> None:
-    missing_in_existing = [k for k in primary_keys if k not in existing_df.columns]
-    missing_in_new = [k for k in primary_keys if k not in new_df.columns]
-
-    if missing_in_existing:
-        raise ValueError(
-            f"Primary keys missing in existing data: {missing_in_existing}"
-        )
-    if missing_in_new:
-        raise ValueError(
-            f"Primary keys missing in new data: {missing_in_new}"
-        )
+    """Validate primary keys exist in both DataFrames (delegates to DataFrameMerger)."""
+    DataFrameMerger.validate_keys(existing_df, primary_keys, "existing data")
+    DataFrameMerger.validate_keys(new_df, primary_keys, "new data")
 
 
 def _build_key_series(df: pd.DataFrame, primary_keys: List[str]) -> pd.Series:
-    if len(primary_keys) == 1:
-        return df[primary_keys[0]].astype(str)
-    return df[primary_keys].astype(str).apply(lambda row: tuple(row), axis=1)
+    """Build composite key series (delegates to DataFrameMerger)."""
+    return DataFrameMerger.build_composite_key(df, primary_keys)
 
 
 def _merge_dataframes(
     existing_df: pd.DataFrame, new_df: pd.DataFrame, primary_keys: List[str]
 ) -> tuple[pd.DataFrame, int, int]:
-    """Return merged DataFrame along with counts of updated and inserted keys."""
-    _validate_primary_keys(existing_df, new_df, primary_keys)
+    """Return merged DataFrame along with counts of updated and inserted keys.
 
-    existing_series = _build_key_series(existing_df, primary_keys)
-    new_series = _build_key_series(new_df, primary_keys)
-
-    existing_keys = set(existing_series)
-    new_keys = set(new_series)
-
-    keep_mask = ~existing_series.isin(new_keys)
-    kept_existing = existing_df[keep_mask]
-
-    merged_df = pd.concat([kept_existing, new_df], ignore_index=True)
-    updated_count = len(existing_keys & new_keys)
-    inserted_count = len(new_keys - existing_keys)
-
-    return merged_df, updated_count, inserted_count
+    Delegates to DataFrameMerger.merge_upsert().
+    """
+    return DataFrameMerger.merge_upsert(existing_df, new_df, primary_keys)
 
 
 def merge_parquet_records(
@@ -388,7 +288,7 @@ def merge_parquet_records(
         return len(new_df)
 
     existing_df = pd.read_parquet(existing_path)
-    merged_df, updated_count, inserted_count = _merge_dataframes(
+    merged_df, updated_count, inserted_count = DataFrameMerger.merge_upsert(
         existing_df, new_df, primary_keys
     )
 
@@ -443,7 +343,7 @@ def merge_csv_records(
         return len(new_df)
 
     existing_df = pd.read_csv(existing_path)
-    merged_df, _, _ = _merge_dataframes(existing_df, new_df, primary_keys)
+    merged_df, _, _ = DataFrameMerger.merge_upsert(existing_df, new_df, primary_keys)
 
     target = out_path or existing_path
     target.parent.mkdir(parents=True, exist_ok=True)

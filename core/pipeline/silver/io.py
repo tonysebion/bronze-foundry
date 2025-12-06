@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import logging
-import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import pandas as pd
 
 from core.pipeline.silver.models import SilverModel
+from core.pipeline.runtime.file_io import (
+    normalize_dataframe as _runtime_normalize_dataframe,
+    sanitize_partition_value as _runtime_sanitize_partition_value,
+    DataFrameMerger,
+    DataFrameWriter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -17,20 +22,19 @@ def build_current_view(
     primary_keys: List[str],
     order_column: str | None,
 ) -> pd.DataFrame:
-    if not primary_keys or any(pk not in df.columns for pk in primary_keys):
-        logger.warning(
-            "Primary keys missing or not present in data; using entire dataset for current view"
-        )
-        return df
+    """Build current view by deduplicating on primary keys.
 
-    working = df.copy()
-    if order_column and order_column in df.columns:
-        working = working.sort_values(order_column)
-    else:
-        working = working.reset_index()
-    return working.drop_duplicates(subset=primary_keys, keep="last").drop(
-        columns=["index"], errors="ignore"
-    )
+    Delegates to DataFrameMerger.deduplicate() from the runtime layer.
+
+    Args:
+        df: DataFrame to deduplicate
+        primary_keys: List of columns forming the primary key
+        order_column: Optional column to sort by before deduplication
+
+    Returns:
+        Deduplicated DataFrame with only the most recent record per key
+    """
+    return DataFrameMerger.deduplicate(df, primary_keys, order_by=order_column, keep="last")
 
 
 def apply_schema_settings(df: pd.DataFrame, schema_cfg: Dict[str, Any]) -> pd.DataFrame:
@@ -60,26 +64,30 @@ def apply_schema_settings(df: pd.DataFrame, schema_cfg: Dict[str, Any]) -> pd.Da
 def normalize_dataframe(
     df: pd.DataFrame, normalization_cfg: Dict[str, Any]
 ) -> pd.DataFrame:
+    """Normalize DataFrame string columns.
+
+    Delegates to runtime.file_io.normalize_dataframe with config unpacking.
+
+    Args:
+        df: DataFrame to normalize
+        normalization_cfg: Dict with trim_strings and empty_strings_as_null options
+
+    Returns:
+        Normalized DataFrame (copy)
+    """
     trim_strings = normalization_cfg.get("trim_strings", False)
     empty_as_null = normalization_cfg.get("empty_strings_as_null", False)
-
-    result = df.copy()
-    if trim_strings or empty_as_null:
-        object_cols = result.select_dtypes(include="object").columns
-        for col in object_cols:
-            if trim_strings:
-                result[col] = result[col].apply(
-                    lambda val: val.strip() if isinstance(val, str) else val
-                )
-            if empty_as_null:
-                result[col] = result[col].apply(
-                    lambda val: None if isinstance(val, str) and val == "" else val
-                )
-    return result
+    return _runtime_normalize_dataframe(
+        df, trim_strings=trim_strings, empty_strings_as_null=empty_as_null
+    )
 
 
 def _sanitize_partition_value(value: Any) -> str:
-    return re.sub(r"[^0-9A-Za-z._-]", "_", str(value))
+    """Sanitize a value for use in partition paths.
+
+    Delegates to runtime.file_io.sanitize_partition_value.
+    """
+    return _runtime_sanitize_partition_value(value)
 
 
 def partition_dataframe(
@@ -153,12 +161,6 @@ def handle_error_rows(
     return df.loc[~invalid_mask].copy()
 
 
-def _atomic_replace(tmp_path: Path, final_path: Path) -> None:
-    # Ensure parent exists
-    final_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path.replace(final_path)
-
-
 def _write_dataset(
     df: pd.DataFrame,
     base_name: str,
@@ -167,26 +169,35 @@ def _write_dataset(
     write_csv: bool,
     parquet_compression: str,
 ) -> List[Path]:
+    """Write dataset with idempotency (skips if file exists).
+
+    Uses DataFrameWriter from runtime layer for atomic writes.
+    """
     files: List[Path] = []
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Check for existing files first (idempotency)
     if write_parquet:
-        final_path = output_dir / f"{base_name}.parquet"
-        if final_path.exists():
-            files.append(final_path)
-        else:
-            tmp_path = output_dir / f".{base_name}.parquet.tmp"
-            df.to_parquet(tmp_path, index=False, compression=parquet_compression)
-            _atomic_replace(tmp_path, final_path)
-            files.append(final_path)
+        parquet_path = output_dir / f"{base_name}.parquet"
+        if parquet_path.exists():
+            files.append(parquet_path)
+            write_parquet = False  # Skip writing
+
     if write_csv:
-        final_path = output_dir / f"{base_name}.csv"
-        if final_path.exists():
-            files.append(final_path)
-        else:
-            tmp_path = output_dir / f".{base_name}.csv.tmp"
-            df.to_csv(tmp_path, index=False)
-            _atomic_replace(tmp_path, final_path)
-            files.append(final_path)
+        csv_path = output_dir / f"{base_name}.csv"
+        if csv_path.exists():
+            files.append(csv_path)
+            write_csv = False  # Skip writing
+
+    # Write any files that don't exist
+    if write_parquet or write_csv:
+        writer = DataFrameWriter(
+            write_parquet=write_parquet,
+            write_csv=write_csv,
+            compression=parquet_compression,
+        )
+        files.extend(writer.write_atomic(df, output_dir, base_name))
+
     return files
 
 
@@ -199,29 +210,14 @@ def _write_dataset_chunk(
     parquet_compression: str,
     chunk_tag: str,
 ) -> List[Path]:
-    """Chunked variant used by streaming promotions (suffix with -<chunk_tag>)."""
-    files: List[Path] = []
-    output_dir.mkdir(parents=True, exist_ok=True)
-    suffix = f"-{chunk_tag}"
-    if write_parquet:
-        final_path = output_dir / f"{base_name}{suffix}.parquet"
-        if final_path.exists():
-            files.append(final_path)
-        else:
-            tmp_path = output_dir / f".{base_name}{suffix}.parquet.tmp"
-            df.to_parquet(tmp_path, index=False, compression=parquet_compression)
-            _atomic_replace(tmp_path, final_path)
-            files.append(final_path)
-    if write_csv:
-        final_path = output_dir / f"{base_name}{suffix}.csv"
-        if final_path.exists():
-            files.append(final_path)
-        else:
-            tmp_path = output_dir / f".{base_name}{suffix}.csv.tmp"
-            df.to_csv(tmp_path, index=False)
-            _atomic_replace(tmp_path, final_path)
-            files.append(final_path)
-    return files
+    """Chunked variant used by streaming promotions (suffix with -<chunk_tag>).
+
+    Uses DataFrameWriter from runtime layer for atomic writes.
+    """
+    chunk_name = f"{base_name}-{chunk_tag}"
+    return _write_dataset(
+        df, chunk_name, output_dir, write_parquet, write_csv, parquet_compression
+    )
 
 
 class DatasetWriter:

@@ -36,6 +36,14 @@ from .file_io import (
     write_records_to_csv,
     write_records_to_parquet,
     compute_file_sha256,
+    # Chunking utilities
+    ChunkSizer,
+    chunk_records,
+    # Merge utilities
+    DataFrameMerger,
+    # Normalization utilities
+    normalize_dataframe,
+    sanitize_partition_value,
 )
 
 __all__ = [
@@ -67,4 +75,12 @@ __all__ = [
     "write_records_to_csv",
     "write_records_to_parquet",
     "compute_file_sha256",
+    # Chunking utilities
+    "ChunkSizer",
+    "chunk_records",
+    # Merge utilities
+    "DataFrameMerger",
+    # Normalization utilities
+    "normalize_dataframe",
+    "sanitize_partition_value",
 ]
