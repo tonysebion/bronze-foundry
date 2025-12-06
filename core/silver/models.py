@@ -37,8 +37,9 @@ class SilverModel(str, Enum):
     @classmethod
     def default_for_load_pattern(cls, pattern: LoadPattern) -> "SilverModel":
         mapping = {
-            LoadPattern.FULL: cls.PERIODIC_SNAPSHOT,
-            LoadPattern.CDC: cls.INCREMENTAL_MERGE,
+            LoadPattern.SNAPSHOT: cls.PERIODIC_SNAPSHOT,
+            LoadPattern.INCREMENTAL_APPEND: cls.INCREMENTAL_MERGE,
+            LoadPattern.INCREMENTAL_MERGE: cls.INCREMENTAL_MERGE,
             LoadPattern.CURRENT_HISTORY: cls.SCD_TYPE_2,
         }
         return mapping.get(pattern, cls.PERIODIC_SNAPSHOT)

@@ -292,7 +292,7 @@ class BronzeOrchestrator:
                         (
                             tcfg.source.run.load_pattern.value
                             if getattr(tcfg.source, "run", None)
-                            else LoadPattern.FULL.value
+                            else LoadPattern.SNAPSHOT.value
                         ),
                     )
                     platform = cfg.model_dump()["platform"]

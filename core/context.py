@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -11,6 +11,7 @@ from core.config import build_relative_path
 from core.config.typed_models import RootConfig
 from core.config.environment import EnvironmentConfig
 from core.patterns import LoadPattern
+from core.run_metadata import generate_run_id
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ class RunContext:
     config_name: str
     load_pattern: LoadPattern
     env_config: Optional[EnvironmentConfig]
+    run_id: str = field(default_factory=generate_run_id)
 
     @property
     def bronze_dir(self) -> Path:
@@ -46,6 +48,7 @@ def build_run_context(
     load_pattern_override: str | None = None,
     bronze_path_override: Path | None = None,
     env_config: Optional[EnvironmentConfig] = None,
+    run_id: Optional[str] = None,
 ) -> RunContext:
     typed: RootConfig | None
     if isinstance(cfg, RootConfig):
@@ -88,7 +91,7 @@ def build_run_context(
 
     pattern_value = load_pattern_override or run_cfg.get("load_pattern")
     load_pattern = (
-        LoadPattern.normalize(pattern_value) if pattern_value else LoadPattern.FULL
+        LoadPattern.normalize(pattern_value) if pattern_value else LoadPattern.SNAPSHOT
     )
 
     logger.debug(
@@ -112,6 +115,7 @@ def build_run_context(
         config_name=config_name,
         load_pattern=load_pattern,
         env_config=env_config,
+        run_id=run_id or generate_run_id(),
     )
 
 
@@ -127,6 +131,7 @@ def run_context_to_dict(ctx: RunContext) -> Dict[str, Any]:
         "dataset_id": ctx.dataset_id,
         "config_name": ctx.config_name,
         "load_pattern": ctx.load_pattern.value,
+        "run_id": ctx.run_id,
     }
 
 
@@ -145,6 +150,8 @@ def run_context_from_dict(payload: Dict[str, Any]) -> RunContext:
         dataset_id=payload["dataset_id"],
         config_name=payload.get("config_name", payload["dataset_id"]),
         load_pattern=load_pattern,
+        env_config=None,
+        run_id=payload.get("run_id", generate_run_id()),
     )
 
 

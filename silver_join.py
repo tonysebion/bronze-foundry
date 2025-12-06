@@ -594,7 +594,7 @@ def determine_model(requested: str | None, metadata: Dict[str, Any]) -> SilverMo
         return profile
     if requested:
         return SilverModel.normalize(requested)
-    return SilverModel.default_for_load_pattern(LoadPattern.FULL)
+    return SilverModel.default_for_load_pattern(LoadPattern.SNAPSHOT)
 
 
 def _model_supported(model: SilverModel, metadata_list: List[Dict[str, Any]]) -> bool:
@@ -675,7 +675,7 @@ def build_run_options(
     )
 
     return RunOptions(
-        load_pattern=LoadPattern.FULL,
+        load_pattern=LoadPattern.SNAPSHOT,
         require_checksum=False,
         write_parquet=write_parquet,
         write_csv=write_csv,
@@ -1133,7 +1133,7 @@ class SilverJoinRunner:
         source_audits = [build_input_audit(meta) for meta in assets.metadata_list]
         requested_model = (
             self.output_cfg.get("model")
-            or SilverModel.default_for_load_pattern(LoadPattern.FULL).value
+            or SilverModel.default_for_load_pattern(LoadPattern.SNAPSHOT).value
         )
         model = select_model(requested_model, assets.metadata_list)
         run_opts = build_run_options(self.output_cfg, assets.metadata_list)

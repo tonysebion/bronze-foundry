@@ -757,7 +757,7 @@ class SilverPromotionService:
         config_pattern = (
             LoadPattern.normalize(cfg["source"]["run"].get("load_pattern"))
             if cfg
-            else LoadPattern.FULL
+            else LoadPattern.SNAPSHOT
         )
         if metadata_pattern and cfg and metadata_pattern != config_pattern:
             logger.warning(

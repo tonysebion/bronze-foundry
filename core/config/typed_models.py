@@ -3,6 +3,15 @@
 Initial pass: mirrors existing dict-based structure while providing
 field validation. We keep to_dict() helpers for compatibility with
 legacy code paths still expecting dictionaries.
+
+Config Schema per Spec Section 2:
+- pipeline_id: Unique identifier for the pipeline
+- layer: bronze | silver
+- domain: Business domain
+- environment: dev | staging | prod
+- source_system: Source system identifier
+- data_classification: public | internal | confidential | restricted
+- owners: semantic_owner, technical_owner
 """
 
 from __future__ import annotations
@@ -22,6 +31,29 @@ from core.patterns import LoadPattern
 from core.silver.models import SilverModel, resolve_profile
 
 from .dataset import DatasetConfig
+
+
+class DataClassification(str, Enum):
+    """Data classification levels per spec."""
+
+    PUBLIC = "public"
+    INTERNAL = "internal"
+    CONFIDENTIAL = "confidential"
+    RESTRICTED = "restricted"
+
+
+class OwnerConfig(BaseModel):
+    """Owner configuration per spec Section 2."""
+
+    semantic_owner: Optional[str] = None
+    technical_owner: Optional[str] = None
+
+
+class SchemaEvolutionConfig(BaseModel):
+    """Schema evolution configuration per spec Section 6."""
+
+    mode: str = "strict"  # strict | allow_new_nullable | ignore_unknown
+    allow_type_relaxation: bool = False
 
 
 class StorageBackend(str, Enum):
@@ -69,7 +101,7 @@ class CustomExtractorConfig(BaseModel):
 
 class RunConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
-    load_pattern: LoadPattern = LoadPattern.FULL
+    load_pattern: LoadPattern = LoadPattern.SNAPSHOT
     local_output_dir: str = "./output"
     write_csv: bool = True
     write_parquet: bool = False
@@ -261,14 +293,46 @@ class PlatformConfig(BaseModel):
 
 
 class RootConfig(BaseModel):
+    """Root configuration model per spec Section 2.
+
+    Core fields:
+    - pipeline_id: Unique identifier (e.g., "bronze_claim_header_ingest")
+    - layer: "bronze" or "silver"
+    - domain: Business domain (e.g., "claims")
+    - environment: "dev", "staging", or "prod"
+    - source_system: Source system name (e.g., "Facets")
+    - data_classification: "public", "internal", "confidential", "restricted"
+    - owners: semantic_owner and technical_owner
+    """
+
     model_config = ConfigDict(
         extra="allow",
         json_encoders={DatasetConfig: lambda value: value},
     )
+
+    # Core config fields per spec Section 2
     config_version: int = 1
+    pipeline_id: Optional[str] = None  # e.g., "bronze_claim_header_ingest"
+    layer: str = "bronze"  # bronze | silver
+    domain: Optional[str] = None  # e.g., "claims"
+    environment: str = "dev"  # dev | staging | prod
+    data_classification: DataClassification = DataClassification.INTERNAL
+    owners: OwnerConfig = Field(default_factory=OwnerConfig)
+    schema_evolution: SchemaEvolutionConfig = Field(default_factory=SchemaEvolutionConfig)
+
+    # Existing config structure
     platform: PlatformConfig
     source: SourceConfig
     silver: Optional[SilverConfig] = None
+
+    @model_validator(mode="after")
+    def _set_defaults_from_source(self):
+        """Set defaults for domain and pipeline_id from source config."""
+        if self.domain is None:
+            self.domain = self.source.system
+        if self.pipeline_id is None:
+            self.pipeline_id = f"{self.layer}_{self.source.system}_{self.source.table}_ingest"
+        return self
 
     def to_dict(self) -> Dict[str, Any]:
         return self.model_dump()

@@ -21,6 +21,7 @@ from core.context import RunContext
 from core.extractors.api_extractor import ApiExtractor
 from core.extractors.base import BaseExtractor
 from core.extractors.db_extractor import DbExtractor
+from core.extractors.db_multi_extractor import DbMultiExtractor
 from core.config.environment import EnvironmentConfig
 from core.extractors.file_extractor import FileExtractor
 from core.bronze.io import chunk_records
@@ -41,6 +42,9 @@ def build_extractor(
         return ApiExtractor()
     if src_type == "db":
         return DbExtractor()
+    if src_type == "db_multi":
+        max_workers = src.get("run", {}).get("parallel_workers", 4)
+        return DbMultiExtractor(max_workers=max_workers)
     if src_type == "custom":
         custom_cfg = src.get("custom_extractor", {})
         module_name = custom_cfg["module"]
@@ -163,7 +167,7 @@ class ExtractJob:
         from datetime import datetime
 
         run_datetime = datetime.combine(self.run_date, datetime.min.time())
-        p_load_pattern = self.load_pattern or LoadPattern.FULL
+        p_load_pattern = self.load_pattern or LoadPattern.SNAPSHOT
 
         metadata_path = emit_bronze_metadata(
             self._out_dir,

@@ -790,7 +790,7 @@ def dataset_to_runtime_config(dataset: DatasetConfig) -> Dict[str, Any]:
     if pattern_override:
         load_pattern_value = LoadPattern.normalize(pattern_override).value
     else:
-        load_pattern_value = LoadPattern.FULL.value
+        load_pattern_value = LoadPattern.SNAPSHOT.value
 
     bronze_backend = dataset.bronze.output_storage or "local"
     local_run = {
@@ -1023,10 +1023,10 @@ def legacy_to_dataset(cfg: Dict[str, Any]) -> Optional[DatasetConfig]:
 
     input_mode = None
     if entity_kind.is_event_like:
-        load_pattern = run_cfg.get("load_pattern", LoadPattern.FULL.value)
+        load_pattern = run_cfg.get("load_pattern", LoadPattern.SNAPSHOT.value)
         input_mode = (
             InputMode.REPLACE_DAILY
-            if load_pattern == LoadPattern.FULL.value
+            if load_pattern == LoadPattern.SNAPSHOT.value
             else InputMode.APPEND_LOG
         )
 

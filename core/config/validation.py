@@ -4,13 +4,19 @@ import copy
 import logging
 from typing import Any, Dict
 
-from .typed_models import SilverConfig
+from .typed_models import SilverConfig, DataClassification
 from pydantic import ValidationError
 from core.deprecation import emit_compat, emit_deprecation, DeprecationSpec
 from core.patterns import LoadPattern
 from core.storage.policy import validate_storage_metadata
 
 logger = logging.getLogger(__name__)
+
+# Valid values for new spec fields
+VALID_DATA_CLASSIFICATIONS = [e.value for e in DataClassification]
+VALID_ENVIRONMENTS = ["dev", "staging", "prod", "test", "local"]
+VALID_LAYERS = ["bronze", "silver"]
+VALID_SCHEMA_EVOLUTION_MODES = ["strict", "allow_new_nullable", "ignore_unknown"]
 
 
 def _normalize_silver_config(
@@ -28,6 +34,74 @@ def _normalize_silver_config(
     return model.to_dict()
 
 
+def _validate_spec_fields(cfg: Dict[str, Any]) -> None:
+    """Validate new spec fields per Section 2.
+
+    Validates:
+    - pipeline_id: Optional string
+    - layer: "bronze" or "silver"
+    - domain: Optional string
+    - environment: "dev", "staging", "prod", "test", "local"
+    - data_classification: "public", "internal", "confidential", "restricted"
+    - owners: dict with semantic_owner and technical_owner
+    - schema_evolution: dict with mode and allow_type_relaxation
+    """
+    # Validate layer
+    layer = cfg.get("layer", "bronze")
+    if layer not in VALID_LAYERS:
+        raise ValueError(f"layer must be one of {VALID_LAYERS}, got '{layer}'")
+
+    # Validate environment
+    environment = cfg.get("environment", "dev")
+    if environment not in VALID_ENVIRONMENTS:
+        raise ValueError(
+            f"environment must be one of {VALID_ENVIRONMENTS}, got '{environment}'"
+        )
+
+    # Validate data_classification
+    classification = cfg.get("data_classification", "internal")
+    if isinstance(classification, str):
+        classification = classification.lower()
+    if classification not in VALID_DATA_CLASSIFICATIONS:
+        raise ValueError(
+            f"data_classification must be one of {VALID_DATA_CLASSIFICATIONS}, got '{classification}'"
+        )
+
+    # Validate owners
+    owners = cfg.get("owners")
+    if owners is not None:
+        if not isinstance(owners, dict):
+            raise ValueError("owners must be a dictionary")
+        for key in ("semantic_owner", "technical_owner"):
+            if key in owners and owners[key] is not None:
+                if not isinstance(owners[key], str):
+                    raise ValueError(f"owners.{key} must be a string")
+
+    # Validate schema_evolution
+    schema_evolution = cfg.get("schema_evolution")
+    if schema_evolution is not None:
+        if not isinstance(schema_evolution, dict):
+            raise ValueError("schema_evolution must be a dictionary")
+        mode = schema_evolution.get("mode", "strict")
+        if mode not in VALID_SCHEMA_EVOLUTION_MODES:
+            raise ValueError(
+                f"schema_evolution.mode must be one of {VALID_SCHEMA_EVOLUTION_MODES}, got '{mode}'"
+            )
+        allow_relaxation = schema_evolution.get("allow_type_relaxation", False)
+        if not isinstance(allow_relaxation, bool):
+            raise ValueError("schema_evolution.allow_type_relaxation must be a boolean")
+
+    # Validate pipeline_id if provided
+    pipeline_id = cfg.get("pipeline_id")
+    if pipeline_id is not None and not isinstance(pipeline_id, str):
+        raise ValueError("pipeline_id must be a string")
+
+    # Validate domain if provided
+    domain = cfg.get("domain")
+    if domain is not None and not isinstance(domain, str):
+        raise ValueError("domain must be a string")
+
+
 def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
     cfg = copy.deepcopy(cfg)
 
@@ -36,6 +110,9 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("Config must contain a 'platform' section")
     if "source" not in cfg:
         raise ValueError("Config must contain a 'source' section")
+
+    # Validate new spec fields (Section 2)
+    _validate_spec_fields(cfg)
 
     platform = cfg["platform"]
     if not isinstance(platform, dict):
@@ -187,7 +264,7 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
             raise ValueError("source.api requires 'endpoint'")
 
     run_cfg = source.get("run", {})
-    pattern_value = run_cfg.get("load_pattern", LoadPattern.FULL.value)
+    pattern_value = run_cfg.get("load_pattern", LoadPattern.SNAPSHOT.value)
     pattern = LoadPattern.normalize(pattern_value)
     run_cfg["load_pattern"] = pattern.value
 

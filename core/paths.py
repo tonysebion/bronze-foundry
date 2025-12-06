@@ -32,7 +32,7 @@ def build_bronze_relative_path(cfg: dict, run_date: date) -> str:
     base_path = f"{system_key}={system}/{entity_key}={table}/"
 
     run_cfg = source_cfg.get("run", {})
-    load_pattern = run_cfg.get("load_pattern", LoadPattern.FULL.value)
+    load_pattern = run_cfg.get("load_pattern", LoadPattern.SNAPSHOT.value)
     bronze_options = bronze.get("options", {})
     run_cfg = cfg["source"].get("run", {})
     pattern_folder = (
