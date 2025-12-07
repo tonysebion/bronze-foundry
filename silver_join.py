@@ -17,13 +17,13 @@ import yaml
 
 from pandas.api.types import is_datetime64_any_dtype
 
-from core.services.pipelines.bronze.io import write_batch_metadata
+from core.domain.services.pipelines.bronze.io import write_batch_metadata
 from core.infrastructure.runtime.context import RunContext, load_run_context
 from core.foundation.primitives.patterns import LoadPattern
 from core.infrastructure.runtime.options import RunOptions
-from core.services.pipelines.silver.models import SilverModel, resolve_profile
+from core.domain.services.pipelines.silver.models import SilverModel, resolve_profile
 from core.infrastructure.io.storage import get_storage_backend, enforce_storage_scope, validate_storage_metadata
-from core.services.pipelines.silver.writer import get_silver_writer
+from core.domain.services.pipelines.silver.writer import get_silver_writer
 
 logger = logging.getLogger(__name__)
 
@@ -929,7 +929,7 @@ def _persist_join_output(
     # Fallback for legacy callers that passed None for model
     if model is None:
         try:
-            from core.services.pipelines.silver.models import SilverModel as _SM
+            from core.domain.services.pipelines.silver.models import SilverModel as _SM
 
             model = _SM.PERIODIC_SNAPSHOT
             logger.debug(

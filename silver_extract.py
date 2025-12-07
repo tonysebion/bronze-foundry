@@ -20,7 +20,7 @@ from core.infrastructure.runtime.config import (
     load_configs,
 )
 from core.infrastructure.runtime.context import RunContext, build_run_context, load_run_context
-from core.services.pipelines.bronze.io import (
+from core.domain.services.pipelines.bronze.io import (
     write_batch_metadata,
     verify_checksum_manifest,
     write_checksum_manifest,
@@ -43,7 +43,7 @@ from core.foundation.catalog.webhooks import fire_webhooks
 from core.foundation.time_utils import utc_isoformat
 from core.infrastructure.runtime.options import RunOptions
 from core.infrastructure.io.storage import enforce_storage_scope, file_lock
-from core.services.pipelines.silver.io import (
+from core.domain.services.pipelines.silver.io import (
     apply_schema_settings,
     build_current_view,
     handle_error_rows,
@@ -51,15 +51,15 @@ from core.services.pipelines.silver.io import (
     partition_dataframe,
     SilverModelPlanner,
 )
-from core.services.pipelines.silver.writer import get_silver_writer
-from core.services.pipelines.silver.models import (
+from core.domain.services.pipelines.silver.writer import get_silver_writer
+from core.domain.services.pipelines.silver.models import (
     SilverModel,
     DEFAULT_ERROR_HANDLING,
     DEFAULT_NORMALIZATION,
     DEFAULT_SCHEMA,
     default_silver_config,
 )
-from core.services.pipelines.silver.processor import (
+from core.domain.services.pipelines.silver.processor import (
     SilverProcessor,
     SilverProcessorResult,
     build_intent_silver_partition,

@@ -253,7 +253,7 @@ class TestParallelExtractsLogging:
 # =============================================================================
 
 from core.orchestration.runner.chunks import ChunkProcessor, ChunkWriter, ChunkWriterConfig
-from core.services.pipelines.bronze.models import StoragePlan
+from core.domain.services.pipelines.bronze.models import StoragePlan
 import threading
 import time
 

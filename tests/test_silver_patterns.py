@@ -13,8 +13,8 @@ from typing import Any, Dict, List
 import pandas as pd
 import pytest
 
-from core.services.pipelines.silver.lookups import LookupConfig, LookupEnricher, LookupResult, LookupJoinKey
-from core.services.pipelines.silver.joins import (
+from core.domain.services.pipelines.silver.lookups import LookupConfig, LookupEnricher, LookupResult, LookupJoinKey
+from core.domain.services.pipelines.silver.joins import (
     JoinConfig,
     JoinSource,
     JoinKeyPair,

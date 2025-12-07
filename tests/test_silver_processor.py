@@ -5,7 +5,7 @@ from pathlib import Path
 
 from core.infrastructure.config import DatasetConfig
 from core.infrastructure.io.storage.checksum import write_checksum_manifest
-from core.services.pipelines.silver.processor import SilverProcessor
+from core.domain.services.pipelines.silver.processor import SilverProcessor
 
 
 def _build_event_dataset(require_checksum: bool = False) -> DatasetConfig:
