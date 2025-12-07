@@ -41,7 +41,7 @@ class TestRichEnumPattern:
         "core.config.models.enums.InputMode",
         "core.config.models.enums.DeleteMode",
         "core.config.models.enums.SchemaMode",
-        "core.resilience.late_data.LateDataMode",
+        "core.platform.resilience.late_data.LateDataMode",
         # Pipeline layer
         "core.runtime.metadata.Layer",
         "core.runtime.metadata.RunStatus",
@@ -119,9 +119,9 @@ class TestSerializableDataclassPattern:
         "core.foundation.state.manifest.FileEntry",
         "core.foundation.state.manifest.FileManifest",
         # Resilience layer
-        "core.resilience.retry.RetryPolicy",
-        "core.resilience.circuit_breaker.CircuitBreaker",
-        "core.resilience.late_data.LateDataConfig",
+        "core.platform.resilience.retry.RetryPolicy",
+        "core.platform.resilience.circuit_breaker.CircuitBreaker",
+        "core.platform.resilience.late_data.LateDataConfig",
         # Pipeline layer
         "core.runtime.context.RunContext",
     ]
