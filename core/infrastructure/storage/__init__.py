@@ -1,83 +1,69 @@
-"""Storage backends for medallion-foundry.
+"""Legacy storage interface shim that re-exports the new core.io.storage package."""
 
-Available backends:
-- S3Storage: AWS S3 and S3-compatible storage
-- AzureStorage: Azure Blob Storage / ADLS Gen2
-- LocalStorage: Local filesystem (for testing)
-
-Usage:
-    from core.infrastructure.storage import get_storage_backend, StorageBackend
-
-    backend = get_storage_backend(config)
-    backend.upload_file(local_path, remote_path)
-"""
-
-from .backend import (
+from core.io.storage import (
+    AzureStorage,
+    AzureStorageBackend,
+    BaseCloudStorage,
+    BACKEND_REGISTRY,
+    HealthCheckResult,
+    LocalStorage,
+    LockAcquireError,
+    S3Storage,
+    S3StorageBackend,
     StorageBackend,
+    StorageMetadata,
+    StorageURI,
+    build_partition_path,
+    compute_file_sha256,
+    create_filesystem,
+    enforce_storage_scope,
+    file_lock,
+    get_backend_factory,
+    get_fs_for_path,
     get_storage_backend,
+    list_backends,
     register_backend,
     register_storage_backend,
-    list_backends,
     resolve_backend_type,
-    get_backend_factory,
-    BACKEND_REGISTRY,
-)
-from .policy import (
-    enforce_storage_scope,
+    sanitize_partition_value,
     validate_storage_metadata,
+    verify_checksum_manifest,
+    write_checksum_manifest,
     VALID_BOUNDARIES,
     VALID_CLOUD_PROVIDERS,
     VALID_PROVIDER_TYPES,
-    StorageMetadata,
 )
-from .checksum import (
-    compute_file_sha256,
-    write_checksum_manifest,
-    verify_checksum_manifest,
-)
-from .path_utils import (
-    sanitize_partition_value,
-    build_partition_path,
-)
-
-# Re-export concrete backends for direct import
-from .s3 import S3Storage, S3StorageBackend
-from .local import LocalStorage
-
-# Azure is optional
-try:
-    from .azure import AzureStorage, AzureStorageBackend
-except ImportError:
-    pass
 
 __all__ = [
-    # Base class and factory
+    "AzureStorage",
+    "AzureStorageBackend",
+    "BaseCloudStorage",
+    "BACKEND_REGISTRY",
+    "HealthCheckResult",
+    "LocalStorage",
+    "LockAcquireError",
+    "S3Storage",
+    "S3StorageBackend",
     "StorageBackend",
+    "StorageMetadata",
+    "StorageURI",
+    "build_partition_path",
+    "compute_file_sha256",
+    "create_filesystem",
+    "enforce_storage_scope",
+    "file_lock",
+    "get_backend_factory",
+    "get_fs_for_path",
     "get_storage_backend",
-    # Registry
+    "list_backends",
     "register_backend",
     "register_storage_backend",
-    "list_backends",
     "resolve_backend_type",
-    "get_backend_factory",
-    "BACKEND_REGISTRY",
-    # Policy
+    "sanitize_partition_value",
+    "validate_storage_metadata",
+    "verify_checksum_manifest",
+    "write_checksum_manifest",
     "VALID_BOUNDARIES",
     "VALID_CLOUD_PROVIDERS",
     "VALID_PROVIDER_TYPES",
-    "enforce_storage_scope",
-    "validate_storage_metadata",
-    # Checksum utilities
-    "compute_file_sha256",
-    "write_checksum_manifest",
-    "verify_checksum_manifest",
-    # Path utilities
-    "sanitize_partition_value",
-    "build_partition_path",
-    # Concrete backends
-    "S3Storage",
-    "S3StorageBackend",
-    "LocalStorage",
-    "AzureStorage",
-    "AzureStorageBackend",
 ]

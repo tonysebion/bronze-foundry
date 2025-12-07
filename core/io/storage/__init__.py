@@ -1,0 +1,69 @@
+"""Storage I/O abstractions and implementations."""
+from __future__ import annotations
+
+from .base import (
+    BACKEND_REGISTRY,
+    BaseCloudStorage,
+    HealthCheckResult,
+    StorageBackend,
+    get_backend_factory,
+    get_storage_backend,
+    list_backends,
+    register_backend,
+    register_storage_backend,
+    resolve_backend_type,
+)
+from .azure import AzureStorage, AzureStorageBackend
+from .checksum import (
+    compute_file_sha256,
+    verify_checksum_manifest,
+    write_checksum_manifest,
+)
+from .filesystem import create_filesystem, get_fs_for_path
+from .locks import LockAcquireError, file_lock
+from .local import LocalStorage
+from .policy import (
+    StorageMetadata,
+    VALID_BOUNDARIES,
+    VALID_CLOUD_PROVIDERS,
+    VALID_PROVIDER_TYPES,
+    enforce_storage_scope,
+    validate_storage_metadata,
+)
+from .path_utils import build_partition_path, sanitize_partition_value
+from .s3 import S3Storage, S3StorageBackend
+from .uri import StorageURI
+
+__all__ = [
+    "BACKEND_REGISTRY",
+    "BaseCloudStorage",
+    "HealthCheckResult",
+    "StorageBackend",
+    "get_backend_factory",
+    "get_storage_backend",
+    "list_backends",
+    "register_backend",
+    "register_storage_backend",
+    "resolve_backend_type",
+    "AzureStorage",
+    "AzureStorageBackend",
+    "S3Storage",
+    "S3StorageBackend",
+    "LocalStorage",
+    "StorageMetadata",
+    "VALID_BOUNDARIES",
+    "VALID_CLOUD_PROVIDERS",
+    "VALID_PROVIDER_TYPES",
+    "enforce_storage_scope",
+    "validate_storage_metadata",
+    "compute_file_sha256",
+    "write_checksum_manifest",
+    "verify_checksum_manifest",
+    "create_filesystem",
+    "get_fs_for_path",
+    "file_lock",
+    "LockAcquireError",
+    "build_partition_path",
+    "sanitize_partition_value",
+    "StorageURI",
+]
