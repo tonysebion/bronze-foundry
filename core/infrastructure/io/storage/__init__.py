@@ -27,7 +27,7 @@ from .quarantine import (
     QuarantineResult,
     quarantine_corrupted_files,
 )
-from .filesystem import create_filesystem, get_fs_for_path
+from .fsspec import create_filesystem, get_fs_for_path
 from .locks import LockAcquireError, file_lock
 from .local import LocalStorage
 from .policy import (
