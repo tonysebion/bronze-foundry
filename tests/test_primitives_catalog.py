@@ -22,8 +22,13 @@ class StubOpenMetadataClient(OpenMetadataClient):
         self.requested.append(("schema", fully_qualified_name))
         return self._schema
 
-    def get_database_tables(self, database: str, schema: str | None = None) -> list[TableSchema]:
-        self.requested.append(("tables", database, schema))
+    def get_database_tables(
+        self,
+        database: str,
+        schema: str | None = None,
+        limit: int = 100,
+    ) -> list[TableSchema]:
+        self.requested.append(("tables", database, schema, limit))
         return self._tables
 
 

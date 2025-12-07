@@ -5,17 +5,31 @@ from unittest.mock import Mock, patch
 import pytest
 
 # Import Azure exceptions for mocking - wrapped to handle optional dependency
+_AzureError: type[Exception]
+_ResourceNotFoundError: type[Exception]
+
 try:
-    from azure.core.exceptions import AzureError, ResourceNotFoundError
+    from azure.core.exceptions import (
+        AzureError as _NativeAzureError,
+        ResourceNotFoundError as _NativeResourceNotFoundError,
+    )
+    _AzureError = _NativeAzureError
+    _ResourceNotFoundError = _NativeResourceNotFoundError
     AZURE_AVAILABLE = True
 except ImportError:
     AZURE_AVAILABLE = False
-    class AzureError(Exception):
+
+    class _StubAzureError(Exception):
         """Fallback AzureError stub when SDK is missing."""
 
-
-    class ResourceNotFoundError(AzureError):
+    class _StubResourceNotFoundError(_StubAzureError):
         """Fallback ResourceNotFoundError stub when SDK is missing."""
+
+    _AzureError = _StubAzureError
+    _ResourceNotFoundError = _StubResourceNotFoundError
+
+AzureError = _AzureError
+ResourceNotFoundError = _ResourceNotFoundError
 
 
 @pytest.fixture

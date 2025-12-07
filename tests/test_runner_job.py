@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import Mock, patch
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 from core.orchestration.runner.job import (
     build_extractor,
@@ -132,7 +133,7 @@ class TestBuildExtractor:
 class TestExtractJob:
     """Tests for ExtractJob class."""
 
-    def _make_context(self, records_to_return: list = None) -> RunContext:
+    def _make_context(self, records_to_return: list[Any] | None = None) -> RunContext:
         """Create a RunContext for testing."""
         return RunContext(
             cfg={

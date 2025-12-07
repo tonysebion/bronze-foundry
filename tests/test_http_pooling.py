@@ -3,8 +3,8 @@
 Story #9: Connection Pooling for HTTP Extractors
 """
 
-from unittest.mock import patch, MagicMock
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Optional
 import pytest
 
 from core.infrastructure.io.http.session import (
@@ -275,25 +275,25 @@ class TestAsyncApiClientPooling:
     @pytest.mark.asyncio
     async def test_context_manager_closes_client(self) -> None:
         """Test context manager properly closes client."""
-        mock_httpx_client: MagicMock | None = None
-        async with AsyncApiClient(
+        close_mock: Optional[AsyncMock] = None
+        client = AsyncApiClient(
             base_url="https://api.example.com",
             headers={},
-        ) as client:
-            # Create client
-            with patch(
-                "core.infrastructure.io.http.session.httpx.AsyncClient", new_callable=AsyncMock
-            ) as mock_async_client:
-                mock_httpx_client = MagicMock()
-                mock_httpx_client.aclose = AsyncMock()
-                mock_async_client.return_value = mock_httpx_client
-                await client._get_client()
-                client._client = mock_httpx_client
+        )
+        with patch(
+            "core.infrastructure.io.http.session.httpx.AsyncClient", new_callable=AsyncMock
+        ) as mock_async_client:
+            mock_httpx_client = MagicMock()
+            close_mock = AsyncMock()
+            mock_httpx_client.aclose = close_mock
+            mock_async_client.return_value = mock_httpx_client
+            await client.__aenter__()
 
-        # After context, client should be None
+        # After context manager exit, client should be closed
+        await client.__aexit__(None, None, None)
         assert client._client is None
-        assert mock_httpx_client is not None
-        mock_httpx_client.aclose.assert_awaited_once()
+        assert close_mock is not None
+        close_mock.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_close_without_client(self) -> None:

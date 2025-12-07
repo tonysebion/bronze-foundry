@@ -85,7 +85,7 @@ def check_file(file_path: Path) -> List[Tuple[str, str, str, str]]:
 
     Returns list of (file_path, from_layer, to_layer, import_path) tuples.
     """
-    violations = []
+    violations: list[tuple[str, str, str, str]] = []
     from_layer = get_layer_from_path(file_path)
 
     if from_layer is None:

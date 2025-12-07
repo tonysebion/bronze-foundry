@@ -15,6 +15,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, cast
 
+from core.foundation.primitives.base import RichEnumMixin
+
 import pytest
 
 
@@ -63,7 +65,8 @@ class TestRichEnumPattern:
             assert hasattr(enum_cls, "choices"), (
                 f"{enum_path} missing choices() classmethod"
             )
-            choices = enum_cls.choices()
+            rich_enum_cls = cast(type[RichEnumMixin], enum_cls)
+            choices = rich_enum_cls.choices()
             assert isinstance(choices, list), (
                 f"{enum_path}.choices() should return a list"
             )
@@ -79,8 +82,9 @@ class TestRichEnumPattern:
                 f"{enum_path} missing normalize() classmethod"
             )
             # Test that normalize works with a valid value
-            choices = enum_cls.choices()
-            result = enum_cls.normalize(choices[0])
+            rich_enum_cls = cast(type[RichEnumMixin], enum_cls)
+            choices = rich_enum_cls.choices()
+            result = rich_enum_cls.normalize(choices[0])
             assert isinstance(result, enum_cls), (
                 f"{enum_path}.normalize() should return an enum member"
             )
@@ -94,7 +98,7 @@ class TestRichEnumPattern:
             )
             # Test that describe works on a member
             member = list(enum_cls)[0]
-            description = member.describe()
+            description = cast(RichEnumMixin, member).describe()
             assert isinstance(description, str), (
                 f"{enum_path}.describe() should return a string"
             )
