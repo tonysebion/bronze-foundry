@@ -1,5 +1,7 @@
 ﻿from __future__ import annotations
 
+
+
 import io
 import json
 import logging
@@ -8,14 +10,13 @@ import sys
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
 from core.primitives.foundations import base as foundations_base
 from core.primitives.foundations import exceptions, logging as bf_logging, models, patterns
 from core.primitives.foundations.patterns import LoadPattern
-
-
 class RichEnumExample(foundations_base.RichEnumMixin, str, Enum):
     ALPHA = "alpha"
     BETA = "beta"
@@ -60,13 +61,23 @@ def test_storage_error_str_includes_details() -> None:
     assert "backend_type=s3" in text
 
 
-def test_emit_warnings() -> None:
-    spec = exceptions.DeprecationSpec(code="D100", message="old", since="1.0", remove_in="2.0")
-    with pytest.warns(exceptions.BronzeFoundryDeprecationWarning):
-        exceptions.emit_deprecation(spec)
+def test_emit_warnings(monkeypatch: pytest.MonkeyPatch) -> None:
+    warn = MagicMock()
+    monkeypatch.setattr(exceptions.warnings, "warn", warn)
 
-    with pytest.warns(exceptions.BronzeFoundryCompatibilityWarning):
-        exceptions.emit_compat("compat", "C100")
+    spec = exceptions.DeprecationSpec(code="D100", message="old", since="1.0", remove_in="2.0")
+    exceptions.emit_deprecation(spec)
+    exceptions.emit_compat("compat", "C100")
+
+    assert warn.call_count == 2
+
+    deprecation_call = warn.call_args_list[0]
+    assert deprecation_call.args[1] is exceptions.BronzeFoundryDeprecationWarning
+    assert "[D100]" in deprecation_call.args[0]
+
+    compatibility_call = warn.call_args_list[1]
+    assert compatibility_call.args[1] is exceptions.BronzeFoundryCompatibilityWarning
+    assert "[C100] compat" in compatibility_call.args[0]
 
 
 def test_json_formatter_includes_extra(monkeypatch: pytest.MonkeyPatch) -> None:
