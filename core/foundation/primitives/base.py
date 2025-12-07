@@ -69,7 +69,7 @@ class RichEnumMixin:
         return [member.value for member in cls._member_map().values()]
 
     @classmethod
-    def normalize(cls, raw: RawEnumInput) -> "RichEnumMixin":
+    def normalize(cls, raw: str | None) -> "RichEnumMixin":
         """Parse a string value into this enum, handling aliases and case.
 
         Args:
@@ -81,8 +81,9 @@ class RichEnumMixin:
         Raises:
             ValueError: If raw is None with no default, or doesn't match any member/alias
         """
-        if isinstance(raw, cls):
-            return raw
+        raw_value = cast(object, raw)
+        if isinstance(raw_value, cls):
+            return raw_value
 
         # Handle None - return default if defined
         if raw is None:
@@ -92,6 +93,7 @@ class RichEnumMixin:
                 return members[default_name]
             raise ValueError(f"{cls.__name__} value must be provided")
 
+        assert isinstance(raw, str)
         candidate = raw.strip().lower()
 
         # Check aliases first

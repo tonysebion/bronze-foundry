@@ -18,6 +18,17 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, TYPE_CHECKING
 
+from core.platform.resilience.constants import (
+    DEFAULT_FAILURE_THRESHOLD,
+    DEFAULT_COOLDOWN_SECONDS,
+    DEFAULT_HALF_OPEN_MAX_CALLS,
+    DEFAULT_MAX_ATTEMPTS,
+    DEFAULT_BASE_DELAY,
+    DEFAULT_MAX_DELAY,
+    DEFAULT_BACKOFF_MULTIPLIER,
+    DEFAULT_JITTER,
+)
+
 if TYPE_CHECKING:
     from core.infrastructure.runtime.config import RootConfig
 
@@ -159,27 +170,27 @@ class BaseCloudStorage(StorageBackend):
             )
 
         self._breaker_upload = CircuitBreaker(
-            failure_threshold=5,
-            cooldown_seconds=30.0,
-            half_open_max_calls=1,
+            failure_threshold=DEFAULT_FAILURE_THRESHOLD,
+            cooldown_seconds=DEFAULT_COOLDOWN_SECONDS,
+            half_open_max_calls=DEFAULT_HALF_OPEN_MAX_CALLS,
             on_state_change=_emit_state,
         )
         self._breaker_download = CircuitBreaker(
-            failure_threshold=5,
-            cooldown_seconds=30.0,
-            half_open_max_calls=1,
+            failure_threshold=DEFAULT_FAILURE_THRESHOLD,
+            cooldown_seconds=DEFAULT_COOLDOWN_SECONDS,
+            half_open_max_calls=DEFAULT_HALF_OPEN_MAX_CALLS,
             on_state_change=_emit_state,
         )
         self._breaker_list = CircuitBreaker(
-            failure_threshold=5,
-            cooldown_seconds=30.0,
-            half_open_max_calls=1,
+            failure_threshold=DEFAULT_FAILURE_THRESHOLD,
+            cooldown_seconds=DEFAULT_COOLDOWN_SECONDS,
+            half_open_max_calls=DEFAULT_HALF_OPEN_MAX_CALLS,
             on_state_change=_emit_state,
         )
         self._breaker_delete = CircuitBreaker(
-            failure_threshold=5,
-            cooldown_seconds=30.0,
-            half_open_max_calls=1,
+            failure_threshold=DEFAULT_FAILURE_THRESHOLD,
+            cooldown_seconds=DEFAULT_COOLDOWN_SECONDS,
+            half_open_max_calls=DEFAULT_HALF_OPEN_MAX_CALLS,
             on_state_change=_emit_state,
         )
 
@@ -200,11 +211,11 @@ class BaseCloudStorage(StorageBackend):
         from core.platform.resilience import RetryPolicy
 
         return RetryPolicy(
-            max_attempts=5,
-            base_delay=0.5,
-            max_delay=8.0,
-            backoff_multiplier=2.0,
-            jitter=0.2,
+            max_attempts=DEFAULT_MAX_ATTEMPTS,
+            base_delay=DEFAULT_BASE_DELAY,
+            max_delay=DEFAULT_MAX_DELAY,
+            backoff_multiplier=DEFAULT_BACKOFF_MULTIPLIER,
+            jitter=DEFAULT_JITTER,
             retry_on_exceptions=(),
             retry_if=retry_if or self._should_retry,
             delay_from_exception=delay_from_exception,

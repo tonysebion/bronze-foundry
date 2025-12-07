@@ -48,7 +48,7 @@ class LoadPattern(RichEnumMixin, str, Enum):
     @classmethod
     def choices(cls) -> List[str]:
         """Return list of valid enum values."""
-        return [member.value for member in cls]
+        return super().choices()
 
     @classmethod
     def normalize(cls, raw: str | None) -> "LoadPattern":
@@ -58,6 +58,7 @@ class LoadPattern(RichEnumMixin, str, Enum):
         if isinstance(raw, cls):
             return raw
 
+        assert isinstance(raw, str)
         candidate = raw.strip().lower()
 
         # Check aliases first
@@ -73,7 +74,8 @@ class LoadPattern(RichEnumMixin, str, Enum):
 
     def describe(self) -> str:
         """Return human-readable description."""
-        return _LOAD_PATTERN_DESCRIPTIONS.get(self.value, self.value)
+        value_str = str(self.value)
+        return _LOAD_PATTERN_DESCRIPTIONS.get(value_str, value_str)
 
     @property
     def chunk_prefix(self) -> str:

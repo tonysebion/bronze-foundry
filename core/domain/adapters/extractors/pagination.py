@@ -122,18 +122,19 @@ class CursorPaginationState(PaginationState):
                 obj = obj.get(key) if isinstance(obj, dict) else None
                 if obj is None:
                     break
-            return obj
+            return obj if isinstance(obj, str) else None
         return None
 
 
 def build_pagination_state(
-    pagination_cfg: Dict[str, Any], params: Dict[str, Any]
+    pagination_cfg: Dict[str, Any] | None, params: Dict[str, Any]
 ) -> PaginationState:
-    pagination_type = (pagination_cfg or {}).get("type", "none")
+    cfg = pagination_cfg or {}
+    pagination_type = cfg.get("type", "none")
     if pagination_type == "offset":
-        return OffsetPaginationState(pagination_cfg, params)
+        return OffsetPaginationState(cfg, params)
     if pagination_type == "page":
-        return PagePaginationState(pagination_cfg, params)
+        return PagePaginationState(cfg, params)
     if pagination_type == "cursor":
-        return CursorPaginationState(pagination_cfg, params)
-    return NoPaginationState(pagination_cfg, params)
+        return CursorPaginationState(cfg, params)
+    return NoPaginationState(cfg, params)

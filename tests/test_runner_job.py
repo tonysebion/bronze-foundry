@@ -13,6 +13,7 @@ from core.orchestration.runner.job import (
 from core.infrastructure.runtime.context import RunContext
 from core.infrastructure.runtime.metadata import Layer, RunStatus
 from core.foundation.primitives.patterns import LoadPattern
+from core.foundation.primitives.exceptions import ConfigValidationError
 from core.infrastructure.io.extractors.base import EXTRACTOR_REGISTRY
 from core.domain.services.pipelines.bronze.models import StoragePlan
 
@@ -70,7 +71,7 @@ class TestBuildExtractor:
         assert extractor is not None
 
     def test_raises_for_unknown_type(self):
-        """Test that unknown type raises ValueError."""
+        """Test that unknown type raises ConfigValidationError."""
         cfg = {
             "source": {
                 "type": "unknown_type",
@@ -79,7 +80,7 @@ class TestBuildExtractor:
                 "run": {},
             }
         }
-        with pytest.raises(ValueError, match="Unknown source.type"):
+        with pytest.raises(ConfigValidationError, match="Unknown source.type"):
             build_extractor(cfg)
 
     def test_custom_extractor_requires_module_and_class(self):
@@ -93,7 +94,7 @@ class TestBuildExtractor:
                 "run": {},
             }
         }
-        with pytest.raises(ValueError, match="custom extractor requires both"):
+        with pytest.raises(ConfigValidationError, match="custom extractor requires both"):
             build_extractor(cfg)
 
     def test_custom_extractor_missing_class(self):
@@ -107,7 +108,7 @@ class TestBuildExtractor:
                 "run": {},
             }
         }
-        with pytest.raises(ValueError, match="custom extractor requires both"):
+        with pytest.raises(ConfigValidationError, match="custom extractor requires both"):
             build_extractor(cfg)
 
     def test_db_multi_extractor_with_workers(self):

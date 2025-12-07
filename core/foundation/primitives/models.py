@@ -7,7 +7,7 @@ These are pure data structures with minimal dependencies.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, List
+from typing import Dict, List, cast
 
 from core.foundation.primitives.base import RichEnumMixin
 from core.foundation.primitives.patterns import LoadPattern
@@ -60,7 +60,7 @@ class SilverModel(RichEnumMixin, str, Enum):
     @classmethod
     def choices(cls) -> List[str]:
         """Return list of valid enum values."""
-        return [member.value for member in cls]
+        return super().choices()
 
     @classmethod
     def normalize(cls, raw: str | None) -> "SilverModel":
@@ -75,11 +75,13 @@ class SilverModel(RichEnumMixin, str, Enum):
         Raises:
             ValueError: If raw is None or doesn't match any member/alias
         """
-        if isinstance(raw, cls):
+        raw_value = cast(object, raw)
+        if isinstance(raw_value, cls):
             return raw
         if raw is None:
             raise ValueError("SilverModel value must be provided")
 
+        assert isinstance(raw, str)
         candidate = raw.strip().lower()
 
         # Check aliases first
@@ -95,7 +97,8 @@ class SilverModel(RichEnumMixin, str, Enum):
 
     def describe(self) -> str:
         """Return human-readable description."""
-        return _SILVER_MODEL_DESCRIPTIONS.get(self.value, self.value)
+        value_str = str(self.value)
+        return _SILVER_MODEL_DESCRIPTIONS.get(value_str, value_str)
 
     @classmethod
     def default_for_load_pattern(cls, pattern: LoadPattern) -> "SilverModel":
