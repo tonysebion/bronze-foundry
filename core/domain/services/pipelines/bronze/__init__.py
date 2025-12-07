@@ -6,10 +6,12 @@ Primary modules:
 - base: Base utilities for bronze extraction
 """
 
+from __future__ import annotations
+
 from . import io
-from . import models
 from . import base
-from .models import StoragePlan, ChunkWriterConfig
+from . import models
+from core.domain.services.processing import ChunkWriterConfig, StoragePlan
 
 __all__ = [
     "io",
