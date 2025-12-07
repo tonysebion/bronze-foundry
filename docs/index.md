@@ -49,6 +49,7 @@ python bronze_extract.py --config config/my_api.yaml --date 2025-11-27
 - **Customize configs** → [Copy & Customize Guide](usage/beginner/COPY_AND_CUSTOMIZE.md)
 - **Set up production** → [Intent Owner Guide](usage/onboarding/intent-owner-guide.md)
 - **Choose the right pattern** → [Pattern Picker](usage/patterns/QUICK_REFERENCE.md) - Bronze patterns + Silver models
+- **Build resilient pipelines** → [Error Handling Guide](guides/error_handling.md) - Retry, rate limiting, circuit breakers
 - **Troubleshoot** → [Config Doctor](framework/operations/CONFIG_DOCTOR.md)
 - **Set up S3 storage** → [S3 Setup Guide](framework/operations/s3-setup-guide.md)
 - **Understand Silver models** → [Silver Models Explained](usage/patterns/silver-models-explained.md)
@@ -93,6 +94,7 @@ python bronze_extract.py --config config/my_api.yaml --date 2025-11-27
 - [API Documentation](api/core.md) - Code reference
 - [Operations Playbook](framework/operations/OPS_PLAYBOOK.md) - Production runbooks
 - [Troubleshooting Guide](framework/operations/troubleshooting-guide.md) - Common issues & solutions
+- [Error Handling & Resilience](guides/error_handling.md) - Retry, circuit breaker, rate limiting
 - [Scripts Overview](scripts/README.md) - Utility scripts reference
 
 ---
