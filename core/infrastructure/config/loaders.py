@@ -110,14 +110,14 @@ def load_configs(
     if "datasets" in raw or is_new_intent_config(raw):
         datasets = _load_intent_datasets(raw, config_path=Path(path))
         if datasets:
-            results = []
+            dataset_results: list[RootConfig] = []
             for ds in datasets:
                 typed = parse_root_config(ds)
                 env_cfg = ds.get("__env_config__")
                 if env_cfg:
                     setattr(typed, "__env_config__", env_cfg)
-                results.append(typed)
-            return results
+                dataset_results.append(typed)
+            return dataset_results
         raise ValueError("'datasets' must be a non-empty list when provided")
 
     if "sources" not in raw:

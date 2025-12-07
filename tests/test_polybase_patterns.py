@@ -106,6 +106,7 @@ class TestPolyBaseSetupGeneration:
             external_data_source_location=custom_location,
         )
 
+        assert setup.external_data_source is not None
         assert setup.external_data_source.location == custom_location
 
     def test_custom_data_source_name(self, sample_dataset_dict):
@@ -117,6 +118,7 @@ class TestPolyBaseSetupGeneration:
             external_data_source_name=custom_name,
         )
 
+        assert setup.external_data_source is not None
         assert setup.external_data_source.name == custom_name
 
 

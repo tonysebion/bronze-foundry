@@ -38,12 +38,12 @@ class DummyWatermarkStore(WatermarkStore):
         self,
         system: str,
         table: str,
-        column: str,
-        watermark_type: WatermarkType,
+        watermark_column: str,
+        watermark_type: WatermarkType = WatermarkType.TIMESTAMP,
     ) -> Watermark:
         assert system == "sys"
         assert table == "tbl"
-        assert column == "updated_at"
+        assert watermark_column == "updated_at"
         return self.watermark
 
     def save(self, watermark: Watermark) -> None:

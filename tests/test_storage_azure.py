@@ -10,8 +10,12 @@ try:
     AZURE_AVAILABLE = True
 except ImportError:
     AZURE_AVAILABLE = False
-    AzureError = Exception
-    ResourceNotFoundError = Exception
+    class AzureError(Exception):
+        """Fallback AzureError stub when SDK is missing."""
+
+
+    class ResourceNotFoundError(AzureError):
+        """Fallback ResourceNotFoundError stub when SDK is missing."""
 
 
 @pytest.fixture

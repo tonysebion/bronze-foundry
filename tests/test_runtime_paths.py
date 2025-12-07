@@ -2,6 +2,7 @@
 
 from datetime import date
 from pathlib import Path
+from typing import Any, cast
 
 
 from core.infrastructure.runtime import paths
@@ -75,8 +76,11 @@ def test_build_bronze_partition_uses_config_overrides() -> None:
     assert partition.run_date == date(2025, 1, 2)
 
 
-def _make_bronze_cfg(partitioning: dict | None = None, run_overrides: dict | None = None) -> dict:
-    cfg = {
+def _make_bronze_cfg(
+    partitioning: dict[str, Any] | None = None,
+    run_overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    cfg: dict[str, Any] = {
         "source": {
             "system": "sys",
             "table": "table",
@@ -86,7 +90,9 @@ def _make_bronze_cfg(partitioning: dict | None = None, run_overrides: dict | Non
         "path_structure": {"bronze": {}},
     }
     if run_overrides:
-        cfg["source"]["run"].update(run_overrides)
+        source_cfg = cast(dict[str, Any], cfg["source"])
+        run_cfg = cast(dict[str, Any], source_cfg["run"])
+        run_cfg.update(run_overrides)
     return cfg
 
 

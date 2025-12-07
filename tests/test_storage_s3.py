@@ -5,6 +5,10 @@ import boto3
 import pytest
 from moto import mock_aws
 
+from typing import Any, Dict
+
+ConfigDict = Dict[str, Dict[str, Any]]
+
 from core.infrastructure.io.storage import S3Storage, S3StorageBackend
 
 
@@ -60,7 +64,7 @@ class TestS3StorageInit:
     def test_requires_bucket(self, aws_credentials):
         """Test that s3_bucket is required."""
         with mock_aws():
-            config = {"bronze": {}, "s3_connection": {}}
+            config: ConfigDict = {"bronze": {}, "s3_connection": {}}
             with pytest.raises(ValueError, match="s3_bucket is required"):
                 S3Storage(config)
 
@@ -70,7 +74,7 @@ class TestS3StorageInit:
             client = boto3.client("s3", region_name="us-east-1")
             client.create_bucket(Bucket="test-bucket")
 
-            config = {
+            config: ConfigDict = {
                 "bronze": {"s3_bucket": "test-bucket", "s3_prefix": "my-prefix"},
                 "s3_connection": {},
             }
@@ -84,7 +88,7 @@ class TestS3StorageInit:
             client = boto3.client("s3", region_name="us-east-1")
             client.create_bucket(Bucket="test-bucket")
 
-            config = {
+            config: ConfigDict = {
                 "bronze": {"s3_bucket": "test-bucket"},
                 "s3_connection": {},
             }
@@ -262,7 +266,7 @@ class TestS3StorageBackendWrapper:
             client = boto3.client("s3", region_name="us-east-1")
             client.create_bucket(Bucket="test-bucket")
 
-            config = {
+            config: ConfigDict = {
                 "bronze": {"s3_bucket": "test-bucket"},
                 "s3_connection": {},
             }
@@ -280,7 +284,7 @@ class TestS3StorageBackendWrapper:
             client = boto3.client("s3", region_name="us-east-1")
             client.create_bucket(Bucket="test-bucket")
 
-            config = {
+            config: ConfigDict = {
                 "bronze": {"s3_bucket": "test-bucket"},
                 "s3_connection": {},
             }
@@ -302,7 +306,7 @@ class TestS3StorageBackendWrapper:
             client = boto3.client("s3", region_name="us-east-1")
             client.create_bucket(Bucket="test-bucket")
 
-            config = {
+            config: ConfigDict = {
                 "bronze": {"s3_bucket": "test-bucket"},
                 "s3_connection": {},
             }

@@ -77,7 +77,7 @@ class JoinKeyPair:
     right: str
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "JoinKeyPair":
+    def from_dict(cls, data: Dict[str, Any] | str) -> "JoinKeyPair":
         """Create from dictionary."""
         if isinstance(data, str):
             return cls(left=data, right=data)
@@ -246,12 +246,13 @@ class MultiSourceJoiner:
             col: primary_sources[0].name for col in result_df.columns
         }
 
-        stats = {
-            "sources": {},
+        sources_stats: Dict[str, Dict[str, Any]] = {}
+        stats: Dict[str, Any] = {
+            "sources": sources_stats,
             "join_type": config.join_type,
             "total_joins": len(secondary_sources),
         }
-        stats["sources"][primary_sources[0].name] = {
+        sources_stats[primary_sources[0].name] = {
             "role": "primary",
             "rows": len(result_df),
             "columns": list(result_df.columns),
@@ -262,7 +263,7 @@ class MultiSourceJoiner:
             result_df, join_stats = self._join_source(
                 result_df, secondary, config
             )
-            stats["sources"][secondary.name] = join_stats
+            sources_stats[secondary.name] = join_stats
 
             # Track column lineage for new columns
             for col in result_df.columns:

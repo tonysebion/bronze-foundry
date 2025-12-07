@@ -73,11 +73,13 @@ def get_extractor(
             key="source.type",
         )
 
+    instantiator = cast(Any, extractor_cls)
+
     if src_type == "db_multi":
         max_workers = src.get("run", {}).get("parallel_workers", 4)
-        return extractor_cls(max_workers=max_workers)
+        return cast(BaseExtractor, instantiator(max_workers=max_workers))
     if src_type == "file":
-        return extractor_cls(env_config=env_config)
+        return cast(BaseExtractor, instantiator(env_config=env_config))
 
     return extractor_cls()
 

@@ -11,8 +11,9 @@ from core.foundation.catalog import hooks, tracing, webhooks
 from core.domain.catalog import yaml_generator
 
 
-class StubOpenMetadataClient:
+class StubOpenMetadataClient(OpenMetadataClient):
     def __init__(self, schema: TableSchema | None = None, tables: Iterable[TableSchema] | None = None):
+        super().__init__()
         self._schema = schema
         self._tables = list(tables or [])
         self.requested: list[tuple] = []

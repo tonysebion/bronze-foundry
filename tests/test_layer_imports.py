@@ -129,7 +129,7 @@ class TestLayerImports:
 
     def test_no_layer_violations(self) -> None:
         """Verify no files violate the layer import hierarchy."""
-        violations = collect_all_violations()
+        violations: list[tuple[str, str, str, str]] = collect_all_violations()
 
         if violations:
             msg_parts = ["Layer import violations found:\n"]

@@ -131,7 +131,7 @@ class TestQualityEngine:
         ])
         engine = QualityEngine(config)
 
-        records = [
+        records: List[Dict[str, Any]] = [
             {"id": 1, "amount": 100},
             {"id": 2, "amount": 200},
         ]
@@ -149,7 +149,7 @@ class TestQualityEngine:
         ])
         engine = QualityEngine(config)
 
-        records = [
+        records: List[Dict[str, Any]] = [
             {"id": 1, "amount": 100},
             {"id": 2, "amount": -50},  # Fails
             {"id": 3, "amount": 200},
@@ -174,7 +174,7 @@ class TestQualityEngine:
         ])
         engine = QualityEngine(config)
 
-        records = [
+        records: List[Dict[str, Any]] = [
             {"id": 1, "name": ""},  # Warn level fails
             {"id": None, "name": "Test"},  # Error level fails
         ]
@@ -193,7 +193,7 @@ class TestQualityEngine:
         ])
         engine = QualityEngine(config)
 
-        records = [{"id": None}]
+        records: List[Dict[str, Any]] = [{"id": None}]
 
         with pytest.raises(ValueError, match="failed"):
             engine.evaluate(records, fail_on_error=True)
@@ -205,7 +205,7 @@ class TestQualityEngine:
         ])
         engine = QualityEngine(config)
 
-        records = [{"value": 0}]
+        records: List[Dict[str, Any]] = [{"value": 0}]
 
         # Should not raise
         report = engine.evaluate(records, fail_on_error=True)
@@ -218,7 +218,7 @@ class TestQualityEngine:
         ])
         engine = QualityEngine(config)
 
-        records = [{"id": 1}]  # Missing 'value' column
+        records: List[Dict[str, Any]] = [{"id": 1}]  # Missing 'value' column
 
         report = engine.evaluate(records)
         # Missing column should be treated as null
@@ -256,7 +256,7 @@ class TestQualityReport:
             {"id": "rule1", "expression": "amount >= 0", "description": "Amount must be non-negative"},
         ])
         engine = QualityEngine(config)
-        records = [
+        records: List[Dict[str, Any]] = [
             {"amount": 100},
             {"amount": -10},
         ]

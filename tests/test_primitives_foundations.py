@@ -20,7 +20,8 @@ class RichEnumExample(foundations_base.RichEnumMixin, str, Enum):
     ALPHA = "alpha"
     BETA = "beta"
 
-    _default = "ALPHA"
+
+RichEnumExample._default = "ALPHA"
 
 
 @dataclass

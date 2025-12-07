@@ -168,6 +168,7 @@ class ExtractJob:
             return
 
         expected_pattern = self.load_pattern.value if self.load_pattern else None
+        manifest: Optional[Dict[str, Any]] = None
         try:
             manifest = verify_checksum_manifest(
                 self._out_dir,
@@ -205,7 +206,7 @@ class ExtractJob:
             return None
         try:
             text = manifest_path.read_text(encoding="utf-8")
-            return json.loads(text)
+            return cast(Dict[str, Any], json.loads(text))
         except Exception:
             return None
 

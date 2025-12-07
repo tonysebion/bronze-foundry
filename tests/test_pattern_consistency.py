@@ -11,8 +11,9 @@ These tests ensure architectural consistency is maintained as the codebase evolv
 from __future__ import annotations
 
 import ast
+from enum import Enum
 from pathlib import Path
-from typing import Type
+from typing import Any, cast
 
 import pytest
 
@@ -48,11 +49,12 @@ class TestRichEnumPattern:
         "core.domain.adapters.quality.rules.RuleLevel",
     ]
 
-    def _import_class(self, dotted_path: str) -> Type:
+    def _import_class(self, dotted_path: str) -> type[Enum]:
         """Import a class from a dotted path."""
         module_path, class_name = dotted_path.rsplit(".", 1)
         module = __import__(module_path, fromlist=[class_name])
-        return getattr(module, class_name)
+        cls = getattr(module, class_name)
+        return cast(type[Enum], cls)
 
     def test_enums_have_choices_method(self) -> None:
         """Every key enum should have a choices() classmethod."""
@@ -124,11 +126,12 @@ class TestSerializableDataclassPattern:
         "core.infrastructure.runtime.context.RunContext",
     ]
 
-    def _import_class(self, dotted_path: str) -> Type:
+    def _import_class(self, dotted_path: str) -> type[Any]:
         """Import a class from a dotted path."""
         module_path, class_name = dotted_path.rsplit(".", 1)
         module = __import__(module_path, fromlist=[class_name])
-        return getattr(module, class_name)
+        cls = getattr(module, class_name)
+        return cast(type[Any], cls)
 
     def test_dataclasses_have_to_dict(self) -> None:
         """Every key dataclass should have to_dict() method."""

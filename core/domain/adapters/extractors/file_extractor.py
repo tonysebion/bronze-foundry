@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple, cast, TYPE_CHECKING
 from datetime import date
 
 import pandas as pd
-import fsspec
+import fsspec  # type: ignore[import-untyped]
 
 from core.foundation.primitives.exceptions import ExtractionError
 from core.infrastructure.io.extractors.base import BaseExtractor, register_extractor

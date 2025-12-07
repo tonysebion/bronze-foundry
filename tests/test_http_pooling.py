@@ -194,9 +194,9 @@ class TestCreatePooledSession:
         # Get the adapter to verify config
         adapter = session.get_adapter("https://example.com")
         # HTTPAdapter stores values as private attributes
-        assert adapter._pool_connections == 5
-        assert adapter._pool_maxsize == 15
-        assert adapter._pool_block is True
+        assert getattr(adapter, "_pool_connections") == 5
+        assert getattr(adapter, "_pool_maxsize") == 15
+        assert getattr(adapter, "_pool_block") is True
         session.close()
 
     def test_default_config(self) -> None:
@@ -205,8 +205,8 @@ class TestCreatePooledSession:
 
         adapter = session.get_adapter("https://example.com")
         # HTTPAdapter stores values as private attributes
-        assert adapter._pool_connections == 10
-        assert adapter._pool_maxsize == 10
+        assert getattr(adapter, "_pool_connections") == 10
+        assert getattr(adapter, "_pool_maxsize") == 10
         session.close()
 
 
@@ -275,6 +275,7 @@ class TestAsyncApiClientPooling:
     @pytest.mark.asyncio
     async def test_context_manager_closes_client(self) -> None:
         """Test context manager properly closes client."""
+        mock_httpx_client: MagicMock | None = None
         async with AsyncApiClient(
             base_url="https://api.example.com",
             headers={},
@@ -291,6 +292,7 @@ class TestAsyncApiClientPooling:
 
         # After context, client should be None
         assert client._client is None
+        assert mock_httpx_client is not None
         mock_httpx_client.aclose.assert_awaited_once()
 
     @pytest.mark.asyncio
