@@ -8,10 +8,6 @@ import sys
 import pytest
 
 
-@pytest.mark.xfail(
-    reason="mypy currently exposes many pre-existing errors; remove xfail when the suite is clean",
-    strict=False,
-)
 def test_mypy_check() -> None:
     """Run `python -m mypy .` so CI can track drift."""
 

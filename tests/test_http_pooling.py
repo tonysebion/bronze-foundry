@@ -4,7 +4,6 @@ Story #9: Connection Pooling for HTTP Extractors
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
-from typing import Optional
 import pytest
 
 from core.infrastructure.io.http.session import (
@@ -275,24 +274,25 @@ class TestAsyncApiClientPooling:
     @pytest.mark.asyncio
     async def test_context_manager_closes_client(self) -> None:
         """Test context manager properly closes client."""
-        close_mock: Optional[AsyncMock] = None
-        client = AsyncApiClient(
-            base_url="https://api.example.com",
-            headers={},
-        )
+        close_mock: AsyncMock | None = None
+        client: AsyncApiClient | None = None
         with patch(
             "core.infrastructure.io.http.session.httpx.AsyncClient", new_callable=AsyncMock
         ) as mock_async_client:
-            mock_httpx_client = MagicMock()
-            close_mock = AsyncMock()
-            mock_httpx_client.aclose = close_mock
-            mock_async_client.return_value = mock_httpx_client
-            await client.__aenter__()
+            async with AsyncApiClient(
+                base_url="https://api.example.com",
+                headers={},
+            ) as active_client:
+                client = active_client
+                mock_httpx_client = MagicMock()
+                close_mock = AsyncMock()
+                mock_httpx_client.aclose = close_mock
+                mock_async_client.return_value = mock_httpx_client
+                await active_client._get_client()
 
-        # After context manager exit, client should be closed
-        await client.__aexit__(None, None, None)
-        assert client._client is None
+        assert client is not None
         assert close_mock is not None
+        assert client._client is None
         close_mock.assert_awaited_once()
 
     @pytest.mark.asyncio

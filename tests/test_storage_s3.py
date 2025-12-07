@@ -1,15 +1,15 @@
 """Unit tests for S3 storage backend with moto mocking."""
 
 
+from typing import Any, Dict
+
 import boto3
 import pytest
 from moto import mock_aws
 
-from typing import Any, Dict
+from core.infrastructure.io.storage import S3Storage, S3StorageBackend
 
 ConfigDict = Dict[str, Dict[str, Any]]
-
-from core.infrastructure.io.storage import S3Storage, S3StorageBackend
 
 
 @pytest.fixture
