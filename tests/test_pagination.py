@@ -2,7 +2,7 @@
 
 import pytest
 
-from core.adapters.extractors.pagination import (
+from core.domain.adapters.extractors.pagination import (
     PaginationState,
     NoPaginationState,
     OffsetPaginationState,

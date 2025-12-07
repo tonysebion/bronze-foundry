@@ -5,7 +5,10 @@ from datetime import date
 
 import pytest
 
-from core.adapters.extractors.cursor_state import CursorStateManager, build_incremental_query
+from core.domain.adapters.extractors.cursor_state import (
+    CursorStateManager,
+    build_incremental_query,
+)
 
 
 def test_save_and_load_cursor(tmp_path):
@@ -26,7 +29,7 @@ def test_load_cursor_handles_invalid_json(tmp_path, caplog):
     path = tmp_path / "bad_cursor_cursor.json"
     path.write_text("not-json")
 
-    caplog.set_level("WARNING", logger="core.adapters.extractors.cursor_state")
+    caplog.set_level("WARNING", logger="core.domain.adapters.extractors.cursor_state")
     result = manager.load_cursor("bad_cursor")
     assert result is None
     assert "Failed to load cursor state" in caplog.text

@@ -6,7 +6,7 @@ from pathlib import Path
 import hashlib
 import pytest
 
-from core.primitives.state import manifest as manifest_module
+from core.foundation.state import manifest as manifest_module
 from core.primitives.state.manifest import (
     FileEntry,
     FileManifest,
@@ -90,7 +90,7 @@ def test_compute_file_checksum(tmp_path: Path) -> None:
 
 
 def test_watermark_update_and_compare(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("core.primitives.state.watermark._utc_isoformat", lambda: MOCK_TIMESTAMP)
+    monkeypatch.setattr("core.foundation.state.watermark._utc_isoformat", lambda: MOCK_TIMESTAMP)
     watermark = Watermark(
         source_key="sys.tbl",
         watermark_column="ts",
@@ -105,7 +105,7 @@ def test_watermark_update_and_compare(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_watermark_store_local(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr("core.primitives.state.watermark._utc_isoformat", lambda: MOCK_TIMESTAMP)
+    monkeypatch.setattr("core.foundation.state.watermark._utc_isoformat", lambda: MOCK_TIMESTAMP)
     store = WatermarkStore(storage_backend="local", local_path=tmp_path / "wm")
     wm = store.get("sys", "table", "ts")
     wm.update("abc", run_id="run", run_date=date(2025, 1, 3), record_count=10)

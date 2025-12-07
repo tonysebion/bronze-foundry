@@ -14,18 +14,18 @@ def test_db_extractor_uses_rate_limiter(monkeypatch):
         return limiter
 
     monkeypatch.setattr(
-        "core.adapters.extractors.db_extractor.RateLimiter.from_config",
+        "core.domain.adapters.extractors.db_extractor.RateLimiter.from_config",
         fake_from_config,
     )
 
     monkeypatch.setenv("CLAIMS_DB_CONN_STR", "driver=example")
 
     monkeypatch.setattr(
-        "core.adapters.extractors.db_extractor.fetch_records_from_query",
+        "core.domain.adapters.extractors.db_extractor.fetch_records_from_query",
         lambda *args, **kwargs: ([], None),
     )
 
-    from core.adapters.extractors.db_extractor import DbExtractor
+    from core.domain.adapters.extractors.db_extractor import DbExtractor
 
     extractor = DbExtractor()
     config = {

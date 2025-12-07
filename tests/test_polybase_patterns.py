@@ -15,7 +15,7 @@ from typing import Any, Dict
 
 import pytest
 
-from core.adapters.polybase.polybase_generator import (
+from core.domain.adapters.polybase.polybase_generator import (
     generate_polybase_setup,
     generate_temporal_functions_sql,
     generate_joined_table_ddl,

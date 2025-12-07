@@ -46,8 +46,8 @@ class TestRichEnumPattern:
         "core.runtime.metadata.Layer",
         "core.runtime.metadata.RunStatus",
         # Adapters layer
-        "core.adapters.schema.evolution.SchemaEvolutionMode",
-        "core.adapters.quality.rules.RuleLevel",
+        "core.domain.adapters.schema.evolution.SchemaEvolutionMode",
+        "core.domain.adapters.quality.rules.RuleLevel",
     ]
 
     def _import_class(self, dotted_path: str) -> Type:
@@ -161,10 +161,10 @@ class TestExtractorRegistryPattern:
         """The extractor registry should have all expected source types."""
         from core.io.extractors.base import EXTRACTOR_REGISTRY
         # Force import of extractor modules to trigger registration
-        from core.adapters.extractors import api_extractor  # noqa: F401
-        from core.adapters.extractors import db_extractor  # noqa: F401
-        from core.adapters.extractors import db_multi_extractor  # noqa: F401
-        from core.adapters.extractors import file_extractor  # noqa: F401
+        from core.domain.adapters.extractors import api_extractor  # noqa: F401
+        from core.domain.adapters.extractors import db_extractor  # noqa: F401
+        from core.domain.adapters.extractors import db_multi_extractor  # noqa: F401
+        from core.domain.adapters.extractors import file_extractor  # noqa: F401
 
         expected_types = {"api", "db", "db_multi", "file"}
         registered_types = set(EXTRACTOR_REGISTRY.keys())
@@ -177,10 +177,10 @@ class TestExtractorRegistryPattern:
         """All registered extractors should subclass BaseExtractor."""
         from core.io.extractors.base import BaseExtractor, EXTRACTOR_REGISTRY
         # Force import of extractor modules
-        from core.adapters.extractors import api_extractor  # noqa: F401
-        from core.adapters.extractors import db_extractor  # noqa: F401
-        from core.adapters.extractors import db_multi_extractor  # noqa: F401
-        from core.adapters.extractors import file_extractor  # noqa: F401
+        from core.domain.adapters.extractors import api_extractor  # noqa: F401
+        from core.domain.adapters.extractors import db_extractor  # noqa: F401
+        from core.domain.adapters.extractors import db_multi_extractor  # noqa: F401
+        from core.domain.adapters.extractors import file_extractor  # noqa: F401
 
         for source_type, extractor_cls in EXTRACTOR_REGISTRY.items():
             assert issubclass(extractor_cls, BaseExtractor), (
@@ -209,8 +209,11 @@ class TestInitExportPattern:
         "core/pipeline/runtime",
         "core/pipeline/bronze",
         "core/pipeline/silver",
-        "core/adapters",
-        "core/adapters/extractors",
+        "core/domain/adapters",
+        "core/domain/adapters/extractors",
+        "core/domain/adapters/schema",
+        "core/domain/adapters/quality",
+        "core/domain/adapters/polybase",
         "core/orchestration",
         "core/orchestration/runner",
     ]

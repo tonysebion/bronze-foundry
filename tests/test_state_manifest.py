@@ -20,7 +20,7 @@ def _build_manifest_with_entries() -> FileManifest:
 def test_add_discovered_file_records_discovery_time() -> None:
     manifest = FileManifest(manifest_path="state.json")
 
-    with patch("core.primitives.state.manifest._utc_isoformat", return_value=MOCK_TIMESTAMP):
+    with patch("core.foundation.state.manifest._utc_isoformat", return_value=MOCK_TIMESTAMP):
         added = manifest.add_discovered_file("file.csv", size_bytes=123)
 
     assert added is True
@@ -33,7 +33,7 @@ def test_mark_processed_moves_entry_to_processed() -> None:
     manifest = FileManifest(manifest_path="state.json")
     manifest.pending_files.append(FileEntry(path="batch.csv"))
 
-    with patch("core.primitives.state.manifest._utc_isoformat", return_value=MOCK_TIMESTAMP):
+    with patch("core.foundation.state.manifest._utc_isoformat", return_value=MOCK_TIMESTAMP):
         manifest.mark_processed("batch.csv", run_id="run-uuid", checksum="sha256:123")
 
     assert manifest.pending_files == []
@@ -45,7 +45,7 @@ def test_mark_processed_moves_entry_to_processed() -> None:
 def test_to_dict_includes_last_updated_and_entries() -> None:
     manifest = _build_manifest_with_entries()
 
-    with patch("core.primitives.state.manifest._utc_isoformat", return_value=MOCK_TIMESTAMP):
+    with patch("core.foundation.state.manifest._utc_isoformat", return_value=MOCK_TIMESTAMP):
         payload = manifest.to_dict()
 
     assert payload["last_updated"] == MOCK_TIMESTAMP

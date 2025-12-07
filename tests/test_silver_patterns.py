@@ -21,7 +21,7 @@ from core.services.pipelines.silver.joins import (
     MultiSourceJoiner,
     JoinResult,
 )
-from core.adapters.schema import SchemaValidator, SchemaSpec, validate_schema
+from core.domain.adapters.schema import SchemaValidator, SchemaSpec, validate_schema
 
 
 class TestSingleSourcePattern:

@@ -12,14 +12,14 @@ from __future__ import annotations
 
 import pytest
 
-from core.adapters.schema.evolution import (
+from core.domain.adapters.schema.evolution import (
     EvolutionChange,
     EvolutionConfig,
     EvolutionResult,
     SchemaEvolution,
     SchemaEvolutionMode,
 )
-from core.adapters.schema.types import ColumnSpec, DataType, SchemaSpec
+from core.domain.adapters.schema.types import ColumnSpec, DataType, SchemaSpec
 
 
 class TestSchemaEvolutionMode:

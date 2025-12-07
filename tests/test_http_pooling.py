@@ -13,7 +13,7 @@ from core.io.http.session import (
     AsyncApiClient,
     HTTPX_AVAILABLE,
 )
-from core.adapters.extractors.api_extractor import (
+from core.domain.adapters.extractors.api_extractor import (
     SyncPoolConfig,
     _create_pooled_session,
 )

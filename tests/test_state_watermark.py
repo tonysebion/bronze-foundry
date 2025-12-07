@@ -11,7 +11,7 @@ MOCK_TIMESTAMP = "2025-01-01T00:00:00Z"
 
 
 def test_watermark_defaults_created_at_using_helper() -> None:
-    with patch("core.primitives.state.watermark._utc_isoformat", return_value=MOCK_TIMESTAMP):
+    with patch("core.foundation.state.watermark._utc_isoformat", return_value=MOCK_TIMESTAMP):
         watermark = Watermark(
             source_key="sys.tbl",
             watermark_column="updated_at",
@@ -27,7 +27,7 @@ def test_watermark_update_sets_fields_and_timestamp() -> None:
         watermark_value="2024-01-01T00:00:00Z",
     )
 
-    with patch("core.primitives.state.watermark._utc_isoformat", return_value=MOCK_TIMESTAMP):
+    with patch("core.foundation.state.watermark._utc_isoformat", return_value=MOCK_TIMESTAMP):
         watermark.update(
             new_value="2024-01-02T00:00:00Z",
             run_id="run-123",
