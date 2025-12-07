@@ -63,6 +63,7 @@ def emit_bronze_metadata(
     chunk_count: int,
     record_count: int,
     cursor: Optional[str],
+    created_files: List[Path],
 ) -> Tuple[Path, Path]:
     run_date_str = run_date.date().isoformat()
     actual_chunk_artifact_count = len(created_files)

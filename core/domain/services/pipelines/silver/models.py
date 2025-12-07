@@ -7,26 +7,8 @@ from typing import Any, Dict
 # Import SilverModel and SILVER_MODEL_ALIASES from primitives and re-export
 from core.foundation.primitives.models import SilverModel, SILVER_MODEL_ALIASES
 
-
-# =============================================================================
-# Model Profiles - Silver-layer specific mappings
-# =============================================================================
-
-MODEL_PROFILES: Dict[str, SilverModel] = {
-    "analytics": SilverModel.SCD_TYPE_2,
-    "operational": SilverModel.SCD_TYPE_1,
-    "merge_ready": SilverModel.FULL_MERGE_DEDUPE,
-    "cdc_delta": SilverModel.INCREMENTAL_MERGE,
-    "snapshot": SilverModel.PERIODIC_SNAPSHOT,
-}
-
-
-def resolve_profile(profile_name: str | None) -> SilverModel | None:
-    """Resolve a profile name to a SilverModel."""
-    if profile_name is None:
-        return None
-    key = profile_name.strip().lower()
-    return MODEL_PROFILES.get(key)
+# Re-export from infrastructure for backward compatibility
+from core.infrastructure.config.profiles import MODEL_PROFILES, resolve_profile
 
 
 # =============================================================================

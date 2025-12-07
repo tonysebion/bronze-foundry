@@ -1,11 +1,11 @@
 """Test that imports respect the layer hierarchy.
 
 Layer Hierarchy (lower cannot import from higher):
-  Layer 0: primitives/     - No core/ dependencies allowed
-  Layer 1: infrastructure/ - Can only import from primitives/
-  Layer 2: pipeline/       - Can import from primitives/, infrastructure/
-  Layer 3: adapters/       - Can import from primitives/, infrastructure/, pipeline/
-  Layer 4: orchestration/  - Can import from all above
+  Layer 0: foundation/      - No core/ dependencies allowed
+  Layer 1: platform/        - Can only import from foundation/
+  Layer 2: infrastructure/  - Can import from foundation/, platform/
+  Layer 3: domain/          - Can import from foundation/, platform/, infrastructure/
+  Layer 4: orchestration/   - Can import from all above
 
 This ensures architectural integrity and prevents circular dependencies.
 """
@@ -20,19 +20,19 @@ import pytest
 
 
 LAYER_HIERARCHY: Dict[str, int] = {
-    "primitives": 0,
-    "infrastructure": 1,
-    "pipeline": 2,
-    "adapters": 3,
-    "orchestration": 4,
+    "foundation": 0,      # L0: Zero-dependency building blocks
+    "platform": 1,        # L1: Cross-cutting platform services
+    "infrastructure": 2,  # L2: Core infrastructure services
+    "domain": 3,          # L3: Business domain logic
+    "orchestration": 4,   # L4: Job execution
 }
 
 LAYER_CAN_IMPORT: Dict[str, Set[str]] = {
-    "primitives": set(),
-    "infrastructure": {"primitives"},
-    "pipeline": {"primitives", "infrastructure"},
-    "adapters": {"primitives", "infrastructure", "pipeline"},
-    "orchestration": {"primitives", "infrastructure", "pipeline", "adapters"},
+    "foundation": set(),
+    "platform": {"foundation"},
+    "infrastructure": {"foundation", "platform"},
+    "domain": {"foundation", "platform", "infrastructure"},
+    "orchestration": {"foundation", "platform", "infrastructure", "domain"},
 }
 
 
@@ -144,7 +144,7 @@ class TestLayerImports:
 
     def test_layer_hierarchy_is_complete(self) -> None:
         """Verify the layer hierarchy defines all expected layers."""
-        expected_layers = {"primitives", "infrastructure", "pipeline", "adapters", "orchestration"}
+        expected_layers = {"foundation", "platform", "infrastructure", "domain", "orchestration"}
         assert set(LAYER_HIERARCHY.keys()) == expected_layers
 
     def test_layer_can_import_is_consistent(self) -> None:

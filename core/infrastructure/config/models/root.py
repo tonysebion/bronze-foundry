@@ -31,15 +31,8 @@ from core.foundation.primitives.base import RichEnumMixin
 from core.foundation.primitives.patterns import LoadPattern
 from core.foundation.primitives.models import SilverModel
 
-# resolve_profile is in pipeline layer, import lazily if needed
-def resolve_profile(profile_name: str | None) -> SilverModel | None:
-    """Resolve a profile name to a SilverModel (lazy import).
-
-    Uses importlib to avoid static layer violation (L1 -> L2).
-    """
-    import importlib
-    silver_models = importlib.import_module("core.services.pipelines.silver.models")
-    return silver_models.resolve_profile(profile_name)
+# Import resolve_profile from infrastructure layer (no lazy import needed)
+from core.infrastructure.config.profiles import resolve_profile
 
 from .dataset import DatasetConfig
 
@@ -125,24 +118,24 @@ class SchemaConfig(BaseModel):
     partition_columns: List[str] = Field(default_factory=list)
     version: int = 1
 
-    def to_schema_spec(self) -> Optional[Any]:
-        """Convert to SchemaSpec for validation.
+    def to_schema_dict(self) -> Optional[Dict[str, Any]]:
+        """Convert to a dictionary suitable for SchemaSpec.from_dict().
 
-        Returns an adapters.schema.types.SchemaSpec instance, imported lazily
-        to avoid layer violation (infrastructure cannot depend on adapters).
+        Returns a dict that can be passed to domain.adapters.schema.types.SchemaSpec.from_dict()
+        when schema validation is needed in the domain layer.
+
+        Returns:
+            Dict with expected_columns, primary_keys, partition_columns, version;
+            or None if no expected_columns are configured.
         """
         if not self.expected_columns:
             return None
-        # Lazy import to avoid layer violation (L1 -> L3)
-        import importlib
-        schema_types = importlib.import_module("core.domain.adapters.schema.types")
-        SchemaSpec = schema_types.SchemaSpec
-        return SchemaSpec.from_dict({
+        return {
             "expected_columns": [col.model_dump() for col in self.expected_columns],
             "primary_keys": self.primary_keys,
             "partition_columns": self.partition_columns,
             "version": self.version,
-        })
+        }
 
 
 # Module-level constants for StorageBackend
