@@ -25,6 +25,7 @@ from core.adapters.extractors.cursor_state import (
     CursorStateManager,
     build_incremental_query,
 )
+from core.infrastructure.resilience.retry import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -76,9 +77,12 @@ class DbExtractor(BaseExtractor):
         params: Optional[Tuple] = None,
         batch_size: int = 10000,
         cursor_column: Optional[str] = None,
+        limiter: Optional[RateLimiter] = None,
     ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
         """Execute database query with retry logic for the selected driver."""
         logger.debug("Executing query with driver=%s params=%s", driver, params)
+        if limiter:
+            limiter.acquire()
         return fetch_records_from_query(
             driver=driver,
             conn_str=conn_str,
@@ -96,6 +100,7 @@ class DbExtractor(BaseExtractor):
         """Fetch records from database with incremental cursor support."""
         source_cfg = cfg["source"]
         db_cfg = source_cfg["db"]
+        run_cfg = source_cfg.get("run", {})
 
         # Driver selection (default: pyodbc)
         driver = (db_cfg.get("driver") or "pyodbc").lower()
@@ -133,6 +138,13 @@ class DbExtractor(BaseExtractor):
             f"Executing database query (incremental={'yes' if use_incremental else 'no'})"
         )
 
+        limiter = RateLimiter.from_config(
+            db_cfg,
+            run_cfg,
+            component="db_extractor",
+            env_var="BRONZE_DB_RPS",
+        )
+
         batch_size = db_cfg.get("fetch_batch_size", 10000)
         records, max_cursor = self._execute_query(
             driver,
@@ -141,6 +153,7 @@ class DbExtractor(BaseExtractor):
             (last_cursor,) if last_cursor else None,
             batch_size=batch_size,
             cursor_column=cursor_column if use_incremental else None,
+            limiter=limiter,
         )
         logger.info("Successfully extracted %d records from database", len(records))
         new_cursor = max_cursor

@@ -265,7 +265,9 @@ class ApiExtractor(BaseExtractor):
         url = base_url.rstrip("/") + endpoint
 
         timeout = run_cfg.get("timeout_seconds", 30)
-        self._limiter = RateLimiter.from_config(api_cfg, run_cfg)
+        self._limiter = RateLimiter.from_config(
+            api_cfg, run_cfg, component="api_extractor"
+        )
         params = dict(api_cfg.get("params", {}))
         pagination_cfg = api_cfg.get("pagination", {}) or {}
         state = build_pagination_state(pagination_cfg, params)
@@ -323,7 +325,9 @@ class ApiExtractor(BaseExtractor):
         client = AsyncApiClient(
             base_url, headers, auth=auth, timeout=timeout, max_concurrent=max_conc
         )
-        limiter = RateLimiter.from_config(api_cfg, run_cfg)
+        limiter = RateLimiter.from_config(
+            api_cfg, run_cfg, component="api_extractor"
+        )
         params = dict(api_cfg.get("params", {}))
         pagination_cfg = api_cfg.get("pagination", {}) or {}
         state = build_pagination_state(pagination_cfg, params)

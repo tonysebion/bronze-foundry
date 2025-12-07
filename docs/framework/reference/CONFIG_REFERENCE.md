@@ -179,6 +179,9 @@ source:
       cursor_column: "UpdatedAt"
       state_file: "./.state/claims_header.cursor"
       cursor_type: "datetime"           # or "string"
+    rate_limit:
+      rps: 5.0                         # Optional token bucket for database queries
+      burst: 10                        # Optional burst capacity (defaults to ceil(rps))
 ```
 
 ### `source.custom` (for `type: custom`)
@@ -215,7 +218,9 @@ source:
     rate_limit_rps: 10  # Fallback if api.rate_limit.rps not set
 ```
 
-Priority order for determining the active rate: `api.rate_limit.rps` → `run.rate_limit_rps` → env `BRONZE_API_RPS`.
+Priority order for determining the active rate:
+- API extractor: `api.rate_limit.rps` → `run.rate_limit_rps` → env `BRONZE_API_RPS`
+- DB extractor: `db.rate_limit.rps` → `run.rate_limit_rps` → env `BRONZE_DB_RPS`
 
 If no value resolves, no throttling is applied.
 

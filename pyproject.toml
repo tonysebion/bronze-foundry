@@ -57,6 +57,7 @@ dev = [
 azure = [
     "azure-storage-blob>=12.19.0",
     "azure-identity>=1.15.0",
+    "adlfs>=2023.11.0",
 ]
 db = [
     "pyodbc>=4.0.0",

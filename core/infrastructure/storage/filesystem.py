@@ -7,6 +7,7 @@ that work with local, S3, and Azure storage backends.
 from __future__ import annotations
 
 import logging
+import os
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import fsspec
@@ -92,11 +93,14 @@ def create_filesystem(
         return fsspec.filesystem("s3", **fs_options)
 
     elif uri.backend == "azure":
-        # Future implementation
-        raise NotImplementedError(
-            "Azure Blob Storage support is not yet implemented. "
-            "Please use local filesystem or S3 storage."
-        )
+        if not env_config or not env_config.azure:
+            raise ValueError(
+                "Azure URI requires environment configuration with connection settings. "
+                "Please provide platform.azure_connection or an environment config file with Azure credentials."
+            )
+        fs_options = _build_azure_fs_options(env_config.azure)
+        logger.debug("Creating Azure filesystem with options: %s", list(fs_options.keys()))
+        return fsspec.filesystem("az", **fs_options)
 
     else:
         raise ValueError(f"Unsupported storage backend: {uri.backend}")
@@ -125,3 +129,97 @@ def get_fs_for_path(
     resolved_path = uri.to_fsspec_path(env_config)
 
     return fs, resolved_path
+
+
+def _build_azure_fs_options(azure_cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Build fsspec filesystem options for Azure storage from config."""
+    fs_options: Dict[str, Any] = {}
+    connection_string_env = azure_cfg.get("connection_string_env")
+    if connection_string_env:
+        connection_string = os.environ.get(connection_string_env)
+        if connection_string:
+            fs_options["connection_string"] = connection_string
+            return fs_options
+
+    account_name_env = azure_cfg.get("account_name_env")
+    account_key_env = azure_cfg.get("account_key_env")
+    account_name = os.environ.get(account_name_env) if account_name_env else None
+    account_key = os.environ.get(account_key_env) if account_key_env else None
+    account_url = (
+        str(azure_cfg.get("account_url")) if azure_cfg.get("account_url") else None
+    )
+    if not account_url and account_name:
+        account_url = f"https://{account_name}.blob.core.windows.net"
+
+    if account_name and account_key:
+        fs_options["account_name"] = account_name
+        fs_options["account_key"] = account_key
+        fs_options["account_url"] = account_url or f"https://{account_name}.blob.core.windows.net"
+        return fs_options
+
+    tenant_id_env = azure_cfg.get("tenant_id_env")
+    client_id_env = azure_cfg.get("client_id_env")
+    client_secret_env = azure_cfg.get("client_secret_env")
+    tenant_id = os.environ.get(tenant_id_env) if tenant_id_env else None
+    client_id = os.environ.get(client_id_env) if client_id_env else None
+    client_secret = os.environ.get(client_secret_env) if client_secret_env else None
+
+    if tenant_id and client_id and client_secret:
+        try:
+            from azure.identity import ClientSecretCredential
+        except ImportError as exc:
+            raise ValueError(
+                "Azure identity dependencies are required for service principal authentication. "
+                "Install the azure extra (pip install 'medallion-foundry[azure]')"
+            ) from exc
+
+        credential = ClientSecretCredential(
+            tenant_id=tenant_id, client_id=client_id, client_secret=client_secret
+        )
+        fs_options["credential"] = credential
+        fs_options["account_url"] = account_url or (
+            f"https://{account_name}.blob.core.windows.net" if account_name else None
+        )
+        if not fs_options["account_url"]:
+            raise ValueError(
+                "For Azure service principal auth you must provide platform.azure.account_url or account_name_env."
+            )
+        return fs_options
+
+    if azure_cfg.get("use_managed_identity"):
+        try:
+            from azure.identity import ManagedIdentityCredential
+        except ImportError as exc:
+            raise ValueError(
+                "Azure identity dependencies are required for managed identity authentication. "
+                "Install the azure extra (pip install 'medallion-foundry[azure]')"
+            ) from exc
+
+        managed_account_url = account_url
+        if not managed_account_url and account_name:
+            managed_account_url = f"https://{account_name}.blob.core.windows.net"
+        if not managed_account_url:
+            raise ValueError(
+                "Managed identity requires account_url or account_name_env to be defined for Azure storage."
+            )
+        fs_options["credential"] = ManagedIdentityCredential()
+        fs_options["account_url"] = managed_account_url
+        return fs_options
+
+    if account_url:
+        try:
+            from azure.identity import DefaultAzureCredential
+        except ImportError as exc:
+            raise ValueError(
+                "Default Azure credential support requires azure-identity. "
+                "Install the azure extra (pip install 'medallion-foundry[azure]')"
+            ) from exc
+        fs_options["credential"] = DefaultAzureCredential()
+        fs_options["account_url"] = account_url
+        return fs_options
+
+    raise ValueError(
+        "Failed to build Azure filesystem options. Please provide one of: "
+        "connection_string_env, account_name_env+account_key_env, "
+        "tenant_id_env+client_id_env+client_secret_env, or use_managed_identity."
+    )
