@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+__all__ = ["trace_span"]
+
 from contextlib import contextmanager
 import os
 from typing import Any, Iterator

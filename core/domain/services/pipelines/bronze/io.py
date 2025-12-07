@@ -11,7 +11,7 @@ import csv
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from core.foundation.time_utils import utc_isoformat as _utc_isoformat
 from core.infrastructure.runtime.file_io import (
@@ -146,29 +146,57 @@ def verify_checksum_manifest(
     return _infra_verify_checksum_manifest(bronze_dir, manifest_name, expected_pattern)
 
 
-# Backward compatibility aliases for internal merge functions
-# Now delegating to the shared DataFrameMerger in runtime layer
-def _validate_primary_keys(
-    existing_df: pd.DataFrame, new_df: pd.DataFrame, primary_keys: List[str]
-) -> None:
-    """Validate primary keys exist in both DataFrames (delegates to DataFrameMerger)."""
-    DataFrameMerger.validate_keys(existing_df, primary_keys, "existing data")
-    DataFrameMerger.validate_keys(new_df, primary_keys, "new data")
+def _merge_records_impl(
+    existing_path: Path,
+    new_records: List[Dict[str, Any]],
+    primary_keys: List[str],
+    out_path: Optional[Path],
+    read_existing: Callable[[Path], pd.DataFrame],
+    write_new: Callable[[pd.DataFrame, Path], None],
+    write_merged: Callable[[pd.DataFrame, Path, int, int], None],
+    count_existing: Callable[[Path], int],
+    format_name: str,
+) -> int:
+    """Common merge implementation template for CSV and Parquet.
 
+    Args:
+        existing_path: Path to existing file
+        new_records: New records to merge
+        primary_keys: List of columns forming the primary key
+        out_path: Output path (defaults to existing_path)
+        read_existing: Callable to read existing file into DataFrame
+        write_new: Callable(df, target) to write new DataFrame
+        write_merged: Callable(df, target) to write merged DataFrame
+        count_existing: Callable(path) to count rows in existing file
+        format_name: Format name for logging (e.g., "Parquet", "CSV")
 
-def _build_key_series(df: pd.DataFrame, primary_keys: List[str]) -> pd.Series:
-    """Build composite key series (delegates to DataFrameMerger)."""
-    return DataFrameMerger.build_composite_key(df, primary_keys)
-
-
-def _merge_dataframes(
-    existing_df: pd.DataFrame, new_df: pd.DataFrame, primary_keys: List[str]
-) -> tuple[pd.DataFrame, int, int]:
-    """Return merged DataFrame along with counts of updated and inserted keys.
-
-    Delegates to DataFrameMerger.merge_upsert().
+    Returns:
+        Total record count after merge
     """
-    return DataFrameMerger.merge_upsert(existing_df, new_df, primary_keys)
+    if not new_records:
+        logger.info("No new records to merge")
+        if existing_path.exists():
+            return count_existing(existing_path)
+        return 0
+
+    new_df = pd.DataFrame.from_records(new_records)
+    target = out_path or existing_path
+
+    if not existing_path.exists():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        write_new(new_df, target)
+        logger.info("Created new %s with %d records at %s", format_name, len(new_df), target)
+        return len(new_df)
+
+    existing_df = read_existing(existing_path)
+    merged_df, updated_count, inserted_count = DataFrameMerger.merge_upsert(
+        existing_df, new_df, primary_keys
+    )
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    write_merged(merged_df, target, updated_count, inserted_count)
+
+    return len(merged_df)
 
 
 def merge_parquet_records(
@@ -193,39 +221,30 @@ def merge_parquet_records(
     Returns:
         Total record count after merge
     """
-    if not new_records:
-        logger.info("No new records to merge")
-        if existing_path.exists():
-            return len(pd.read_parquet(existing_path))
-        return 0
+    def write_new(df: pd.DataFrame, target: Path) -> None:
+        df.to_parquet(target, index=False, compression=compression)
 
-    new_df = pd.DataFrame.from_records(new_records)
+    def write_merged(df: pd.DataFrame, target: Path, updated: int, inserted: int) -> None:
+        df.to_parquet(target, index=False, compression=compression)
+        logger.info(
+            "Merged Parquet: %d total records (%d updated, %d inserted) at %s",
+            len(df), updated, inserted, target,
+        )
 
-    if not existing_path.exists():
-        # No existing data, just write new records
-        target = out_path or existing_path
-        target.parent.mkdir(parents=True, exist_ok=True)
-        new_df.to_parquet(target, index=False, compression=compression)
-        logger.info("Created new Parquet with %d records at %s", len(new_df), target)
-        return len(new_df)
+    def count_existing(path: Path) -> int:
+        return len(pd.read_parquet(path))
 
-    existing_df = pd.read_parquet(existing_path)
-    merged_df, updated_count, inserted_count = DataFrameMerger.merge_upsert(
-        existing_df, new_df, primary_keys
+    return _merge_records_impl(
+        existing_path=existing_path,
+        new_records=new_records,
+        primary_keys=primary_keys,
+        out_path=out_path,
+        read_existing=pd.read_parquet,
+        write_new=write_new,
+        write_merged=write_merged,
+        count_existing=count_existing,
+        format_name="Parquet",
     )
-
-    target = out_path or existing_path
-    target.parent.mkdir(parents=True, exist_ok=True)
-    merged_df.to_parquet(target, index=False, compression=compression)
-    logger.info(
-        "Merged Parquet: %d total records (%d updated, %d inserted) at %s",
-        len(merged_df),
-        updated_count,
-        inserted_count,
-        target,
-    )
-
-    return len(merged_df)
 
 
 def merge_csv_records(
@@ -247,29 +266,25 @@ def merge_csv_records(
     Returns:
         Total record count after merge
     """
-    if not new_records:
-        logger.info("No new records to merge")
-        if existing_path.exists():
-            with existing_path.open("r", encoding="utf-8") as f:
-                return sum(1 for _ in f) - 1  # Subtract header
-        return 0
+    def write_new(df: pd.DataFrame, target: Path) -> None:
+        df.to_csv(target, index=False)
 
-    new_df = pd.DataFrame.from_records(new_records)
+    def write_merged(df: pd.DataFrame, target: Path, updated: int, inserted: int) -> None:
+        df.to_csv(target, index=False)
+        logger.info("Merged CSV: %d total records at %s", len(df), target)
 
-    if not existing_path.exists():
-        # No existing data, just write new records
-        target = out_path or existing_path
-        target.parent.mkdir(parents=True, exist_ok=True)
-        new_df.to_csv(target, index=False)
-        logger.info("Created new CSV with %d records at %s", len(new_df), target)
-        return len(new_df)
+    def count_existing(path: Path) -> int:
+        with path.open("r", encoding="utf-8") as f:
+            return sum(1 for _ in f) - 1  # Subtract header
 
-    existing_df = pd.read_csv(existing_path)
-    merged_df, _, _ = DataFrameMerger.merge_upsert(existing_df, new_df, primary_keys)
-
-    target = out_path or existing_path
-    target.parent.mkdir(parents=True, exist_ok=True)
-    merged_df.to_csv(target, index=False)
-
-    logger.info("Merged CSV: %d total records at %s", len(merged_df), target)
-    return len(merged_df)
+    return _merge_records_impl(
+        existing_path=existing_path,
+        new_records=new_records,
+        primary_keys=primary_keys,
+        out_path=out_path,
+        read_existing=pd.read_csv,
+        write_new=write_new,
+        write_merged=write_merged,
+        count_existing=count_existing,
+        format_name="CSV",
+    )

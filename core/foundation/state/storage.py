@@ -7,6 +7,11 @@ and ManifestTracker to avoid code duplication.
 
 from __future__ import annotations
 
+__all__ = [
+    "StateStorageBackend",
+    "parse_s3_path",
+]
+
 import json
 import logging
 from pathlib import Path

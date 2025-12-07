@@ -44,7 +44,7 @@ from core.domain.adapters.extractors.cursor_state import (
     build_incremental_query,
 )
 from core.domain.adapters.extractors.db_runner import fetch_records_from_query
-from core.domain.adapters.extractors.mixins import default_retry
+from core.domain.adapters.extractors.resilience import ResilientExtractorMixin
 from core.foundation.primitives.exceptions import ExtractionError
 from core.infrastructure.io.extractors.base import BaseExtractor, register_extractor
 
@@ -124,7 +124,7 @@ class MultiEntityResult:
 
 
 @register_extractor("db_multi")
-class DbMultiExtractor(BaseExtractor):
+class DbMultiExtractor(BaseExtractor, ResilientExtractorMixin):
     """Extractor for multiple database entities with parallel support.
 
     Per spec Section 3.5, supports:
@@ -142,6 +142,7 @@ class DbMultiExtractor(BaseExtractor):
         """
         self.max_workers = max_workers
         self._state_manager = CursorStateManager()
+        self._init_resilience()
     def _build_entity_query(
         self,
         entity: EntityConfig,
@@ -170,7 +171,6 @@ class DbMultiExtractor(BaseExtractor):
 
         return base_query, None
 
-    @default_retry
     def _extract_entity(
         self,
         entity: EntityConfig,
@@ -181,6 +181,7 @@ class DbMultiExtractor(BaseExtractor):
         """Extract records for a single entity.
 
         This method is thread-safe and can be called in parallel.
+        Uses circuit breaker and retry for resilience.
         """
         logger.info("Starting extraction for entity: %s", entity.name)
 
@@ -195,8 +196,8 @@ class DbMultiExtractor(BaseExtractor):
         query, params = self._build_entity_query(entity, last_cursor)
         logger.debug("Entity %s query: %s", entity.name, query)
 
-        try:
-            records, max_cursor = fetch_records_from_query(
+        def _do_fetch() -> Tuple[List[Dict[str, Any]], Optional[str]]:
+            return fetch_records_from_query(
                 driver="pyodbc",
                 conn_str=conn_str,
                 query=query,
@@ -205,6 +206,13 @@ class DbMultiExtractor(BaseExtractor):
                 cursor_column=entity.watermark_column
                 if entity.load_mode == "incremental_append"
                 else None,
+            )
+
+        try:
+            records, max_cursor = self._execute_with_resilience(
+                _do_fetch,
+                f"db_multi_{entity.name}",
+                retry_if=self._should_retry_db_error,
             )
         except Exception as exc:
             logger.error("Entity %s extraction failed: %s", entity.name, exc)
@@ -224,6 +232,27 @@ class DbMultiExtractor(BaseExtractor):
             cursor=max_cursor,
             row_count=len(records),
         )
+
+    def _should_retry_db_error(self, exc: BaseException) -> bool:
+        """Determine if a database error is retryable."""
+        exc_type = type(exc).__name__
+        exc_module = type(exc).__module__
+
+        # pyodbc and database connection errors
+        if "pyodbc" in exc_module:
+            if "OperationalError" in exc_type or "InterfaceError" in exc_type:
+                return True
+
+        # SQLAlchemy connection errors
+        if "sqlalchemy" in exc_module:
+            if "OperationalError" in exc_type or "DisconnectionError" in exc_type:
+                return True
+
+        # Generic connection-related errors
+        if exc_type in ("ConnectionError", "TimeoutError", "BrokenPipeError"):
+            return True
+
+        return False
 
     def fetch_records(
         self,

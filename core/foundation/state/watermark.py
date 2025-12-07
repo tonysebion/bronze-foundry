@@ -25,6 +25,14 @@ Watermark file structure:
 
 from __future__ import annotations
 
+__all__ = [
+    "WatermarkType",
+    "Watermark",
+    "WatermarkStore",
+    "build_watermark_store",
+    "compute_max_watermark",
+]
+
 import logging
 from dataclasses import dataclass, field
 from datetime import date

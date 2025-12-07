@@ -34,6 +34,7 @@ from core.domain.services.pipelines.silver.handlers import (
     StateHandler,
     DerivedEventHandler,
 )
+from core.domain.services.pipelines.silver.partition_resolver import PartitionColumnResolver
 
 if TYPE_CHECKING:
     from core.infrastructure.config import EnvironmentConfig
@@ -301,83 +302,12 @@ class SilverProcessor:
         return df
 
     def _resolve_partition_columns(self, frames: Dict[str, pd.DataFrame]) -> List[str]:
-        """Resolve partition columns for output."""
-        # V1: Unified temporal configuration
-        if self.dataset.silver.record_time_partition:
-            partition_key = self.dataset.silver.record_time_partition
-            source_column = self.dataset.silver.record_time_column
+        """Resolve partition columns for output.
 
-            if not source_column:
-                raise ValueError(
-                    "record_time_partition specified but record_time_column is missing"
-                )
-
-            for frame in frames.values():
-                if source_column not in frame.columns:
-                    raise ValueError(
-                        f"record_time_column '{source_column}' not found in Silver output"
-                    )
-                frame[partition_key] = pd.to_datetime(
-                    frame[source_column], errors="coerce"
-                ).dt.date.astype(str)
-
-            return [partition_key]
-
-        # Legacy: use partition_by if provided
-        partition_by = self.dataset.silver.partition_by
-        if partition_by:
-            for frame in frames.values():
-                for column in partition_by:
-                    if column in frame.columns:
-                        continue
-                    if column.endswith("_dt"):
-                        source = (
-                            self.dataset.silver.event_ts_column
-                            if self.dataset.silver.event_ts_column in frame.columns
-                            else self.dataset.silver.change_ts_column
-                        )
-                        if source and source in frame.columns:
-                            frame[column] = pd.to_datetime(
-                                frame[source], errors="coerce"
-                            ).dt.date.astype(str)
-                        else:
-                            raise ValueError(
-                                f"Unable to derive partition column '{column}'"
-                            )
-                    else:
-                        raise ValueError(
-                            f"Partition column '{column}' missing from Silver output"
-                        )
-            return partition_by
-
-        # Default: derive from entity kind
-        if self.dataset.silver.entity_kind.is_event_like:
-            column = (self.dataset.silver.event_ts_column or "event_ts") + "_dt"
-            for frame in frames.values():
-                source = (
-                    self.dataset.silver.event_ts_column
-                    or self.dataset.silver.change_ts_column
-                )
-                if source and source in frame.columns:
-                    frame[column] = pd.to_datetime(
-                        frame[source], errors="coerce"
-                    ).dt.date.astype(str)
-            return [column]
-
-        column = "effective_from_dt"
-        for frame in frames.values():
-            if "effective_from" in frame.columns:
-                frame[column] = pd.to_datetime(
-                    frame["effective_from"], errors="coerce"
-                ).dt.date.astype(str)
-            elif (
-                self.dataset.silver.change_ts_column
-                and self.dataset.silver.change_ts_column in frame.columns
-            ):
-                frame[column] = pd.to_datetime(
-                    frame[self.dataset.silver.change_ts_column], errors="coerce"
-                ).dt.date.astype(str)
-        return [column]
+        Delegates to PartitionColumnResolver for cleaner separation of concerns.
+        """
+        resolver = PartitionColumnResolver(self.dataset)
+        return resolver.resolve(frames)
 
 
 def build_intent_silver_partition(

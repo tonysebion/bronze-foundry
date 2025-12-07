@@ -3,6 +3,23 @@
 This module provides specific exception types for better error handling and debugging.
 """
 
+__all__ = [
+    "BronzeFoundryError",
+    "ConfigValidationError",
+    "ExtractionError",
+    "StorageError",
+    "AuthenticationError",
+    "PaginationError",
+    "StateManagementError",
+    "DataQualityError",
+    "RetryExhaustedError",
+    "BronzeFoundryDeprecationWarning",
+    "BronzeFoundryCompatibilityWarning",
+    "DeprecationSpec",
+    "emit_deprecation",
+    "emit_compat",
+]
+
 import warnings
 from dataclasses import dataclass
 from typing import Optional, Dict, Any

@@ -4,29 +4,30 @@ Supports db_table and db_query source types with:
 - Incremental loading via watermark columns
 - Parameterized queries with cursor substitution
 - Connection string from environment variables
-- Retry logic with exponential backoff
+- Retry logic with circuit breaker and exponential backoff
 """
 
 import logging
 import os
-from typing import Dict, Any, List, Optional, Tuple
 from datetime import date
+from typing import Any, Dict, List, Optional, Tuple
 
-from core.foundation.primitives.exceptions import ExtractionError
-from core.infrastructure.io.extractors.base import BaseExtractor, register_extractor
-from core.domain.adapters.extractors.db_runner import fetch_records_from_query
 from core.domain.adapters.extractors.cursor_state import (
     CursorStateManager,
     build_incremental_query,
 )
-from core.domain.adapters.extractors.mixins import RateLimitMixin, default_retry
+from core.domain.adapters.extractors.db_runner import fetch_records_from_query
+from core.domain.adapters.extractors.mixins import RateLimitMixin
+from core.domain.adapters.extractors.resilience import ResilientExtractorMixin
+from core.foundation.primitives.exceptions import ExtractionError
+from core.infrastructure.io.extractors.base import BaseExtractor, register_extractor
 from core.platform.resilience import RateLimiter
 
 logger = logging.getLogger(__name__)
 
 
 @register_extractor("db")
-class DbExtractor(BaseExtractor, RateLimitMixin):
+class DbExtractor(BaseExtractor, RateLimitMixin, ResilientExtractorMixin):
     """Extractor for database sources with incremental loading support.
 
     Supports both db_table and db_query source types. Watermark handling
@@ -35,6 +36,7 @@ class DbExtractor(BaseExtractor, RateLimitMixin):
 
     def __init__(self) -> None:
         self._state_manager = CursorStateManager()
+        self._init_resilience()
 
     def get_watermark_config(self, cfg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Get watermark configuration for database extraction.
@@ -58,7 +60,6 @@ class DbExtractor(BaseExtractor, RateLimitMixin):
             "type": incremental.get("cursor_type", "timestamp"),
         }
 
-    @default_retry
     def _execute_query(
         self,
         driver: str,
@@ -69,18 +70,51 @@ class DbExtractor(BaseExtractor, RateLimitMixin):
         cursor_column: Optional[str] = None,
         limiter: Optional[RateLimiter] = None,
     ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-        """Execute database query with retry logic for the selected driver."""
-        logger.debug("Executing query with driver=%s params=%s", driver, params)
-        if limiter:
-            limiter.acquire()
-        return fetch_records_from_query(
-            driver=driver,
-            conn_str=conn_str,
-            query=query,
-            params=params,
-            batch_size=batch_size,
-            cursor_column=cursor_column,
+        """Execute database query with circuit breaker and retry logic."""
+
+        def _do_query() -> Tuple[List[Dict[str, Any]], Optional[str]]:
+            logger.debug("Executing query with driver=%s params=%s", driver, params)
+            if limiter:
+                limiter.acquire()
+            return fetch_records_from_query(
+                driver=driver,
+                conn_str=conn_str,
+                query=query,
+                params=params,
+                batch_size=batch_size,
+                cursor_column=cursor_column,
+            )
+
+        return self._execute_with_resilience(
+            _do_query,
+            "db_extractor_query",
+            retry_if=self._should_retry_db_error,
         )
+
+    def _should_retry_db_error(self, exc: BaseException) -> bool:
+        """Determine if a database error is retryable.
+
+        Retries on transient connection errors but not on query/data errors.
+        """
+        exc_type = type(exc).__name__
+        exc_module = type(exc).__module__
+
+        # pyodbc and database connection errors
+        if "pyodbc" in exc_module:
+            # Retry on connection and timeout errors
+            if "OperationalError" in exc_type or "InterfaceError" in exc_type:
+                return True
+
+        # SQLAlchemy connection errors
+        if "sqlalchemy" in exc_module:
+            if "OperationalError" in exc_type or "DisconnectionError" in exc_type:
+                return True
+
+        # Generic connection-related errors
+        if exc_type in ("ConnectionError", "TimeoutError", "BrokenPipeError"):
+            return True
+
+        return False
 
     def fetch_records(
         self,

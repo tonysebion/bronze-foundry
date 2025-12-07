@@ -42,6 +42,13 @@ Manifest file structure:
 
 from __future__ import annotations
 
+__all__ = [
+    "FileEntry",
+    "FileManifest",
+    "ManifestTracker",
+    "compute_file_checksum",
+]
+
 import fnmatch
 import hashlib
 import logging

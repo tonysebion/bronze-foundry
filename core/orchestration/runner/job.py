@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import logging
-import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
@@ -26,16 +24,13 @@ from core.domain.adapters.extractors.factory import (
     ensure_extractors_loaded,
     get_extractor,
 )
-from core.domain.services.pipelines.bronze.io import chunk_records, verify_checksum_manifest
+from core.domain.services.pipelines.bronze.io import chunk_records
 from core.foundation.primitives.patterns import LoadPattern
 from core.domain.services.processing.chunk_processor import ChunkProcessor, ChunkWriter
 from core.infrastructure.io.storage import get_storage_backend
-from core.domain.adapters.schema.evolution import (
-    EvolutionConfig,
-    SchemaEvolution,
-    SchemaEvolutionMode,
-)
-from core.domain.adapters.schema.types import ColumnSpec, DataType, SchemaSpec
+from core.domain.services.schema import SchemaEvolutionChecker
+from core.orchestration.runner.artifact_cleanup import ArtifactCleanup
+from core.orchestration.runner.manifest_inspector import ManifestInspector
 from core.foundation.catalog.hooks import (
     report_quality_snapshot,
     report_run_metadata,
@@ -79,6 +74,7 @@ class ExtractJob:
         self.storage_plan: Optional[StoragePlan] = None
         self.schema_snapshot: List[Dict[str, str]] = []
         self.previous_manifest_schema: Optional[List[Dict[str, Any]]] = None
+        self._schema_checker = SchemaEvolutionChecker(context.cfg)
 
     @property
     def source_cfg(self) -> Dict[str, Any]:
@@ -163,131 +159,54 @@ class ExtractJob:
         return len(chunk_files), chunk_files
 
     def _inspect_existing_manifest(self) -> None:
-        manifest_path = self._out_dir / "_checksums.json"
-        if not manifest_path.exists():
+        """Inspect existing manifest and handle accordingly.
+
+        Uses ManifestInspector for cleaner separation of concerns.
+        """
+        inspector = ManifestInspector(self._out_dir, self.load_pattern)
+        result = inspector.inspect()
+
+        if not result.exists:
             return
 
-        expected_pattern = self.load_pattern.value if self.load_pattern else None
-        manifest: Optional[Dict[str, Any]] = None
-        try:
-            manifest = verify_checksum_manifest(
-                self._out_dir,
-                expected_pattern=expected_pattern,
-            )
-            self._store_previous_manifest_schema(manifest)
-            self._assert_schema_compatible()
-        except (ValueError, FileNotFoundError) as exc:
-            manifest = self._load_manifest_json()
-            if manifest:
-                self._store_previous_manifest_schema(manifest)
+        # Store schema from previous manifest (if any)
+        if result.previous_schema:
+            self.previous_manifest_schema = result.previous_schema
+
+        if result.needs_cleanup:
             logger.warning(
                 "Detected incomplete Bronze partition at %s: %s; resetting artifacts for a clean rerun.",
                 self._out_dir,
-                exc,
+                result.error_message,
             )
             self._cleanup_existing_artifacts()
             return
+
+        # Valid manifest - check schema compatibility before aborting
+        self._assert_schema_compatible()
 
         raise RuntimeError(
             f"Bronze partition {self._out_dir} already contains a verified checksum manifest; aborting to avoid duplicates."
         )
 
     def _cleanup_existing_artifacts(self) -> None:
-        if not self._out_dir.exists():
-            return
-        logger.info("Clearing existing Bronze artifacts at %s before rerun", self._out_dir)
-        shutil.rmtree(self._out_dir, ignore_errors=True)
-        self._out_dir.mkdir(parents=True, exist_ok=True)
+        """Clean up existing artifacts for a fresh rerun.
+
+        Uses ArtifactCleanup for consistent cleanup logic.
+        """
+        cleanup = ArtifactCleanup(self._out_dir, self.storage_plan)
+        cleanup.cleanup_directory()
         self.created_files = []
 
-    def _load_manifest_json(self) -> Optional[Dict[str, Any]]:
-        manifest_path = self._out_dir / "_checksums.json"
-        if not manifest_path.exists():
-            return None
-        try:
-            text = manifest_path.read_text(encoding="utf-8")
-            return cast(Dict[str, Any], json.loads(text))
-        except Exception:
-            return None
-
-    def _store_previous_manifest_schema(self, manifest: Optional[Dict[str, Any]]) -> None:
-        if not manifest:
-            return
-        schema = manifest.get("schema")
-        if isinstance(schema, list):
-            self.previous_manifest_schema = schema
-
-    def _schema_spec_from_snapshot(
-        self, snapshot: List[Dict[str, Any]]
-    ) -> SchemaSpec:
-        columns: List[ColumnSpec] = []
-        for entry in snapshot:
-            name = entry.get("name")
-            if not name:
-                continue
-            dtype = entry.get("dtype", "any")
-            columns.append(
-                ColumnSpec(
-                    name=name,
-                    type=DataType.from_string(dtype),
-                    nullable=entry.get("nullable", True),
-                )
-            )
-        return SchemaSpec(columns=columns)
-
-    def _resolve_schema_evolution_config(self) -> EvolutionConfig:
-        schema_cfg = self.source_cfg.get("run", {}).get("schema_evolution")
-        if not schema_cfg or not isinstance(schema_cfg, dict):
-            schema_cfg = self.cfg.get("schema_evolution") or {}
-        if not isinstance(schema_cfg, dict):
-            schema_cfg = {}
-
-        mode_str = schema_cfg.get("mode", "strict")
-        try:
-            mode = SchemaEvolutionMode(mode_str)
-        except ValueError:
-            logger.warning(
-                "Unknown schema_evolution.mode '%s', defaulting to strict", mode_str
-            )
-            mode = SchemaEvolutionMode.STRICT
-
-        protected_columns = schema_cfg.get("protected_columns", [])
-        if not isinstance(protected_columns, list):
-            protected_columns = []
-
-        return EvolutionConfig(
-            mode=mode,
-            allow_type_relaxation=schema_cfg.get("allow_type_relaxation", False),
-            allow_precision_increase=schema_cfg.get("allow_precision_increase", True),
-            protected_columns=protected_columns,
-        )
-
     def _assert_schema_compatible(self) -> None:
-        if not self.previous_manifest_schema or not self.schema_snapshot:
-            return
-
-        config = self._resolve_schema_evolution_config()
-        evolution = SchemaEvolution(config)
-        previous_spec = self._schema_spec_from_snapshot(self.previous_manifest_schema)
-        current_spec = self._schema_spec_from_snapshot(self.schema_snapshot)
-        result = evolution.check_evolution(previous_spec, current_spec)
-
-        if not result.compatible:
-            logger.error(
-                "Schema drift blocked by evolution rules: %s", result.to_dict()
-            )
-            raise RuntimeError(
-                "Schema drift detected and blocked by configured evolution rules. "
-                f"Details: {result.to_dict()}"
-            )
+        """Check schema compatibility using SchemaEvolutionChecker."""
+        self._schema_checker.check_compatibility(
+            self.previous_manifest_schema, self.schema_snapshot
+        )
 
     def _metadata_config(self) -> Dict[str, Any]:
         """Build a config dict that includes the user-specified schema evolution block."""
-        metadata_cfg: Dict[str, Any] = dict(self.cfg)
-        run_schema = self.source_cfg.get("run", {}).get("schema_evolution")
-        if run_schema:
-            metadata_cfg["schema_evolution"] = run_schema
-        return metadata_cfg
+        return self._schema_checker.get_config_for_metadata()
 
     def _emit_metadata(
         self, record_count: int, chunk_count: int, cursor: Optional[str]
@@ -370,37 +289,14 @@ class ExtractJob:
         report_lineage(source_dataset, dataset_id, lineage_metadata)
 
     def _cleanup_on_failure(self) -> None:
+        """Clean up created files on failure.
+
+        Uses ArtifactCleanup for consistent cleanup logic.
+        """
         run_cfg = self.source_cfg.get("run", {})
-        cleanup_on_failure = run_cfg.get("cleanup_on_failure", True)
-        if not (cleanup_on_failure and self.created_files):
-            return
-
-        logger.info("Cleaning up %s files due to failure", len(self.created_files))
-        for file_path in self.created_files:
-            try:
-                if file_path.exists():
-                    file_path.unlink()
-                    logger.debug("Deleted %s", file_path)
-            except Exception as cleanup_error:  # pragma: no cover - best effort
-                logger.warning("Failed to cleanup %s: %s", file_path, cleanup_error)
-
-            plan = self.storage_plan
-            if plan:
-                remote_path = plan.remote_path_for(file_path)
-                try:
-                    if plan.delete(file_path):
-                        logger.info("Deleted remote artifact %s", remote_path)
-                    else:
-                        logger.debug(
-                            "Remote artifact %s was not deleted (disabled or missing)",
-                            remote_path,
-                        )
-                except Exception as remote_error:  # pragma: no cover
-                    logger.warning(
-                        "Failed to delete remote artifact %s: %s",
-                        remote_path,
-                        remote_error,
-                    )
+        cleanup_enabled = run_cfg.get("cleanup_on_failure", True)
+        cleanup = ArtifactCleanup(self._out_dir, self.storage_plan)
+        cleanup.cleanup_files(self.created_files, cleanup_enabled)
 
 
 def run_extract(context: RunContext) -> int:

@@ -4,6 +4,8 @@ Utility helpers for sending lifecycle webhooks (success/failure notifications).
 
 from __future__ import annotations
 
+__all__ = ["fire_webhooks"]
+
 import json
 import logging
 from typing import Iterable, Mapping, Any

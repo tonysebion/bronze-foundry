@@ -7,6 +7,17 @@ This module provides flexible logging configuration with support for:
 - Structured logging with context
 """
 
+__all__ = [
+    "JSONFormatter",
+    "HumanReadableFormatter",
+    "get_log_level_from_env",
+    "get_log_format_from_env",
+    "setup_logging",
+    "get_logger",
+    "log_exception",
+    "log_performance",
+]
+
 import logging
 import logging.handlers
 import json

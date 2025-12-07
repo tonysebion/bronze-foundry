@@ -22,6 +22,19 @@ The set_om_client() function accepts Any type to maintain layer boundaries.
 
 from __future__ import annotations
 
+__all__ = [
+    "set_om_client",
+    "get_om_client",
+    "is_om_enabled",
+    "notify_catalog",
+    "report_schema_snapshot",
+    "report_run_metadata",
+    "report_lineage",
+    "report_quality_snapshot",
+    "report_quality_rule_results",
+    "report_dataset_registered",
+]
+
 import logging
 from typing import Any, Iterable, List, Mapping, Optional
 

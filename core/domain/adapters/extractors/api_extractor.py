@@ -34,12 +34,117 @@ from core.infrastructure.io.http.session import (
 
 from core.infrastructure.io.extractors.base import BaseExtractor, register_extractor
 from core.domain.adapters.extractors.pagination import (
+    PaginationState,
     PagePaginationState,
     build_pagination_state,
 )
 from core.domain.adapters.extractors.resilience import ResilientExtractorMixin
 
 logger = logging.getLogger(__name__)
+
+
+def _run_pagination_loop(
+    state: PaginationState,
+    fetch_page: Any,
+    extract_records: Any,
+    api_cfg: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Common pagination loop logic shared between sync and async paths.
+
+    Args:
+        state: Pagination state machine
+        fetch_page: Callable that fetches a page given params, returns response data
+        extract_records: Callable that extracts records from response data
+        api_cfg: API configuration dict
+
+    Returns:
+        All collected records
+    """
+    all_records: List[Dict[str, Any]] = []
+
+    while state.should_fetch_more():
+        current_params = state.build_params()
+        data = fetch_page(current_params)
+        records = extract_records(data, api_cfg)
+        if not records:
+            break
+
+        all_records.extend(records)
+        logger.info(
+            "Fetched %d records %s (total: %d)",
+            len(records),
+            state.describe(),
+            len(all_records),
+        )
+
+        if state.max_records > 0 and len(all_records) >= state.max_records:
+            all_records = all_records[: state.max_records]
+            logger.info("Reached max_records limit of %d", state.max_records)
+            break
+
+        if not state.on_records(records, data):
+            break
+
+    if (
+        isinstance(state, PagePaginationState)
+        and state.max_pages
+        and state.max_pages_limit_hit
+    ):
+        logger.info("Reached max_pages limit of %d", state.max_pages)
+
+    return all_records
+
+
+async def _run_pagination_loop_async(
+    state: PaginationState,
+    fetch_page: Any,
+    extract_records: Any,
+    api_cfg: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Async variant of pagination loop.
+
+    Args:
+        state: Pagination state machine
+        fetch_page: Async callable that fetches a page given params
+        extract_records: Callable that extracts records from response data
+        api_cfg: API configuration dict
+
+    Returns:
+        All collected records
+    """
+    all_records: List[Dict[str, Any]] = []
+
+    while state.should_fetch_more():
+        current_params = state.build_params()
+        data = await fetch_page(current_params)
+        records = extract_records(data, api_cfg)
+        if not records:
+            break
+
+        all_records.extend(records)
+        logger.info(
+            "Fetched %d records %s (total: %d)",
+            len(records),
+            state.describe(),
+            len(all_records),
+        )
+
+        if state.max_records > 0 and len(all_records) >= state.max_records:
+            all_records = all_records[: state.max_records]
+            logger.info("Reached max_records limit of %d", state.max_records)
+            break
+
+        if not state.on_records(records, data):
+            break
+
+    if (
+        isinstance(state, PagePaginationState)
+        and state.max_pages
+        and state.max_pages_limit_hit
+    ):
+        logger.info("Reached max_pages limit of %d", state.max_pages)
+
+    return all_records
 
 
 def _create_pooled_session(pool_config: Optional[SyncPoolConfig] = None) -> requests.Session:
@@ -260,40 +365,12 @@ class ApiExtractor(BaseExtractor, ResilientExtractorMixin):
         pagination_cfg = api_cfg.get("pagination", {}) or {}
         state = build_pagination_state(pagination_cfg, params)
 
-        all_records: List[Dict[str, Any]] = []
-
-        while state.should_fetch_more():
-            current_params = state.build_params()
+        def fetch_page(current_params: Dict[str, Any]) -> Dict[str, Any]:
             resp = self._make_request(session, url, headers, current_params, timeout, auth)
-            data = resp.json()
-            records = self._extract_records(data, api_cfg)
-            if not records:
-                break
+            result: Dict[str, Any] = resp.json()
+            return result
 
-            all_records.extend(records)
-            logger.info(
-                "Fetched %d records %s (total: %d)",
-                len(records),
-                state.describe(),
-                len(all_records),
-            )
-
-            if state.max_records > 0 and len(all_records) >= state.max_records:
-                all_records = all_records[: state.max_records]
-                logger.info("Reached max_records limit of %d", state.max_records)
-                break
-
-            if not state.on_records(records, data):
-                break
-
-        if (
-            isinstance(state, PagePaginationState)
-            and state.max_pages
-            and state.max_pages_limit_hit
-        ):
-            logger.info("Reached max_pages limit of %d", state.max_pages)
-
-        return all_records
+        return _run_pagination_loop(state, fetch_page, self._extract_records, api_cfg)
 
     async def _paginate_async(
         self,
@@ -323,47 +400,20 @@ class ApiExtractor(BaseExtractor, ResilientExtractorMixin):
         pagination_cfg = api_cfg.get("pagination", {}) or {}
         state = build_pagination_state(pagination_cfg, params)
 
-        all_records: List[Dict[str, Any]] = []
-
         # Use context manager for proper cleanup
         async with AsyncApiClient(
             base_url, headers, auth=auth, timeout=timeout,
             max_concurrent=max_conc, pool_config=pool_config
         ) as client:
-            async def _get(params_local: Dict[str, Any]) -> Dict[str, Any]:
+            async def fetch_page(params_local: Dict[str, Any]) -> Dict[str, Any]:
                 if limiter:
                     await limiter.async_acquire()
                 with trace_span("api.request"):
                     return await client.get(endpoint, params=params_local)
 
-            while state.should_fetch_more():
-                data = await _get(state.build_params())
-                records = self._extract_records(data, api_cfg)
-                if not records:
-                    break
-
-                all_records.extend(records)
-                logger.info(
-                    "Fetched %d records %s (total: %d)",
-                    len(records),
-                    state.describe(),
-                    len(all_records),
-                )
-
-                if state.max_records > 0 and len(all_records) >= state.max_records:
-                    all_records = all_records[: state.max_records]
-                    logger.info("Reached max_records limit of %d", state.max_records)
-                    break
-
-                if not state.on_records(records, data):
-                    break
-
-            if (
-                isinstance(state, PagePaginationState)
-                and state.max_pages
-                and state.max_pages_limit_hit
-            ):
-                logger.info("Reached max_pages limit of %d", state.max_pages)
+            all_records = await _run_pagination_loop_async(
+                state, fetch_page, self._extract_records, api_cfg
+            )
 
             # Log connection metrics
             logger.debug(
