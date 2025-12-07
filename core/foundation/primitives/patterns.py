@@ -58,7 +58,8 @@ class LoadPattern(RichEnumMixin, str, Enum):
         if isinstance(raw, cls):
             return raw
 
-        assert isinstance(raw, str)
+        if not isinstance(raw, str):
+            raise TypeError(f"Expected str, got {type(raw).__name__}")
         candidate = raw.strip().lower()
 
         # Check aliases first

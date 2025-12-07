@@ -16,7 +16,7 @@ from core.infrastructure.runtime.metadata import Layer, RunStatus
 from core.foundation.primitives.patterns import LoadPattern
 from core.foundation.primitives.exceptions import ConfigValidationError
 from core.infrastructure.io.extractors.base import EXTRACTOR_REGISTRY
-from core.domain.services.pipelines.bronze.models import StoragePlan
+from core.domain.services.processing.chunk_config import StoragePlan
 
 
 class TestBuildExtractor:

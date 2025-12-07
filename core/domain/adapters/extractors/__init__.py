@@ -1,23 +1,21 @@
 """Extractor implementations for various source types."""
-from core.domain.adapters.extractors import (
-    api_extractor,
-    db_extractor,
-    db_multi_extractor,
-    file_extractor,
-    factory,
-    cursor_state,
-    pagination,
+from core.domain.adapters.extractors.factory import (
+    get_extractor,
+    get_extractor_class,
+    ensure_extractors_loaded,
+    EXTRACTOR_REGISTRY,
 )
+
 # base comes from infrastructure layer
 from core.infrastructure.io.extractors import base
 
+# Auto-load extractors when package is imported
+ensure_extractors_loaded()
+
 __all__ = [
     "base",
-    "api_extractor",
-    "db_extractor",
-    "db_multi_extractor",
-    "file_extractor",
-    "factory",
-    "cursor_state",
-    "pagination",
+    "get_extractor",
+    "get_extractor_class",
+    "ensure_extractors_loaded",
+    "EXTRACTOR_REGISTRY",
 ]

@@ -459,7 +459,11 @@ def compute_file_checksum(path: str, protocol: str = "local") -> str:
         s3 = boto3.client("s3")
         response = s3.get_object(Bucket=bucket, Key=key)
 
-        for chunk in response["Body"].iter_chunks(chunk_size=1024 * 1024):
+        body = response["Body"]
+        while True:
+            chunk = body.read(1024 * 1024)
+            if not chunk:
+                break
             hasher.update(chunk)
     else:
         with open(path, "rb") as f:

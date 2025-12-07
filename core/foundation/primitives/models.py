@@ -80,7 +80,8 @@ class SilverModel(RichEnumMixin, str, Enum):
         if raw is None:
             raise ValueError("SilverModel value must be provided")
 
-        assert isinstance(raw, str)
+        if not isinstance(raw, str):
+            raise TypeError(f"Expected str, got {type(raw).__name__}")
         candidate = raw.strip().lower()
 
         # Check aliases first

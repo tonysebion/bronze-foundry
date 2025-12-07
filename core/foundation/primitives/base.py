@@ -93,7 +93,8 @@ class RichEnumMixin:
                 return members[default_name]
             raise ValueError(f"{cls.__name__} value must be provided")
 
-        assert isinstance(raw, str)
+        if not isinstance(raw, str):
+            raise TypeError(f"Expected str, got {type(raw).__name__}")
         candidate = raw.strip().lower()
 
         # Check aliases first
