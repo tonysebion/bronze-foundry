@@ -41,18 +41,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import pyodbc
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
 
 from core.infrastructure.io.extractors.base import BaseExtractor, register_extractor
 from core.domain.adapters.extractors.cursor_state import (
     CursorStateManager,
     build_incremental_query,
 )
+from core.domain.adapters.extractors.mixins import RateLimitMixin, default_retry
 
 logger = logging.getLogger(__name__)
 
@@ -176,12 +171,7 @@ class DbMultiExtractor(BaseExtractor):
 
         return base_query, None
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type(Exception),
-        reraise=True,
-    )
+    @default_retry
     def _extract_entity(
         self,
         entity: EntityConfig,

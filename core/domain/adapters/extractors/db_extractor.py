@@ -12,26 +12,20 @@ import os
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import date
 
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-)
-
 from core.infrastructure.io.extractors.base import BaseExtractor, register_extractor
 from core.domain.adapters.extractors.db_runner import fetch_records_from_query
 from core.domain.adapters.extractors.cursor_state import (
     CursorStateManager,
     build_incremental_query,
 )
+from core.domain.adapters.extractors.mixins import RateLimitMixin, default_retry
 from core.platform.resilience import RateLimiter
 
 logger = logging.getLogger(__name__)
 
 
 @register_extractor("db")
-class DbExtractor(BaseExtractor):
+class DbExtractor(BaseExtractor, RateLimitMixin):
     """Extractor for database sources with incremental loading support.
 
     Supports both db_table and db_query source types. Watermark handling
@@ -63,12 +57,7 @@ class DbExtractor(BaseExtractor):
             "type": incremental.get("cursor_type", "timestamp"),
         }
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type(Exception),
-        reraise=True,
-    )
+    @default_retry
     def _execute_query(
         self,
         driver: str,
@@ -138,7 +127,7 @@ class DbExtractor(BaseExtractor):
             f"Executing database query (incremental={'yes' if use_incremental else 'no'})"
         )
 
-        limiter = RateLimiter.from_config(
+        limiter = self.create_rate_limiter(
             db_cfg,
             run_cfg,
             component="db_extractor",

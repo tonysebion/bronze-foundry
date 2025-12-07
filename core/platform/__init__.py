@@ -5,12 +5,12 @@ It includes resilience patterns and observability utilities.
 
 Subpackages:
     resilience/    - Retry policies, circuit breakers, rate limiters
-    observability/ - Error handling, logging, tracing utilities
+    observability/ - Tracing utilities
     om/            - OpenMetadata integration client
 
 Import examples:
     from core.platform.resilience import RetryPolicy, CircuitBreaker
-    from core.platform.observability import errors, logging, tracing
+    from core.platform.observability import tracing
     from core.platform.om import OpenMetadataClient
 """
 

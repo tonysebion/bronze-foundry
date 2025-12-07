@@ -252,7 +252,11 @@ class TestParallelExtractsLogging:
 # Concurrent Chunk Processing Tests (#4)
 # =============================================================================
 
-from core.orchestration.runner.chunks import ChunkProcessor, ChunkWriter, ChunkWriterConfig
+from core.domain.services.processing.chunk_processor import (
+    ChunkProcessor,
+    ChunkWriter,
+    ChunkWriterConfig,
+)
 from core.domain.services.pipelines.bronze.models import StoragePlan
 import threading
 import time

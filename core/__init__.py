@@ -15,7 +15,7 @@ Package Map:
 
     platform/            # L1: Cross-cutting platform services
     ├── resilience/      # retry, circuit breaker, rate limiter
-    ├── observability/   # errors, logging, tracing helpers
+    ├── observability/   # tracing helpers
     └── om/              # OpenMetadata client
 
     infrastructure/      # L2: Core infrastructure services

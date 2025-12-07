@@ -1,5 +1,3 @@
-"""Observability helpers for errors, logging, and tracing."""
+"""Observability helpers for tracing."""
 
-from .errors import *
-from .logging import *
 from .tracing import *
