@@ -20,7 +20,7 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.infrastructure.config.typed_models import RootConfig
+    from core.runtime.config import RootConfig
 
 logger = logging.getLogger(__name__)
 

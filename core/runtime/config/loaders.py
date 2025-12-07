@@ -11,14 +11,15 @@ import yaml
 
 from .schemas import (
     DatasetConfig,
+    EnvironmentConfig,
+    S3ConnectionConfig,
     dataset_to_runtime_config,
     is_new_intent_config,
     legacy_to_dataset,
-    RootConfig,
     parse_root_config,
+    RootConfig,
 )
 from core.primitives.foundations.exceptions import emit_compat
-from core.infrastructure.config.environment import EnvironmentConfig, S3ConnectionConfig
 from .placeholders import apply_env_substitution
 from .validation import validate_config_dict
 from .v2_validation import validate_v2_config_dict
@@ -307,7 +308,7 @@ def _load_intent_datasets(
 
 def load_config_with_env(
     config_path: Path, env_config_path: Optional[Path] = None
-) -> Tuple[DatasetConfig, Optional["EnvironmentConfig"]]:  # noqa: F821
+) -> Tuple[DatasetConfig, Optional[EnvironmentConfig]]:
     """Load dataset config and optional environment config.
 
     Args:
@@ -323,8 +324,6 @@ def load_config_with_env(
         >>> if env:
         ...     print(f"Using environment: {env.name}")
     """
-    from core.infrastructure.config.environment import EnvironmentConfig
-
     # Load the pattern config
     with open(config_path, "r", encoding="utf-8") as f:
         raw = yaml.safe_load(f)

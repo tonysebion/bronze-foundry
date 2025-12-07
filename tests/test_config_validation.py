@@ -3,7 +3,7 @@
 import copy
 import pytest
 
-from core.infrastructure.config.validation import validate_config_dict
+from core.runtime.config import validate_config_dict
 
 
 @pytest.fixture

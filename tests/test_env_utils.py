@@ -2,7 +2,7 @@
 
 import os
 
-from core.infrastructure.config.environment import resolve_env_vars
+from core.runtime.config import resolve_env_vars
 
 
 def test_resolve_simple_string(tmp_path, monkeypatch):
@@ -19,8 +19,7 @@ def test_resolve_nested_structures(monkeypatch):
     assert resolved["list"][1]["nested"] == "value"
 
 
-def test_missing_env_var_logs(monkeypatch, caplog):
-    caplog.set_level("WARNING", logger="core.infrastructure.config.environment")
+def test_missing_env_var_leaves_placeholder(monkeypatch):
+    monkeypatch.delenv("MISSING", raising=False)
     result = resolve_env_vars("${MISSING}")
-    assert "${MISSING}" in result
-    assert "Environment variable MISSING not found" in caplog.text
+    assert result == "${MISSING}"

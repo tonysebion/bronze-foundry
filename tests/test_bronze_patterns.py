@@ -30,7 +30,7 @@ from core.services.pipelines.bronze.io import (
     merge_csv_records,
 )
 from core.primitives.foundations.patterns import LoadPattern
-from core.infrastructure.config.validation import validate_config_dict
+from core.runtime.config import validate_config_dict
 from core.primitives.state.manifest import ManifestTracker
 
 

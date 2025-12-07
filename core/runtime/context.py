@@ -8,8 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from core.runtime.paths import build_bronze_relative_path
-from core.infrastructure.config.typed_models import RootConfig
-from core.infrastructure.config.environment import EnvironmentConfig
+from core.runtime.config import EnvironmentConfig, RootConfig
 from core.primitives.foundations.patterns import LoadPattern
 from core.runtime.metadata import generate_run_id
 

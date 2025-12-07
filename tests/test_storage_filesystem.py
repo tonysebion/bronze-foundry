@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from core.infrastructure.config.environment import EnvironmentConfig
+from core.runtime.config import EnvironmentConfig
 from core.infrastructure.storage.filesystem import create_filesystem
 from core.infrastructure.storage.uri import StorageURI
 

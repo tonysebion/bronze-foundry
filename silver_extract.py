@@ -13,13 +13,12 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import pandas as pd
 
-from core.infrastructure.config import (
+from core.runtime.config import (
     DatasetConfig,
-    build_relative_path,
-    load_configs,
+    RootConfig,
     ensure_root_config,
+    load_configs,
 )
-from core.infrastructure.config.typed_models import RootConfig
 from core.runtime.context import RunContext, build_run_context, load_run_context
 from core.services.pipelines.bronze.io import (
     write_batch_metadata,
@@ -28,7 +27,11 @@ from core.services.pipelines.bronze.io import (
 )
 from core.primitives.foundations.logging import setup_logging
 from core.primitives.foundations.patterns import LoadPattern
-from core.runtime.paths import build_silver_partition_path, build_bronze_partition
+from core.runtime.paths import (
+    build_bronze_partition,
+    build_bronze_relative_path,
+    build_silver_partition_path,
+)
 from core.primitives.catalog.hooks import (
     notify_catalog,
     report_schema_snapshot,
@@ -128,7 +131,7 @@ def _default_silver_cfg() -> Dict[str, Any]:
 
 def _derive_bronze_path_from_config(cfg: Dict[str, Any], run_date: dt.date) -> Path:
     local_output_dir = Path(cfg["source"]["run"].get("local_output_dir", "./output"))
-    relative_path = build_relative_path(cfg, run_date)
+    relative_path = build_bronze_relative_path(cfg, run_date)
     return (local_output_dir / relative_path).resolve()
 
 
@@ -722,7 +725,7 @@ class SilverPromotionService:
             cfg_dict = cfg.model_dump()
         else:
             cfg_dict = cfg
-        relative_path = build_relative_path(cfg_dict, run_date)
+        relative_path = build_bronze_relative_path(cfg_dict, run_date)
         local_output_dir = Path(
             cfg_dict["source"]["run"].get("local_output_dir", "./output")
         )

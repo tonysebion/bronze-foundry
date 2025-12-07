@@ -277,7 +277,7 @@ class TestConfigValidationWithQualityRules:
 
     def test_validate_quality_rules_config(self, temp_dir):
         """Quality rules in config should validate."""
-        from core.infrastructure.config.validation import validate_config_dict
+        from core.runtime.config import validate_config_dict
 
         config = {
             "platform": {
@@ -304,7 +304,7 @@ class TestConfigValidationWithQualityRules:
 
     def test_invalid_quality_rule_level_rejected(self, temp_dir):
         """Invalid rule level should be rejected."""
-        from core.infrastructure.config.validation import validate_config_dict
+        from core.runtime.config import validate_config_dict
 
         config = {
             "platform": {

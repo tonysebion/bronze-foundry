@@ -18,7 +18,7 @@ from core.infrastructure.storage.uri import StorageURI
 from core.infrastructure.storage.filesystem import create_filesystem
 
 if TYPE_CHECKING:
-    from core.infrastructure.config.environment import EnvironmentConfig
+    from core.runtime.config import EnvironmentConfig
 
 logger = logging.getLogger(__name__)
 

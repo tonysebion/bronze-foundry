@@ -19,7 +19,7 @@ import logging
 import datetime as dt
 from typing import Any, Dict, List, Optional, cast
 
-from core.infrastructure.config import load_configs, ensure_root_config
+from core.runtime.config import ensure_root_config, load_configs, RootConfig
 from core.orchestration.runner import run_extract
 from core.parallel import run_parallel_extracts
 from core.primitives.foundations.logging import setup_logging
@@ -29,7 +29,6 @@ from core.primitives.catalog.hooks import notify_catalog, report_run_metadata
 from core.runtime.context import build_run_context, RunContext
 from core.primitives.catalog.webhooks import fire_webhooks
 from core.runtime.options import RunOptions
-from core.infrastructure.config.typed_models import RootConfig
 from core.infrastructure.storage.policy import enforce_storage_scope
 
 # Version is managed by setuptools_scm and written to core/_version.py
