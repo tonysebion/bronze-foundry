@@ -161,7 +161,7 @@ All enums should follow the `RichEnumMixin` pattern with these methods:
 
 ```python
 from enum import Enum
-from core.primitives.foundations.base import RichEnumMixin
+from core.foundation.primitives.base import RichEnumMixin
 
 # Module-level constants (not class attributes due to Enum metaclass)
 _MY_ENUM_DESCRIPTIONS = {
