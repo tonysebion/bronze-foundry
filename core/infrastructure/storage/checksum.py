@@ -1,13 +1,7 @@
-"""Backward compatibility shim for storage checksum helpers."""
+"""Backward compatibility shim for storage checksum utilities."""
 
-from core.io.storage.checksum import (
-    compute_file_sha256,
-    verify_checksum_manifest,
-    write_checksum_manifest,
-)
+import sys
 
-__all__ = [
-    "compute_file_sha256",
-    "verify_checksum_manifest",
-    "write_checksum_manifest",
-]
+from core.io.storage import checksum as checksum_impl
+
+sys.modules[__name__] = checksum_impl

@@ -1,5 +1,7 @@
-"""Backward compatibility shim for the Azure storage backend."""
+"""Backward compatibility shim for Azure storage utilities."""
 
-from core.io.storage.azure import AzureStorage, AzureStorageBackend
+import sys
 
-__all__ = ["AzureStorage", "AzureStorageBackend"]
+from core.io.storage import azure as azure_impl
+
+sys.modules[__name__] = azure_impl

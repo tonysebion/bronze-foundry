@@ -1,4 +1,4 @@
-" Legacy runtime shim exposing the new core.runtime package.
+"""Legacy runtime shim exposing the new core.runtime package."""
 from core.runtime import chunking, context, file_io, metadata, options, paths
 
 __all__ = [
