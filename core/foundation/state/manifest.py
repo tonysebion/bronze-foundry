@@ -360,8 +360,11 @@ class ManifestTracker:
         path = Path(self.manifest_path)
         path.parent.mkdir(parents=True, exist_ok=True)
 
+        manifest = self._manifest
+        if manifest is None:
+            return
         with open(path, "w", encoding="utf-8") as f:
-            json.dump(self._manifest.to_dict(), f, indent=2)
+            json.dump(manifest.to_dict(), f, indent=2)
 
         logger.info("Saved manifest to %s", path)
 
@@ -378,7 +381,10 @@ class ManifestTracker:
         key = parts[1] if len(parts) > 1 else ""
 
         s3 = boto3.client("s3")
-        body = json.dumps(self._manifest.to_dict(), indent=2)
+        manifest = self._manifest
+        if manifest is None:
+            return
+        body = json.dumps(manifest.to_dict(), indent=2)
         s3.put_object(Bucket=bucket, Key=key, Body=body.encode("utf-8"))
 
         logger.info("Saved manifest to s3://%s/%s", bucket, key)

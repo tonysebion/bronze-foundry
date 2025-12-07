@@ -36,9 +36,11 @@ class CursorStateManager:
         try:
             with path.open("r", encoding="utf-8") as handle:
                 state = json.load(handle)
-            cursor = state.get("cursor")
-            if cursor is not None:
-                cursor = str(cursor)
+            cursor_value = state.get("cursor")
+            if cursor_value is None:
+                logger.debug("Loaded cursor for %s: %s", key, None)
+                return None
+            cursor = str(cursor_value)
             logger.debug("Loaded cursor for %s: %s", key, cursor)
             return cursor
         except (json.JSONDecodeError, OSError) as exc:

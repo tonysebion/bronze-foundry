@@ -171,7 +171,7 @@ def quarantine_corrupted_files(
 
     # Write quarantine manifest
     if config.write_manifest and result.quarantined_files:
-        manifest = {
+        manifest_entry = {
             "timestamp": timestamp,
             "reason": reason,
             "files": [
@@ -185,19 +185,22 @@ def quarantine_corrupted_files(
         }
 
         manifest_path = quarantine_path / "_quarantine_manifest.json"
+        manifest_payload: Dict[str, Any] | list[Dict[str, Any]] = manifest_entry
         try:
             # Append to existing manifest if present
             if manifest_path.exists():
                 with manifest_path.open("r", encoding="utf-8") as f:
                     existing = json.load(f)
                 if isinstance(existing, list):
-                    existing.append(manifest)
-                    manifest = existing
+                    existing.append(manifest_entry)
+                    manifest_payload = existing
                 else:
-                    manifest = [existing, manifest]
+                    manifest_payload = [existing, manifest_entry]
+            else:
+                manifest_payload = manifest_entry
 
             with manifest_path.open("w", encoding="utf-8") as f:
-                json.dump(manifest, f, indent=2)
+                json.dump(manifest_payload, f, indent=2)
             logger.debug("Wrote quarantine manifest to %s", manifest_path)
         except OSError as exc:
             logger.warning("Failed to write quarantine manifest: %s", exc)

@@ -75,9 +75,8 @@ class SilverModel(RichEnumMixin, str, Enum):
         Raises:
             ValueError: If raw is None or doesn't match any member/alias
         """
-        raw_value = cast(object, raw)
-        if isinstance(raw_value, cls):
-            return raw
+        if isinstance(raw, cls):
+            return cast("SilverModel", raw)
         if raw is None:
             raise ValueError("SilverModel value must be provided")
 

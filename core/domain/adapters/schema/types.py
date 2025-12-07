@@ -105,7 +105,7 @@ class ColumnSpec:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
-        result = {
+        result: Dict[str, Any] = {
             "name": self.name,
             "type": self.type.value,
             "nullable": self.nullable,

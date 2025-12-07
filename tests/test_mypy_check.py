@@ -15,8 +15,9 @@ import pytest
 def test_mypy_check() -> None:
     """Run `python -m mypy .` so CI can track drift."""
 
+    cmd = [sys.executable, "-m", "mypy", "."]
     result = subprocess.run(
-        [sys.executable, "-m", "mypy", "."],
+        cmd,
         check=False,
         capture_output=True,
         text=True,

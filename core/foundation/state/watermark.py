@@ -82,7 +82,8 @@ class WatermarkType(RichEnumMixin, str, Enum):
 
     def describe(self) -> str:
         """Return human-readable description."""
-        return _WATERMARK_TYPE_DESCRIPTIONS.get(self.value, self.value)
+        value_str = str(self.value)
+        return _WATERMARK_TYPE_DESCRIPTIONS.get(value_str, value_str)
 
 
 @dataclass

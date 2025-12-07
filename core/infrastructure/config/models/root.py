@@ -78,7 +78,8 @@ class DataClassification(RichEnumMixin, str, Enum):
 
     def describe(self) -> str:
         """Return human-readable description."""
-        return _DATA_CLASSIFICATION_DESCRIPTIONS.get(self.value, self.value)
+        value_str = str(self.value)
+        return _DATA_CLASSIFICATION_DESCRIPTIONS.get(value_str, value_str)
 
 
 class OwnerConfig(BaseModel):
@@ -177,7 +178,8 @@ class StorageBackend(RichEnumMixin, str, Enum):
 
     def describe(self) -> str:
         """Return human-readable description."""
-        return _STORAGE_BACKEND_DESCRIPTIONS.get(self.value, self.value)
+        value_str = str(self.value)
+        return _STORAGE_BACKEND_DESCRIPTIONS.get(value_str, value_str)
 
 
 # Module-level constants for SourceType
@@ -221,7 +223,8 @@ class SourceType(RichEnumMixin, str, Enum):
 
     def describe(self) -> str:
         """Return human-readable description."""
-        return _SOURCE_TYPE_DESCRIPTIONS.get(self.value, self.value)
+        value_str = str(self.value)
+        return _SOURCE_TYPE_DESCRIPTIONS.get(value_str, value_str)
 
 
 class BronzeConfig(BaseModel):

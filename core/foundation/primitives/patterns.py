@@ -80,12 +80,14 @@ class LoadPattern(RichEnumMixin, str, Enum):
     @property
     def chunk_prefix(self) -> str:
         """Prefix used for chunk file names."""
-        return self.value.replace("_", "-")
+        value_str = str(self.value)
+        return value_str.replace("_", "-")
 
     @property
     def folder_name(self) -> str:
         """Return folder name fragment for this pattern."""
-        return f"pattern={self.value}"
+        value_str = str(self.value)
+        return f"pattern={value_str}"
 
     @property
     def is_incremental(self) -> bool:

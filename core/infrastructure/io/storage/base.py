@@ -435,7 +435,7 @@ def resolve_backend_type(config: Dict[str, Any]) -> str:
     """Determine the backend type from the provided config."""
     backend = config.get("bronze", {}).get("storage_backend", "s3")
     if isinstance(backend, Enum):
-        backend_value = backend.value
+        backend_value = str(backend.value)
     else:
         backend_value = str(backend)
     backend_value = backend_value.split(".")[-1]

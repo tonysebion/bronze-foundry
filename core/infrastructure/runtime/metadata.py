@@ -78,7 +78,8 @@ class Layer(RichEnumMixin, str, Enum):
 
     def describe(self) -> str:
         """Return human-readable description."""
-        return _LAYER_DESCRIPTIONS.get(self.value, self.value)
+        value_str = str(self.value)
+        return _LAYER_DESCRIPTIONS.get(value_str, value_str)
 
 
 # Module-level constants for RunStatus
@@ -124,7 +125,8 @@ class RunStatus(RichEnumMixin, str, Enum):
 
     def describe(self) -> str:
         """Return human-readable description."""
-        return _RUN_STATUS_DESCRIPTIONS.get(self.value, self.value)
+        value_str = str(self.value)
+        return _RUN_STATUS_DESCRIPTIONS.get(value_str, value_str)
 
     @property
     def is_terminal(self) -> bool:
@@ -178,7 +180,8 @@ class DataClassification(RichEnumMixin, str, Enum):
 
     def describe(self) -> str:
         """Return human-readable description."""
-        return _DATA_CLASSIFICATION_DESCRIPTIONS.get(self.value, self.value)
+        value_str = str(self.value)
+        return _DATA_CLASSIFICATION_DESCRIPTIONS.get(value_str, value_str)
 
 
 @dataclass
@@ -468,11 +471,12 @@ def get_metadata_path(
 
     Path format: /data/<env>/<layer>/<domain>/<table>/_metadata/runs/run=<run_id>.json
     """
+    layer_segment = str(layer.value)
     return (
         base_path
         / "data"
         / environment
-        / layer.value
+        / layer_segment
         / domain
         / table
         / "_metadata"
