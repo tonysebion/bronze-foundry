@@ -246,3 +246,154 @@ class TestParallelExtractsLogging:
         # Check that summary was logged
         info_calls = [str(call) for call in mock_logger.info.call_args_list]
         assert any("complete" in call.lower() for call in info_calls)
+
+
+# =============================================================================
+# Concurrent Chunk Processing Tests (#4)
+# =============================================================================
+
+from core.orchestration.runner.chunks import ChunkProcessor, ChunkWriter, ChunkWriterConfig
+from core.pipeline.bronze.models import StoragePlan
+import threading
+import time
+
+
+class TestChunkProcessorConcurrency:
+    """Tests for ChunkProcessor with parallel_workers > 1."""
+
+    def _make_mock_writer(self, delay: float = 0.0, fail_on_index: int | None = None):
+        """Create a mock ChunkWriter that tracks calls."""
+        written_chunks = []
+        write_lock = threading.Lock()
+
+        class TrackingWriter:
+            def write(self, chunk_index: int, chunk):
+                if fail_on_index is not None and chunk_index == fail_on_index:
+                    raise ValueError(f"Simulated failure on chunk {chunk_index}")
+
+                if delay > 0:
+                    time.sleep(delay)
+
+                with write_lock:
+                    written_chunks.append((chunk_index, chunk, threading.current_thread().name))
+
+                return [Path(f"/tmp/chunk_{chunk_index}.parquet")]
+
+        return TrackingWriter(), written_chunks
+
+    def test_sequential_processing_with_single_worker(self):
+        """Test that single worker processes chunks sequentially."""
+        writer, written_chunks = self._make_mock_writer()
+        processor = ChunkProcessor(writer, parallel_workers=1)
+
+        chunks = [[{"id": 1}], [{"id": 2}], [{"id": 3}]]
+        result = processor.process(chunks)
+
+        assert len(result) == 3
+        assert len(written_chunks) == 3
+        # Verify sequential order (chunks should be in order 1, 2, 3)
+        indices = [idx for idx, _, _ in written_chunks]
+        assert indices == [1, 2, 3]
+
+    def test_parallel_processing_with_multiple_workers(self):
+        """Test that multiple workers process chunks in parallel."""
+        writer, written_chunks = self._make_mock_writer(delay=0.05)
+        processor = ChunkProcessor(writer, parallel_workers=3)
+
+        chunks = [[{"id": i}] for i in range(6)]
+        start = time.monotonic()
+        result = processor.process(chunks)
+        elapsed = time.monotonic() - start
+
+        assert len(result) == 6
+        assert len(written_chunks) == 6
+
+        # Parallel execution should be faster than sequential (6 * 0.05 = 0.3s sequential)
+        # With 3 workers, should complete in roughly 2 * 0.05 = 0.1s
+        assert elapsed < 0.25  # Allow some overhead
+
+    def test_no_double_writes(self):
+        """Verify chunks aren't written twice under concurrency."""
+        writer, written_chunks = self._make_mock_writer(delay=0.01)
+        processor = ChunkProcessor(writer, parallel_workers=4)
+
+        chunks = [[{"id": i}] for i in range(10)]
+        result = processor.process(chunks)
+
+        # Each chunk should be written exactly once
+        indices = [idx for idx, _, _ in written_chunks]
+        assert len(indices) == 10
+        assert sorted(indices) == list(range(1, 11))  # Indices start at 1
+
+    def test_chunk_index_isolation(self):
+        """Verify parallel workers receive correct chunk indices."""
+        writer, written_chunks = self._make_mock_writer()
+        processor = ChunkProcessor(writer, parallel_workers=3)
+
+        chunks = [
+            [{"id": "a"}],
+            [{"id": "b"}],
+            [{"id": "c"}],
+            [{"id": "d"}],
+        ]
+        processor.process(chunks)
+
+        # Verify each chunk index maps to correct data
+        for idx, chunk, _ in written_chunks:
+            expected_id = chr(ord('a') + idx - 1)  # idx 1 -> 'a', idx 2 -> 'b', etc.
+            assert chunk[0]["id"] == expected_id
+
+    def test_error_propagation_in_parallel_mode(self):
+        """Test that errors in parallel execution are properly propagated."""
+        writer, _ = self._make_mock_writer(fail_on_index=2)
+        processor = ChunkProcessor(writer, parallel_workers=2)
+
+        chunks = [[{"id": i}] for i in range(4)]
+
+        with pytest.raises(ValueError, match="Simulated failure on chunk 2"):
+            processor.process(chunks)
+
+    def test_empty_chunks_list(self):
+        """Test processing empty chunks list."""
+        writer, written_chunks = self._make_mock_writer()
+        processor = ChunkProcessor(writer, parallel_workers=4)
+
+        result = processor.process([])
+
+        assert result == []
+        assert len(written_chunks) == 0
+
+    def test_single_chunk_uses_sequential(self):
+        """Test that single chunk doesn't use parallel execution."""
+        writer, written_chunks = self._make_mock_writer()
+        processor = ChunkProcessor(writer, parallel_workers=4)
+
+        chunks = [[{"id": 1}]]
+        result = processor.process(chunks)
+
+        assert len(result) == 1
+        assert len(written_chunks) == 1
+
+    def test_worker_count_normalization(self):
+        """Test that worker count is normalized to at least 1."""
+        writer, _ = self._make_mock_writer()
+
+        # Test zero workers
+        processor_zero = ChunkProcessor(writer, parallel_workers=0)
+        assert processor_zero.parallel_workers == 1
+
+        # Test negative workers
+        processor_neg = ChunkProcessor(writer, parallel_workers=-5)
+        assert processor_neg.parallel_workers == 1
+
+    def test_varying_worker_counts(self):
+        """Test that different worker counts all complete successfully."""
+        for worker_count in [1, 2, 4, 8]:
+            writer, written_chunks = self._make_mock_writer()
+            processor = ChunkProcessor(writer, parallel_workers=worker_count)
+
+            chunks = [[{"id": i}] for i in range(8)]
+            result = processor.process(chunks)
+
+            assert len(result) == 8
+            written_chunks.clear()  # Reset for next iteration
