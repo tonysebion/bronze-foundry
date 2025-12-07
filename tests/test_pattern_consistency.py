@@ -43,8 +43,8 @@ class TestRichEnumPattern:
         "core.infrastructure.config.models.enums.SchemaMode",
         "core.platform.resilience.late_data.LateDataMode",
         # Pipeline layer
-        "core.runtime.metadata.Layer",
-        "core.runtime.metadata.RunStatus",
+        "core.infrastructure.runtime.metadata.Layer",
+        "core.infrastructure.runtime.metadata.RunStatus",
         # Adapters layer
         "core.domain.adapters.schema.evolution.SchemaEvolutionMode",
         "core.domain.adapters.quality.rules.RuleLevel",
@@ -123,7 +123,7 @@ class TestSerializableDataclassPattern:
         "core.platform.resilience.circuit_breaker.CircuitBreaker",
         "core.platform.resilience.late_data.LateDataConfig",
         # Pipeline layer
-        "core.runtime.context.RunContext",
+        "core.infrastructure.runtime.context.RunContext",
     ]
 
     def _import_class(self, dotted_path: str) -> Type:

@@ -13,13 +13,13 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, TYPE_CHECKING
 
 import pandas as pd
 
-from core.runtime.config import (
+from core.infrastructure.runtime.config import (
     DatasetConfig,
     RootConfig,
     ensure_root_config,
     load_configs,
 )
-from core.runtime.context import RunContext, build_run_context, load_run_context
+from core.infrastructure.runtime.context import RunContext, build_run_context, load_run_context
 from core.services.pipelines.bronze.io import (
     write_batch_metadata,
     verify_checksum_manifest,
@@ -27,7 +27,7 @@ from core.services.pipelines.bronze.io import (
 )
 from core.foundation.primitives.logging import setup_logging
 from core.foundation.primitives.patterns import LoadPattern
-from core.runtime.paths import (
+from core.infrastructure.runtime.paths import (
     build_bronze_partition,
     build_bronze_relative_path,
     build_silver_partition_path,
@@ -41,7 +41,7 @@ from core.foundation.catalog.hooks import (
 )
 from core.foundation.catalog.webhooks import fire_webhooks
 from core.foundation.time_utils import utc_isoformat
-from core.runtime.options import RunOptions
+from core.infrastructure.runtime.options import RunOptions
 from core.infrastructure.io.storage import enforce_storage_scope, file_lock
 from core.services.pipelines.silver.io import (
     apply_schema_settings,

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from core.runtime.config import apply_env_substitution, substitute_env_vars
+from core.infrastructure.runtime.config import apply_env_substitution, substitute_env_vars
 from core.infrastructure.config import loaders as loader
 
 
