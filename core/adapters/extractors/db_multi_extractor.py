@@ -48,7 +48,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from core.adapters.extractors.base import BaseExtractor, register_extractor
+from core.io.extractors.base import BaseExtractor, register_extractor
 from core.adapters.extractors.cursor_state import (
     CursorStateManager,
     build_incremental_query,

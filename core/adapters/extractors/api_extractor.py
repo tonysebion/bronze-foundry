@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import date
 
@@ -25,9 +24,10 @@ from core.infrastructure.resilience.retry import (
     RateLimiter,
 )
 from core.primitives.catalog.tracing import trace_span
-from .async_http import AsyncApiClient, is_async_enabled
+from core.io.http.auth import build_api_auth
+from core.io.http.session import AsyncApiClient, is_async_enabled
 
-from core.adapters.extractors.base import BaseExtractor, register_extractor
+from core.io.extractors.base import BaseExtractor, register_extractor
 from core.adapters.extractors.pagination import (
     PagePaginationState,
     build_pagination_state,
@@ -66,69 +66,6 @@ class ApiExtractor(BaseExtractor):
         failure_threshold=5, cooldown_seconds=30.0, half_open_max_calls=1
     )
     _limiter: Optional[RateLimiter] = None
-
-    def _build_auth_headers(self, api_cfg: Dict[str, Any]) -> Dict[str, str]:
-        """Build authentication headers based on config."""
-        headers = {"Accept": "application/json"}
-
-        auth_type = api_cfg.get("auth_type", "none")
-
-        if auth_type == "bearer":
-            token_env = api_cfg.get("auth_token_env")
-            if not token_env:
-                raise ValueError(
-                    "auth_type='bearer' requires 'auth_token_env' in config"
-                )
-
-            token = os.environ.get(token_env)
-            if not token:
-                raise ValueError(
-                    f"Environment variable '{token_env}' not set for bearer token"
-                )
-
-            headers["Authorization"] = f"Bearer {token}"
-            logger.debug("Added bearer token authentication")
-
-        elif auth_type == "api_key":
-            key_env = api_cfg.get("auth_key_env")
-            key_header = api_cfg.get("auth_key_header", "X-API-Key")
-
-            if not key_env:
-                raise ValueError(
-                    "auth_type='api_key' requires 'auth_key_env' in config"
-                )
-
-            api_key = os.environ.get(key_env)
-            if not api_key:
-                raise ValueError(
-                    f"Environment variable '{key_env}' not set for API key"
-                )
-
-            headers[key_header] = api_key
-            logger.debug("Added API key authentication in header '%s'", key_header)
-
-        elif auth_type == "basic":
-            username_env = api_cfg.get("auth_username_env")
-            password_env = api_cfg.get("auth_password_env")
-
-            if not username_env or not password_env:
-                raise ValueError(
-                    "auth_type='basic' requires 'auth_username_env' and 'auth_password_env'"
-                )
-
-            # Basic auth is handled separately via requests auth parameter
-            logger.debug("Using basic authentication")
-
-        elif auth_type != "none":
-            raise ValueError(
-                f"Unsupported auth_type: '{auth_type}'. Use 'bearer', 'api_key', 'basic', or 'none'"
-            )
-
-        # Add any custom headers from config
-        custom_headers = api_cfg.get("headers", {})
-        headers.update(custom_headers)
-
-        return headers
 
     def _make_request(
         self,
@@ -382,15 +319,7 @@ class ApiExtractor(BaseExtractor):
         run_cfg = source_cfg["run"]
 
         session = requests.Session()
-        headers = self._build_auth_headers(api_cfg)
-
-        # Handle basic auth separately
-        auth = None
-        if api_cfg.get("auth_type") == "basic":
-            username = os.environ.get(api_cfg["auth_username_env"])
-            password = os.environ.get(api_cfg["auth_password_env"])
-            if username and password:
-                auth = (username, password)
+        headers, auth = build_api_auth(api_cfg)
 
         base_url = api_cfg["base_url"]
         endpoint = api_cfg["endpoint"]

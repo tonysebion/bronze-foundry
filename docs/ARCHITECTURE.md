@@ -243,7 +243,7 @@ class MyConfig:
 New extractors should register themselves using the `@register_extractor` decorator:
 
 ```python
-from core.adapters.extractors.base import BaseExtractor, register_extractor
+from core.io.extractors.base import BaseExtractor, register_extractor
 
 @register_extractor("my_type")
 class MyExtractor(BaseExtractor):
@@ -255,7 +255,7 @@ class MyExtractor(BaseExtractor):
 The registry enables dynamic extractor lookup:
 
 ```python
-from core.adapters.extractors.base import (
+from core.io.extractors.base import (
     get_extractor_class,
     list_extractor_types,
     EXTRACTOR_REGISTRY,

@@ -21,7 +21,7 @@ from core.pipeline.runtime.metadata import (
     build_run_metadata,
     write_run_metadata,
 )
-from core.adapters.extractors.base import BaseExtractor
+from core.io.extractors.base import BaseExtractor
 from core.adapters.extractors.factory import (
     ensure_extractors_loaded,
     get_extractor,

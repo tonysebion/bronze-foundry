@@ -19,7 +19,7 @@ from tenacity import (
     retry_if_exception_type,
 )
 
-from core.adapters.extractors.base import BaseExtractor, register_extractor
+from core.io.extractors.base import BaseExtractor, register_extractor
 from core.adapters.extractors.db_runner import fetch_records_from_query
 from core.adapters.extractors.cursor_state import (
     CursorStateManager,

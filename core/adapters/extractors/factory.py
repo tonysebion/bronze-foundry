@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Type, cast
 
 import core.adapters.extractors as extractors_pkg
-from core.adapters.extractors.base import (
+from core.io.extractors.base import (
     BaseExtractor,
     EXTRACTOR_REGISTRY,
     get_extractor_class,

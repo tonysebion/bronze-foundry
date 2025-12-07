@@ -18,59 +18,19 @@ Extractor Registration:
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Any, List, Optional, Tuple, Type
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import date
 
 from core.primitives.state.watermark import Watermark, WatermarkStore, WatermarkType
 
-
-# =============================================================================
-# Extractor Registry
-# =============================================================================
-
-# Global registry mapping source type names to extractor classes
-EXTRACTOR_REGISTRY: Dict[str, Type["BaseExtractor"]] = {}
-
-
-def register_extractor(source_type: str) -> Callable[[Type["BaseExtractor"]], Type["BaseExtractor"]]:
-    """Decorator to register an extractor class for a source type.
-
-    Args:
-        source_type: The source type name (e.g., "api", "db", "file", "custom")
-
-    Returns:
-        Decorator function that registers the class
-
-    Example:
-        @register_extractor("api")
-        class ApiExtractor(BaseExtractor):
-            ...
-    """
-    def decorator(cls: Type["BaseExtractor"]) -> Type["BaseExtractor"]:
-        EXTRACTOR_REGISTRY[source_type] = cls
-        return cls
-    return decorator
+from .registry import (
+    EXTRACTOR_REGISTRY,
+    get_extractor_class,
+    list_extractor_types,
+    register_extractor,
+)
 
 
-def get_extractor_class(source_type: str) -> Optional[Type["BaseExtractor"]]:
-    """Get the extractor class for a source type.
-
-    Args:
-        source_type: The source type name
-
-    Returns:
-        The extractor class, or None if not registered
-    """
-    return EXTRACTOR_REGISTRY.get(source_type)
-
-
-def list_extractor_types() -> List[str]:
-    """List all registered extractor types.
-
-    Returns:
-        List of registered source type names
-    """
-    return list(EXTRACTOR_REGISTRY.keys())
 
 
 @dataclass

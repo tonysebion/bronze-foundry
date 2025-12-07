@@ -13,7 +13,7 @@ from datetime import date
 import pandas as pd
 import fsspec
 
-from core.adapters.extractors.base import BaseExtractor, register_extractor
+from core.io.extractors.base import BaseExtractor, register_extractor
 from core.infrastructure.storage.uri import StorageURI
 from core.infrastructure.storage.filesystem import create_filesystem
 

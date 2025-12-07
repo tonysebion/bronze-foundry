@@ -14,7 +14,7 @@ from core.orchestration.runner.job import (
 from core.pipeline.runtime.context import RunContext
 from core.pipeline.runtime.metadata import Layer, RunStatus
 from core.primitives.foundations.patterns import LoadPattern
-from core.adapters.extractors.base import BaseExtractor, EXTRACTOR_REGISTRY
+from core.io.extractors.base import BaseExtractor, EXTRACTOR_REGISTRY
 from core.pipeline.bronze.models import StoragePlan
 
 
