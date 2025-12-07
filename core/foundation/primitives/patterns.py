@@ -14,24 +14,8 @@ Legacy pattern names (deprecated):
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, List
 
 from core.foundation.primitives.base import RichEnumMixin
-
-
-# Define aliases and descriptions as module constants
-# (can't be class attributes due to Enum metaclass behavior)
-_LOAD_PATTERN_ALIASES: Dict[str, str] = {
-    "full": "snapshot",
-    "cdc": "incremental_append",
-}
-
-_LOAD_PATTERN_DESCRIPTIONS: Dict[str, str] = {
-    "snapshot": "Complete snapshot each run (replaces all data)",
-    "incremental_append": "Append new/changed records (insert-only CDC)",
-    "incremental_merge": "Merge/upsert with existing data",
-    "current_history": "Maintains split current + history tables (SCD Type 2)",
-}
 
 
 class LoadPattern(RichEnumMixin, str, Enum):
@@ -44,39 +28,6 @@ class LoadPattern(RichEnumMixin, str, Enum):
 
     # Legacy compatibility (will be removed in future)
     CURRENT_HISTORY = "current_history"
-
-    @classmethod
-    def choices(cls) -> List[str]:
-        """Return list of valid enum values."""
-        return super().choices()
-
-    @classmethod
-    def normalize(cls, raw: str | None) -> "LoadPattern":
-        """Normalize a pattern value, handling legacy names."""
-        if raw is None:
-            return cls.SNAPSHOT
-        if isinstance(raw, cls):
-            return raw
-
-        if not isinstance(raw, str):
-            raise TypeError(f"Expected str, got {type(raw).__name__}")
-        candidate = raw.strip().lower()
-
-        # Check aliases first
-        canonical = _LOAD_PATTERN_ALIASES.get(candidate, candidate)
-
-        for member in cls:
-            if member.value == canonical:
-                return member
-
-        raise ValueError(
-            f"Invalid load pattern '{raw}'. Valid options: {', '.join(cls.choices())}"
-        )
-
-    def describe(self) -> str:
-        """Return human-readable description."""
-        value_str = str(self.value)
-        return _LOAD_PATTERN_DESCRIPTIONS.get(value_str, value_str)
 
     @property
     def chunk_prefix(self) -> str:
@@ -99,3 +50,18 @@ class LoadPattern(RichEnumMixin, str, Enum):
     def requires_merge(self) -> bool:
         """Check if this pattern requires merge/upsert logic."""
         return self == self.INCREMENTAL_MERGE
+
+
+# RichEnumMixin class variables must be set AFTER class definition due to Enum metaclass
+# These enable the base class normalize()/describe() methods to work correctly
+LoadPattern._default = "SNAPSHOT"
+LoadPattern._aliases = {
+    "full": "snapshot",
+    "cdc": "incremental_append",
+}
+LoadPattern._descriptions = {
+    "snapshot": "Complete snapshot each run (replaces all data)",
+    "incremental_append": "Append new/changed records (insert-only CDC)",
+    "incremental_merge": "Merge/upsert with existing data",
+    "current_history": "Maintains split current + history tables (SCD Type 2)",
+}

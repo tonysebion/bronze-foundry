@@ -14,6 +14,7 @@ from enum import Enum
 from typing import Any, ClassVar, Dict, List, Type, TypeVar, cast
 
 T = TypeVar("T", bound="SerializableMixin")
+E = TypeVar("E", bound="RichEnumMixin")
 
 
 class RichEnumMixin:
@@ -69,7 +70,7 @@ class RichEnumMixin:
         return [member.value for member in cls._member_map().values()]
 
     @classmethod
-    def normalize(cls, raw: str | None) -> "RichEnumMixin":
+    def normalize(cls: Type[E], raw: str | E | None) -> E:
         """Parse a string value into this enum, handling aliases and case.
 
         Args:
@@ -81,16 +82,16 @@ class RichEnumMixin:
         Raises:
             ValueError: If raw is None with no default, or doesn't match any member/alias
         """
-        raw_value = cast(object, raw)
-        if isinstance(raw_value, cls):
-            return raw_value
+        # If already an enum instance, return it directly
+        if isinstance(raw, cls):
+            return raw
 
         # Handle None - return default if defined
         if raw is None:
             default_name = getattr(cls, "_default", None)
             members = cls._member_map()
             if default_name is not None and default_name in members:
-                return members[default_name]
+                return cast(E, members[default_name])
             raise ValueError(f"{cls.__name__} value must be provided")
 
         if not isinstance(raw, str):
@@ -104,7 +105,7 @@ class RichEnumMixin:
         # Find matching member
         for member in cls._member_map().values():
             if member.value == canonical:
-                return member
+                return cast(E, member)
 
         raise ValueError(
             f"Invalid {cls.__name__} '{raw}'. Valid options: {', '.join(cls.choices())}"

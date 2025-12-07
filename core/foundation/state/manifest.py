@@ -51,7 +51,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.foundation.time_utils import utc_isoformat as _utc_isoformat
-from core.foundation.state.storage import StateStorageBackend
+from core.foundation.state.storage import StateStorageBackend, parse_s3_path
 
 logger = logging.getLogger(__name__)
 
@@ -394,9 +394,7 @@ def compute_file_checksum(path: str, protocol: str = "local") -> str:
         except ImportError:
             raise ImportError("boto3 required for S3 checksum")
 
-        parts = path.replace("s3://", "").split("/", 1)
-        bucket = parts[0]
-        key = parts[1] if len(parts) > 1 else ""
+        bucket, key = parse_s3_path(path)
 
         s3 = boto3.client("s3")
         response = s3.get_object(Bucket=bucket, Key=key)

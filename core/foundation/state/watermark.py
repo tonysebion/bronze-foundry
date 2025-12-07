@@ -30,23 +30,13 @@ from dataclasses import dataclass, field
 from datetime import date
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from core.foundation.time_utils import utc_isoformat as _utc_isoformat
 from core.foundation.primitives.base import RichEnumMixin
 from core.foundation.state.storage import StateStorageBackend
 
 logger = logging.getLogger(__name__)
-
-
-
-# Module-level constants for WatermarkType
-_WATERMARK_TYPE_DESCRIPTIONS: Dict[str, str] = {
-    "timestamp": "ISO timestamp watermark (e.g., 2025-01-15T10:30:00Z)",
-    "date": "Date watermark (e.g., 2025-01-15)",
-    "integer": "Integer sequence watermark (e.g., record ID)",
-    "string": "String watermark for lexicographic comparison",
-}
 
 
 class WatermarkType(RichEnumMixin, str, Enum):
@@ -57,32 +47,15 @@ class WatermarkType(RichEnumMixin, str, Enum):
     INTEGER = "integer"
     STRING = "string"
 
-    @classmethod
-    def choices(cls) -> List[str]:
-        """Return list of valid enum values."""
-        return [member.value for member in cls]
 
-    @classmethod
-    def normalize(cls, raw: str | None) -> "WatermarkType":
-        """Normalize a watermark type value."""
-        if isinstance(raw, cls):
-            return raw
-        if raw is None:
-            return cls.TIMESTAMP
-
-        candidate = raw.strip().lower()
-        for member in cls:
-            if member.value == candidate:
-                return member
-
-        raise ValueError(
-            f"Invalid WatermarkType '{raw}'. Valid options: {', '.join(cls.choices())}"
-        )
-
-    def describe(self) -> str:
-        """Return human-readable description."""
-        value_str = str(self.value)
-        return _WATERMARK_TYPE_DESCRIPTIONS.get(value_str, value_str)
+# RichEnumMixin class variables must be set AFTER class definition due to Enum metaclass
+WatermarkType._default = "TIMESTAMP"
+WatermarkType._descriptions = {
+    "timestamp": "ISO timestamp watermark (e.g., 2025-01-15T10:30:00Z)",
+    "date": "Date watermark (e.g., 2025-01-15)",
+    "integer": "Integer sequence watermark (e.g., record ID)",
+    "string": "String watermark for lexicographic comparison",
+}
 
 
 @dataclass

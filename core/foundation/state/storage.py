@@ -17,6 +17,29 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+def parse_s3_path(path: str) -> Tuple[str, str]:
+    """Parse an S3 path into bucket and key.
+
+    This is a standalone utility function for S3 path parsing that can be
+    used throughout the codebase without instantiating StateStorageBackend.
+
+    Args:
+        path: S3 path in format "s3://bucket/key" or "bucket/key"
+
+    Returns:
+        Tuple of (bucket, key)
+
+    Example:
+        >>> parse_s3_path("s3://my-bucket/path/to/file.json")
+        ('my-bucket', 'path/to/file.json')
+    """
+    clean = path.replace("s3://", "")
+    parts = clean.split("/", 1)
+    bucket = parts[0]
+    key = parts[1] if len(parts) > 1 else ""
+    return bucket, key
+
+
 class StateStorageBackend:
     """Base class for JSON state storage (watermarks, manifests).
 
@@ -42,11 +65,7 @@ class StateStorageBackend:
         Returns:
             Tuple of (bucket, key)
         """
-        clean = path.replace("s3://", "")
-        parts = clean.split("/", 1)
-        bucket = parts[0]
-        key = parts[1] if len(parts) > 1 else ""
-        return bucket, key
+        return parse_s3_path(path)
 
     @staticmethod
     def _get_boto3_client() -> Any:
