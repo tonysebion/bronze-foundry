@@ -1,4 +1,4 @@
-from core.config import DatasetConfig, dataset_to_runtime_config
+from core.infrastructure.config import DatasetConfig, dataset_to_runtime_config
 
 
 def _base_dataset_dict(reference_mode=None):

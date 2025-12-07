@@ -25,7 +25,7 @@ from core.domain.adapters.polybase.polybase_generator import (
     generate_history_summary_view_ddl,
     generate_event_aggregation_view_ddl,
 )
-from core.config import DatasetConfig
+from core.infrastructure.config import DatasetConfig
 
 
 class TestPolyBaseSetupGeneration:

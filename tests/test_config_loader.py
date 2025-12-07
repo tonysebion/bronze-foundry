@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from core.runtime.config import apply_env_substitution, substitute_env_vars
-from core.config import loaders as loader
+from core.infrastructure.config import loaders as loader
 
 
 def test_read_yaml_missing_file(tmp_path):
