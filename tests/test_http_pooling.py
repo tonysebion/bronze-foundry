@@ -255,7 +255,7 @@ class TestAsyncApiClientPooling:
 
         # Mock httpx AsyncClient to avoid real HTTP calls while still running _get_client
         with patch(
-            "core.io.http.session.httpx.AsyncClient", new_callable=AsyncMock
+            "core.infrastructure.io.http.session.httpx.AsyncClient", new_callable=AsyncMock
         ) as mock_async_client:
             mock_httpx_client = MagicMock()
             mock_httpx_client.get = AsyncMock(return_value=mock_response)
@@ -281,7 +281,7 @@ class TestAsyncApiClientPooling:
         ) as client:
             # Create client
             with patch(
-                "core.io.http.session.httpx.AsyncClient", new_callable=AsyncMock
+                "core.infrastructure.io.http.session.httpx.AsyncClient", new_callable=AsyncMock
             ) as mock_async_client:
                 mock_httpx_client = MagicMock()
                 mock_httpx_client.aclose = AsyncMock()
@@ -320,7 +320,7 @@ class TestAsyncApiClientPooling:
 
         # Mock httpx to verify limits are passed
         import httpx as real_httpx
-        with patch("core.io.http.session.httpx") as mock_httpx:
+        with patch("core.infrastructure.io.http.session.httpx") as mock_httpx:
             mock_limits = MagicMock()
             mock_httpx.Limits = MagicMock(return_value=mock_limits)
             mock_async_client = MagicMock()
