@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import warnings
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -173,32 +172,6 @@ def build_run_context(
         env_config=env_config,
         run_id=run_id or generate_run_id(),
     )
-
-
-def run_context_to_dict(ctx: RunContext) -> Dict[str, Any]:
-    """Convert RunContext to dictionary.
-
-    Deprecated: Use ctx.to_dict() instead.
-    """
-    warnings.warn(
-        "run_context_to_dict is deprecated, use ctx.to_dict() instead",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return ctx.to_dict()
-
-
-def run_context_from_dict(payload: Dict[str, Any]) -> RunContext:
-    """Create RunContext from dictionary.
-
-    Deprecated: Use RunContext.from_dict(payload) instead.
-    """
-    warnings.warn(
-        "run_context_from_dict is deprecated, use RunContext.from_dict(payload) instead",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return RunContext.from_dict(payload)
 
 
 def load_run_context(path: str | Path) -> RunContext:

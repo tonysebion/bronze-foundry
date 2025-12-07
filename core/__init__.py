@@ -94,7 +94,7 @@ from core.platform.resilience import (
 )
 
 # Runtime (L2)
-from core.infrastructure.runtime.context import RunContext, build_run_context, run_context_to_dict, load_run_context
+from core.infrastructure.runtime.context import RunContext, build_run_context, load_run_context
 from core.infrastructure.runtime.options import RunOptions
 from core.infrastructure.runtime import default_artifacts
 from core.infrastructure.runtime.paths import (
@@ -162,7 +162,6 @@ __all__ = [
     # Runtime (L2)
     "RunContext",
     "build_run_context",
-    "run_context_to_dict",
     "load_run_context",
     "RunOptions",
     "default_artifacts",

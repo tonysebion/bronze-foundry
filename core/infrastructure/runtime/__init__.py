@@ -7,7 +7,7 @@ This package contains execution context and run configuration:
 - metadata: RunMetadata, Layer, RunStatus for observability
 """
 
-from .context import RunContext, build_run_context, run_context_to_dict, load_run_context
+from .context import RunContext, build_run_context, load_run_context
 from .file_io import (
     ChunkSizer,
     DataFrameLoader,
@@ -48,7 +48,6 @@ __all__ = [
     # Context
     "RunContext",
     "build_run_context",
-    "run_context_to_dict",
     "load_run_context",
     # Options
     "RunOptions",
