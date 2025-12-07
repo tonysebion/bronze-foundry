@@ -1,26 +1,23 @@
 """Cross-cutting infrastructure concerns for bronze-foundry.
 
-This package contains infrastructure components:
-- resilience/: Retry policies, circuit breakers, rate limiting, late data handling
-- config/: Configuration loading and validation
-
-DEPRECATED: Use core.resilience and core.storage instead of core.infrastructure.resilience and core.infrastructure.storage.
+DEPRECATED: Use these canonical packages instead:
+    - core.config for configuration
+    - core.resilience for retry/circuit breaker
+    - core.storage for storage backends
 
 Import from canonical packages directly:
+    from core.config import load_config, RootConfig
     from core.resilience import RetryPolicy, CircuitBreaker
     from core.storage import get_storage_backend
-    from core.infrastructure.config import load_configs
 """
 
-# Expose child packages for attribute access
-from . import config
-
 # Backward compatibility - redirect to canonical packages
+from core import config
 from core import resilience
 from core import storage
 
 __all__ = [
+    "config",
     "resilience",
     "storage",
-    "config",
 ]

@@ -19,7 +19,7 @@ from tests.synthetic_data import (
     StateChangeGenerator,
     generate_time_series_data,
 )
-from core.infrastructure.resilience.late_data import LateDataHandler, LateDataMode, LateDataConfig
+from core.resilience import LateDataHandler, LateDataMode, LateDataConfig
 
 
 class TestSyntheticDataGenerators:

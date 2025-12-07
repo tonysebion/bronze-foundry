@@ -20,7 +20,7 @@ from datetime import date
 import requests
 from requests.adapters import HTTPAdapter
 
-from core.infrastructure.resilience.retry import (
+from core.resilience import (
     RetryPolicy,
     execute_with_retry,
     CircuitBreaker,

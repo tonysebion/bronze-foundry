@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple, cast, TYPE_CHECKING
 
 import pandas as pd
 
-from core.infrastructure.config.dataset import (
+from core.config import (
     DatasetConfig,
     DeleteMode,
     EntityKind,

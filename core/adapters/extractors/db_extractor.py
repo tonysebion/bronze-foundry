@@ -25,7 +25,7 @@ from core.adapters.extractors.cursor_state import (
     CursorStateManager,
     build_incremental_query,
 )
-from core.infrastructure.resilience.retry import RateLimiter
+from core.resilience import RateLimiter
 
 logger = logging.getLogger(__name__)
 

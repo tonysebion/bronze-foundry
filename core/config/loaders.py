@@ -16,7 +16,7 @@ from .migration import dataset_to_runtime_config, legacy_to_dataset
 from core.primitives.foundations.exceptions import emit_compat
 from .placeholders import apply_env_substitution
 from .validation import validate_config_dict
-from core.infrastructure.config.v2_validation import validate_v2_config_dict
+from .v2_validation import validate_v2_config_dict
 
 logger = logging.getLogger(__name__)
 def _read_yaml(path: str) -> Dict[str, Any]:

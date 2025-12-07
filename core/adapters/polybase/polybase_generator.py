@@ -6,7 +6,7 @@ Enhanced per spec Section 8 to support:
 - CTE views for common query patterns
 """
 
-from core.infrastructure.config.dataset import (
+from core.config import (
     DatasetConfig,
     PathStructure,
     PolybaseExternalDataSource,

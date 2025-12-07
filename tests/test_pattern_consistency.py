@@ -32,16 +32,16 @@ class TestRichEnumPattern:
         "core.primitives.foundations.patterns.LoadPattern",
         "core.primitives.foundations.models.SilverModel",
         "core.primitives.state.watermark.WatermarkType",
-        # Infrastructure layer
-        "core.infrastructure.config.typed_models.StorageBackend",
-        "core.infrastructure.config.typed_models.SourceType",
-        "core.infrastructure.config.typed_models.DataClassification",
-        "core.infrastructure.config.dataset.EntityKind",
-        "core.infrastructure.config.dataset.HistoryMode",
-        "core.infrastructure.config.dataset.InputMode",
-        "core.infrastructure.config.dataset.DeleteMode",
-        "core.infrastructure.config.dataset.SchemaMode",
-        "core.infrastructure.resilience.late_data.LateDataMode",
+        # Config layer
+        "core.config.models.root.StorageBackend",
+        "core.config.models.root.SourceType",
+        "core.config.models.root.DataClassification",
+        "core.config.models.enums.EntityKind",
+        "core.config.models.enums.HistoryMode",
+        "core.config.models.enums.InputMode",
+        "core.config.models.enums.DeleteMode",
+        "core.config.models.enums.SchemaMode",
+        "core.resilience.late_data.LateDataMode",
         # Pipeline layer
         "core.runtime.metadata.Layer",
         "core.runtime.metadata.RunStatus",
@@ -118,10 +118,10 @@ class TestSerializableDataclassPattern:
         "core.primitives.state.watermark.Watermark",
         "core.primitives.state.manifest.FileEntry",
         "core.primitives.state.manifest.FileManifest",
-        # Infrastructure layer
-        "core.infrastructure.resilience.retry.RetryPolicy",
-        "core.infrastructure.resilience.retry.CircuitBreaker",
-        "core.infrastructure.resilience.late_data.LateDataConfig",
+        # Resilience layer
+        "core.resilience.retry.RetryPolicy",
+        "core.resilience.circuit_breaker.CircuitBreaker",
+        "core.resilience.late_data.LateDataConfig",
         # Pipeline layer
         "core.runtime.context.RunContext",
     ]

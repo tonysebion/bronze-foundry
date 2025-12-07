@@ -17,7 +17,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
-from core.infrastructure.resilience.retry import RetryPolicy, CircuitBreaker, execute_with_retry_async
+from core.resilience import RetryPolicy, CircuitBreaker, execute_with_retry_async
 
 logger = logging.getLogger(__name__)
 

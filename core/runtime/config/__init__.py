@@ -33,8 +33,8 @@ from core.config import (
     validate_config_dict,
 )
 
-# v2_validation stays in infrastructure for now
-from core.infrastructure.config.v2_validation import validate_v2_config_dict
+# v2_validation re-exported from core.config
+from core.config.v2_validation import validate_v2_config_dict
 
 __all__ = [
     "apply_env_substitution",

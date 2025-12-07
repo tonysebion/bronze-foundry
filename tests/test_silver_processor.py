@@ -3,7 +3,7 @@ import os
 import time
 from pathlib import Path
 
-from core.infrastructure.config.dataset import DatasetConfig
+from core.config import DatasetConfig
 from core.io.storage.checksum import write_checksum_manifest
 from core.services.pipelines.silver.processor import SilverProcessor
 

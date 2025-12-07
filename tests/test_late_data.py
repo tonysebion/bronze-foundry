@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from core.infrastructure.resilience.late_data import (
+from core.resilience import (
     BackfillWindow,
     LateDataConfig,
     LateDataHandler,

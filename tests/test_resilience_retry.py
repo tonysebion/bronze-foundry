@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.infrastructure.resilience.retry import (
+from core.resilience import (
     CircuitBreaker,
     CircuitState,
     RetryPolicy,
