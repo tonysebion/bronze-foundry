@@ -396,7 +396,6 @@ class PatternTestDataGenerator:
         self.reset()
 
         # Generate all entity versions as a stream of changes
-        all_records = []
         entity_versions: Dict[int, int] = {}  # entity_id -> current version
         batch_dates = [
             self.base_date + timedelta(days=i * 7) for i in range(changes_per_entity + 1)

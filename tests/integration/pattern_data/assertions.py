@@ -31,8 +31,6 @@ Example assertion file:
 """
 
 from __future__ import annotations
-
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -227,7 +225,7 @@ class AssertionValidator:
                     passed=actual == expected,
                     expected=expected,
                     actual=actual,
-                    message=f"Row count mismatch",
+                    message="Row count mismatch",
                 )
             )
 
@@ -240,7 +238,7 @@ class AssertionValidator:
                     passed=actual >= expected,
                     expected=f">= {expected}",
                     actual=actual,
-                    message=f"Row count below minimum",
+                    message="Row count below minimum",
                 )
             )
 
@@ -253,7 +251,7 @@ class AssertionValidator:
                     passed=actual <= expected,
                     expected=f"<= {expected}",
                     actual=actual,
-                    message=f"Row count above maximum",
+                    message="Row count above maximum",
                 )
             )
 
@@ -355,7 +353,7 @@ class AssertionValidator:
                     passed=actual == expected,
                     expected=expected,
                     actual=actual,
-                    message=f"Metadata field mismatch",
+                    message="Metadata field mismatch",
                 )
             )
 
@@ -435,7 +433,7 @@ class AssertionValidator:
                             passed=is_replacement == expected,
                             expected=expected,
                             actual=is_replacement,
-                            message=f"Snapshot replacement check - overlap: {len(overlap)} IDs",
+                    message=f"Snapshot replacement check - overlap: {len(overlap)} IDs",
                         )
                     )
 

@@ -24,19 +24,16 @@ Run all pattern tests:
 
 from __future__ import annotations
 
-import json
 import shutil
 import tempfile
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, Optional
 
 import pandas as pd
 import pytest
 
 from tests.integration.pattern_data import (
     PatternTestDataGenerator,
-    PatternScenario,
     AssertionValidator,
     PatternAssertions,
     create_snapshot_assertions,
@@ -434,7 +431,7 @@ class TestCurrentHistoryPattern:
 
         assert len(df) == 500
         assert all(df["version"] == 1)
-        assert all(df["is_current"] == True)
+        assert all(df["is_current"])
 
     def test_scd2_entity_ids_unique_per_version(self, generator):
         """Test entity IDs are unique within each batch."""
