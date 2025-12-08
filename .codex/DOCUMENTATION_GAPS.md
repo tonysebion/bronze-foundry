@@ -1,13 +1,18 @@
 # Documentation Gaps & Discrepancies Report
 
-**Date:** December 6, 2025  
-**Status:** 5 gaps identified, 1 critical gap fixed
+**Date:** December 7, 2025
+**Status:** 5 documentation gaps fixed, plus resilience docs and testing infrastructure added
 
 ---
 
 ## Summary
 
-This report identifies 5 documentation gaps and discrepancies that could confuse users or cause implementation errors. The most critical issue (CLI flag inconsistency) and additional improvements have been addressed.
+This report identifies 5 documentation gaps and discrepancies that could confuse users or cause implementation errors. All 5 gaps have been addressed.
+
+**Additional Completed Work (December 7, 2025):**
+- ✅ **Story 3.1: Error Handling & Retry Documentation** - Created `docs/guides/error_handling.md` and resilience config examples
+- ✅ **Story 1.1: Synthetic Data Test Framework** - Created MinIO-backed integration test suite with 35 end-to-end tests
+- ✅ **Story 1.2: Config Validation Tests** - Expanded test coverage to 173 parametrized validation tests
 
 ---
 

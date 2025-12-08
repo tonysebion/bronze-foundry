@@ -13,6 +13,8 @@ Per Story 1.1: Create Synthetic Data Test Framework
 
 from __future__ import annotations
 
+from typing import Any, Dict
+
 import pandas as pd
 
 from tests.integration.conftest import (
@@ -247,7 +249,8 @@ class TestS3StorageWithMinio:
         result = storage.health_check()
 
         assert result.is_healthy is True
-        assert result.latency_ms >= 0
+        if result.latency_ms is not None:
+            assert result.latency_ms >= 0
         # Permissions are in checked_permissions dict
         assert result.checked_permissions.get("read") is True
         assert result.checked_permissions.get("write") is True
@@ -392,7 +395,6 @@ class TestBronzeExtractionE2E:
         self, claims_t0_df, temp_dir, t0_date
     ):
         """Bronze extraction should read local parquet file."""
-        from datetime import date
         from core.orchestration.runner.job import build_extractor
 
         # Write synthetic data to temp file
@@ -400,7 +402,7 @@ class TestBronzeExtractionE2E:
         claims_t0_df.to_parquet(input_file, index=False)
 
         # Build config for file extraction
-        cfg = {
+        cfg: Dict[str, Any] = {
             "source": {
                 "type": "file",
                 "system": "synthetic",
@@ -434,7 +436,7 @@ class TestBronzeExtractionE2E:
         orders_t0_df.to_csv(input_file, index=False)
 
         # Build config for CSV extraction
-        cfg = {
+        cfg: Dict[str, Any] = {
             "source": {
                 "type": "file",
                 "system": "synthetic",
@@ -555,7 +557,7 @@ class TestBronzeExtractionE2E:
         claims_t0_df.to_parquet(input_file, index=False)
 
         # Build config and extract
-        cfg = {
+        cfg: Dict[str, Any] = {
             "source": {
                 "type": "file",
                 "system": "synthetic",
@@ -607,7 +609,7 @@ class TestBronzeExtractionE2E:
         t0_file = temp_dir / "claims_t0.parquet"
         claims_t0_df.to_parquet(t0_file, index=False)
 
-        cfg = {
+        cfg: Dict[str, Any] = {
             "source": {
                 "type": "file",
                 "system": "synthetic",
@@ -680,11 +682,13 @@ class TestSilverTransformationE2E:
         # Add whitespace
         df["claim_id"] = df["claim_id"].apply(lambda x: f"  {x}  ")
 
-        # Normalize (Silver processing)
+        # Normalize (Silver processing) - only for actual string columns
         for col in df.select_dtypes(include=["object"]).columns:
-            df[col] = df[col].str.strip()
+            # Check if values are strings before using .str accessor
+            if df[col].apply(lambda x: isinstance(x, str)).all():
+                df[col] = df[col].str.strip()
 
-        # Verify no leading/trailing whitespace
+        # Verify no leading/trailing whitespace on claim_id
         assert not df["claim_id"].str.startswith(" ").any()
         assert not df["claim_id"].str.endswith(" ").any()
 

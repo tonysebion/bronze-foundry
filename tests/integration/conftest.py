@@ -345,6 +345,6 @@ def download_parquet_from_minio(client, bucket: str, key: str) -> pd.DataFrame:
 
 
 @pytest.fixture
-def temp_dir(tmp_path) -> Path:
+def temp_dir(tmp_path: Path) -> Path:
     """Temporary directory for integration test files."""
     return tmp_path
