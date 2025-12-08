@@ -15,8 +15,10 @@ system, including:
 """
 
 import copy
+
 import pytest
 
+from core.foundation.primitives.exceptions import BronzeFoundryCompatibilityWarning
 from core.infrastructure.config import validate_config_dict
 
 
@@ -239,7 +241,11 @@ class TestStorageBackendValidation:
         cfg["platform"]["bronze"].pop("local_path")
         cfg["platform"]["bronze"]["output_dir"] = "./legacy_output"
         # Should not raise, but should emit deprecation warning
-        result = validate_config_dict(cfg)
+        with pytest.warns(
+            BronzeFoundryCompatibilityWarning,
+            match=r"\[CFG001\] Using platform\.bronze\.output_dir as local_path; add explicit local_path to silence warning",
+        ):
+            result = validate_config_dict(cfg)
         assert result["platform"]["bronze"]["local_path"] == "./legacy_output"
 
 
@@ -308,7 +314,11 @@ class TestSourceTypeValidation:
         """API source with legacy 'url' field should work with deprecation warning."""
         cfg = copy.deepcopy(base_config)
         cfg["source"]["api"] = {"url": "https://example.com", "endpoint": "/data"}
-        result = validate_config_dict(cfg)
+        with pytest.warns(
+            BronzeFoundryCompatibilityWarning,
+            match=r"\[CFG002\] source\.api\.url key is deprecated; use base_url",
+        ):
+            result = validate_config_dict(cfg)
         assert result["source"]["api"]["base_url"] == "https://example.com"
 
     @pytest.mark.parametrize("db_type", ["db", "db_table", "db_query"])
