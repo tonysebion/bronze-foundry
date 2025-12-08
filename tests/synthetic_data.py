@@ -7,6 +7,7 @@ Per spec Section 10: Generates domain-aware test data for:
 - Nested/JSON data structures (Story 1.5)
 - Wide schemas with sparsity (Story 1.5)
 - Late-arriving timezone-shifted data (Story 1.5)
+- Duplicate injection for deduplication testing (Story 1.4)
 
 Supports T0/T1/T2 time series scenarios:
 - T0: Initial full load
@@ -1069,6 +1070,378 @@ class SalesFactGenerator(BaseSyntheticGenerator):
         return pd.DataFrame(records)
 
 
+# =============================================================================
+# Duplicate Injection Utilities (Story 1.4 - Deduplication Testing)
+# =============================================================================
+
+
+@dataclass
+class DuplicateConfig:
+    """Configuration for duplicate injection behavior."""
+
+    exact_duplicate_rate: float = 0.05  # 5% exact duplicates
+    near_duplicate_rate: float = 0.03  # 3% near duplicates (same key, minor differences)
+    out_of_order_rate: float = 0.02  # 2% out-of-order duplicate arrivals
+    seed: int = 42
+
+
+class DuplicateInjector:
+    """Inject duplicates into DataFrames for deduplication testing.
+
+    Useful for testing:
+    - INCREMENTAL_MERGE deduplication logic
+    - Silver layer duplicate detection and removal
+    - Idempotency of pipeline runs
+    - Out-of-order event handling
+
+    Example usage:
+        >>> injector = DuplicateInjector(seed=42)
+        >>> df_with_dupes = injector.inject_exact_duplicates(df, rate=0.1)
+        >>> df_with_near_dupes = injector.inject_near_duplicates(
+        ...     df, key_columns=["order_id"], mutable_columns=["updated_at", "status"]
+        ... )
+    """
+
+    def __init__(self, seed: int = 42, config: Optional[DuplicateConfig] = None):
+        self.seed = seed
+        self.config = config or DuplicateConfig(seed=seed)
+        self.rng = random.Random(seed)
+
+    def reset(self) -> None:
+        """Reset random state for reproducibility."""
+        self.rng = random.Random(self.seed)
+
+    def inject_exact_duplicates(
+        self,
+        df: pd.DataFrame,
+        rate: Optional[float] = None,
+        count: Optional[int] = None,
+    ) -> pd.DataFrame:
+        """Inject exact duplicates (identical rows) into a DataFrame.
+
+        Args:
+            df: Source DataFrame
+            rate: Fraction of rows to duplicate (default from config)
+            count: Exact number of duplicates to add (overrides rate)
+
+        Returns:
+            DataFrame with duplicates appended
+        """
+        self.reset()
+        rate = rate if rate is not None else self.config.exact_duplicate_rate
+
+        if count is None:
+            count = max(1, int(len(df) * rate))
+
+        if count == 0 or len(df) == 0:
+            return df.copy()
+
+        # Select random rows to duplicate
+        indices = self.rng.choices(range(len(df)), k=count)
+        duplicates = df.iloc[indices].copy()
+
+        # Append duplicates
+        result = pd.concat([df, duplicates], ignore_index=True)
+        return result
+
+    def inject_near_duplicates(
+        self,
+        df: pd.DataFrame,
+        key_columns: List[str],
+        mutable_columns: Optional[List[str]] = None,
+        rate: Optional[float] = None,
+        count: Optional[int] = None,
+        timestamp_column: Optional[str] = None,
+        timestamp_offset_seconds: int = 1,
+    ) -> pd.DataFrame:
+        """Inject near duplicates (same key, minor field differences).
+
+        Near duplicates have the same primary key but different values in
+        mutable columns (e.g., updated_at, status). This simulates:
+        - Multiple updates to the same record arriving in the same batch
+        - Late-arriving updates that should be deduplicated
+
+        Args:
+            df: Source DataFrame
+            key_columns: Columns that identify a unique record (primary key)
+            mutable_columns: Columns to modify in duplicates (auto-detected if None)
+            rate: Fraction of rows to create near duplicates for
+            count: Exact number of near duplicates (overrides rate)
+            timestamp_column: Column to increment for newer versions
+            timestamp_offset_seconds: Seconds to add to timestamp for each duplicate
+
+        Returns:
+            DataFrame with near duplicates appended
+        """
+        self.reset()
+        rate = rate if rate is not None else self.config.near_duplicate_rate
+
+        if count is None:
+            count = max(1, int(len(df) * rate))
+
+        if count == 0 or len(df) == 0:
+            return df.copy()
+
+        # Auto-detect mutable columns if not provided
+        if mutable_columns is None:
+            mutable_columns = self._detect_mutable_columns(df, key_columns)
+
+        # Select random rows to create near duplicates from
+        indices = self.rng.choices(range(len(df)), k=count)
+        near_dupes = []
+
+        for idx in indices:
+            row = df.iloc[idx].to_dict()
+
+            # Modify mutable columns
+            for col in mutable_columns:
+                if col not in row:
+                    continue
+                row[col] = self._mutate_value(row[col], col)
+
+            # Increment timestamp if specified
+            if timestamp_column and timestamp_column in row:
+                ts_value = row[timestamp_column]
+                if isinstance(ts_value, datetime):
+                    row[timestamp_column] = ts_value + timedelta(seconds=timestamp_offset_seconds)
+                elif isinstance(ts_value, date):
+                    row[timestamp_column] = ts_value + timedelta(days=1)
+
+            near_dupes.append(row)
+
+        near_dupes_df = pd.DataFrame(near_dupes)
+        result = pd.concat([df, near_dupes_df], ignore_index=True)
+        return result
+
+    def inject_out_of_order_duplicates(
+        self,
+        df: pd.DataFrame,
+        key_columns: List[str],
+        timestamp_column: str,
+        rate: Optional[float] = None,
+        count: Optional[int] = None,
+    ) -> pd.DataFrame:
+        """Inject duplicates that arrive out of order (older version after newer).
+
+        This simulates scenarios where:
+        - An older update arrives after a newer one
+        - Reprocessing historical data creates duplicate arrivals
+        - Network delays cause out-of-order message delivery
+
+        Args:
+            df: Source DataFrame (assumed to be in chronological order)
+            key_columns: Columns that identify a unique record
+            timestamp_column: Column containing the event/update timestamp
+            rate: Fraction of rows to create out-of-order duplicates for
+            count: Exact number of out-of-order duplicates
+
+        Returns:
+            DataFrame with out-of-order duplicates inserted at random positions
+        """
+        self.reset()
+        rate = rate if rate is not None else self.config.out_of_order_rate
+
+        if count is None:
+            count = max(1, int(len(df) * rate))
+
+        if count == 0 or len(df) == 0:
+            return df.copy()
+
+        result = df.copy()
+
+        # Select rows from the first half to duplicate (older records)
+        first_half_size = len(df) // 2
+        if first_half_size == 0:
+            return result
+
+        indices = self.rng.choices(range(first_half_size), k=count)
+
+        for idx in indices:
+            row = df.iloc[idx].to_dict()
+
+            # Make the timestamp slightly older to simulate late arrival of old data
+            if timestamp_column in row:
+                ts_value = row[timestamp_column]
+                if isinstance(ts_value, datetime):
+                    row[timestamp_column] = ts_value - timedelta(seconds=self.rng.randint(1, 3600))
+
+            # Insert at a random position in the second half (simulating late arrival)
+            insert_pos = self.rng.randint(first_half_size, len(result))
+            row_df = pd.DataFrame([row])
+            result = pd.concat(
+                [result.iloc[:insert_pos], row_df, result.iloc[insert_pos:]],
+                ignore_index=True,
+            )
+
+        return result
+
+    def inject_all_duplicate_types(
+        self,
+        df: pd.DataFrame,
+        key_columns: List[str],
+        timestamp_column: Optional[str] = None,
+        mutable_columns: Optional[List[str]] = None,
+    ) -> pd.DataFrame:
+        """Inject all types of duplicates using configured rates.
+
+        Convenience method that applies exact, near, and out-of-order duplicates
+        in sequence using the rates from DuplicateConfig.
+
+        Args:
+            df: Source DataFrame
+            key_columns: Columns that identify a unique record
+            timestamp_column: Column for timestamp-based operations
+            mutable_columns: Columns to modify for near duplicates
+
+        Returns:
+            DataFrame with all duplicate types injected
+        """
+        result = df.copy()
+
+        # Apply exact duplicates
+        result = self.inject_exact_duplicates(result)
+
+        # Apply near duplicates
+        result = self.inject_near_duplicates(
+            result,
+            key_columns=key_columns,
+            mutable_columns=mutable_columns,
+            timestamp_column=timestamp_column,
+        )
+
+        # Apply out-of-order duplicates if timestamp column provided
+        if timestamp_column:
+            result = self.inject_out_of_order_duplicates(
+                result,
+                key_columns=key_columns,
+                timestamp_column=timestamp_column,
+            )
+
+        return result
+
+    def _detect_mutable_columns(
+        self,
+        df: pd.DataFrame,
+        key_columns: List[str],
+    ) -> List[str]:
+        """Auto-detect columns that are likely mutable (can be modified in updates)."""
+        mutable_patterns = ["updated", "modified", "status", "state", "amount", "value", "count"]
+        mutable_cols = []
+
+        for col in df.columns:
+            if col in key_columns:
+                continue
+            col_lower = col.lower()
+            if any(pattern in col_lower for pattern in mutable_patterns):
+                mutable_cols.append(col)
+
+        # If no pattern matches, use any non-key numeric or string columns
+        if not mutable_cols:
+            for col in df.columns:
+                if col in key_columns:
+                    continue
+                if df[col].dtype in ["int64", "float64", "object"]:
+                    mutable_cols.append(col)
+                    if len(mutable_cols) >= 3:
+                        break
+
+        return mutable_cols
+
+    def _mutate_value(self, value: Any, column_name: str) -> Any:
+        """Mutate a value slightly for near-duplicate generation."""
+        if value is None:
+            return value
+
+        col_lower = column_name.lower()
+
+        # Status-like columns: pick a different status
+        if "status" in col_lower or "state" in col_lower:
+            if isinstance(value, str):
+                statuses = ["updated", "modified", "changed", "processed"]
+                return self.rng.choice(statuses)
+
+        # Amount/value columns: slight adjustment
+        if "amount" in col_lower or "value" in col_lower or "price" in col_lower:
+            if isinstance(value, (int, float)):
+                adjustment = self.rng.uniform(-0.01, 0.01)  # +/- 1%
+                return round(value * (1 + adjustment), 2)
+
+        # Count columns: increment by 1
+        if "count" in col_lower or "quantity" in col_lower:
+            if isinstance(value, int):
+                return value + self.rng.randint(0, 2)
+
+        # String columns: append marker
+        if isinstance(value, str):
+            return f"{value}_v{self.rng.randint(2, 9)}"
+
+        # Numeric columns: slight adjustment
+        if isinstance(value, float):
+            return round(value * (1 + self.rng.uniform(-0.05, 0.05)), 4)
+        if isinstance(value, int):
+            return value + self.rng.randint(-1, 1)
+
+        return value
+
+    def get_duplicate_stats(
+        self,
+        df: pd.DataFrame,
+        key_columns: List[str],
+    ) -> Dict[str, Any]:
+        """Analyze a DataFrame for duplicate statistics.
+
+        Returns:
+            Dictionary with duplicate counts and percentages
+        """
+        total_rows = len(df)
+        unique_keys = df[key_columns].drop_duplicates()
+        unique_count = len(unique_keys)
+        duplicate_count = total_rows - unique_count
+
+        # Find rows with duplicates
+        key_counts = df.groupby(key_columns).size()
+        keys_with_dupes = key_counts[key_counts > 1]
+
+        return {
+            "total_rows": total_rows,
+            "unique_keys": unique_count,
+            "duplicate_rows": duplicate_count,
+            "duplicate_rate": duplicate_count / total_rows if total_rows > 0 else 0,
+            "keys_with_duplicates": len(keys_with_dupes),
+            "max_duplicates_per_key": int(key_counts.max()) if len(key_counts) > 0 else 0,
+        }
+
+
+def create_duplicate_injector(
+    seed: int = 42,
+    exact_rate: float = 0.05,
+    near_rate: float = 0.03,
+    out_of_order_rate: float = 0.02,
+) -> DuplicateInjector:
+    """Create a DuplicateInjector with specified configuration.
+
+    Args:
+        seed: Random seed for reproducibility
+        exact_rate: Rate of exact duplicates (default 5%)
+        near_rate: Rate of near duplicates (default 3%)
+        out_of_order_rate: Rate of out-of-order duplicates (default 2%)
+
+    Returns:
+        Configured DuplicateInjector instance
+
+    Example:
+        >>> injector = create_duplicate_injector(seed=42, exact_rate=0.1)
+        >>> df_with_dupes = injector.inject_exact_duplicates(df)
+    """
+    config = DuplicateConfig(
+        exact_duplicate_rate=exact_rate,
+        near_duplicate_rate=near_rate,
+        out_of_order_rate=out_of_order_rate,
+        seed=seed,
+    )
+    return DuplicateInjector(seed=seed, config=config)
+
+
 # Factory function for creating generators
 def create_generator(domain: str, seed: int = 42, row_count: int = 100) -> BaseSyntheticGenerator:
     """Create a generator for the specified domain.
@@ -1085,6 +1458,8 @@ def create_generator(domain: str, seed: int = 42, row_count: int = 100) -> BaseS
     - customer_dim: Customer dimension table (Story 1.6)
     - product_dim: Product dimension table (Story 1.6)
     - sales_fact: Sales fact table (Story 1.6)
+
+    For duplicate injection, use create_duplicate_injector() instead.
     """
     generators: Dict[str, Type[BaseSyntheticGenerator]] = {
         "claims": ClaimsGenerator,
