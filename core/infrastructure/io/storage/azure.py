@@ -57,7 +57,7 @@ class AzureStorage(BaseCloudStorage):
             )
 
         # Initialize circuit breakers from base class
-        super().__init__()
+        super().__init__(retry_config=bronze_cfg.get("retry"))
 
     def _build_client(self, azure_cfg: Dict[str, Any]) -> BlobServiceClient:
         """Build the BlobServiceClient using the first available credential."""

@@ -16,7 +16,7 @@ import logging
 from abc import abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, Mapping, Optional, TypeVar, Union, TYPE_CHECKING
 
 from core.platform.resilience import ResilienceMixin
 from core.platform.resilience.constants import (
@@ -154,7 +154,7 @@ class BaseCloudStorage(StorageBackend, ResilienceMixin):
     - get_backend_type() -> str
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, retry_config: Optional[Mapping[str, Any]] = None) -> None:
         """Initialize circuit breakers for each operation."""
         self._init_resilience_multi(
             operations=["upload", "download", "list", "delete"],
@@ -163,6 +163,7 @@ class BaseCloudStorage(StorageBackend, ResilienceMixin):
             cooldown_seconds=DEFAULT_COOLDOWN_SECONDS,
             half_open_max_calls=DEFAULT_HALF_OPEN_MAX_CALLS,
         )
+        self._retry_config = retry_config
         # Maintain backward-compatible attribute names
         self._breaker_upload = self._breakers["upload"]
         self._breaker_download = self._breakers["download"]
@@ -259,6 +260,7 @@ class BaseCloudStorage(StorageBackend, ResilienceMixin):
             f"{self.get_backend_type()}_upload",
             breaker_key="upload",
             retry_if=self._should_retry,
+            retry_config=self._retry_config,
         )
 
     def download_file(self, remote_path: str, local_path: str) -> bool:
@@ -277,6 +279,7 @@ class BaseCloudStorage(StorageBackend, ResilienceMixin):
             f"{self.get_backend_type()}_download",
             breaker_key="download",
             retry_if=self._should_retry,
+            retry_config=self._retry_config,
         )
 
     def list_files(self, prefix: str) -> List[str]:
@@ -294,6 +297,7 @@ class BaseCloudStorage(StorageBackend, ResilienceMixin):
             f"{self.get_backend_type()}_list",
             breaker_key="list",
             retry_if=self._should_retry,
+            retry_config=self._retry_config,
         )
 
     def delete_file(self, remote_path: str) -> bool:
@@ -311,6 +315,7 @@ class BaseCloudStorage(StorageBackend, ResilienceMixin):
             f"{self.get_backend_type()}_delete",
             breaker_key="delete",
             retry_if=self._should_retry,
+            retry_config=self._retry_config,
         )
 
 

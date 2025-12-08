@@ -74,7 +74,7 @@ class S3Storage(BaseCloudStorage):
             raise
 
         # Initialize circuit breakers from base class
-        super().__init__()
+        super().__init__(retry_config=bronze_cfg.get("retry"))
 
     def get_backend_type(self) -> str:
         """Get backend type identifier."""
