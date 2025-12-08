@@ -4,6 +4,9 @@ Per spec Section 10: Generates domain-aware test data for:
 - Healthcare claims domain
 - Retail/E-commerce domain
 - Financial transactions domain
+- Nested/JSON data structures (Story 1.5)
+- Wide schemas with sparsity (Story 1.5)
+- Late-arriving timezone-shifted data (Story 1.5)
 
 Supports T0/T1/T2 time series scenarios:
 - T0: Initial full load
@@ -14,10 +17,12 @@ Supports T0/T1/T2 time series scenarios:
 from __future__ import annotations
 
 import hashlib
+import json
 import random
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
-from typing import Any, Dict, List
+from datetime import date, datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Union
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -367,14 +372,694 @@ class StateChangeGenerator(BaseSyntheticGenerator):
         return pd.DataFrame(records)
 
 
+# =============================================================================
+# Edge Case Generators (Story 1.5)
+# =============================================================================
+
+
+class NestedJsonGenerator(BaseSyntheticGenerator):
+    """Generate nested/JSON data with arrays, objects, and mixed types.
+
+    Useful for testing:
+    - JSON column handling in Bronze extraction
+    - Schema inference with nested structures
+    - Array/object flattening in Silver transformations
+    """
+
+    CATEGORIES = ["electronics", "clothing", "home", "books", "sports"]
+    TAGS = ["sale", "new", "featured", "clearance", "premium", "limited", "bestseller"]
+    REGIONS = ["north", "south", "east", "west", "central"]
+    SHIPPING_METHODS = ["standard", "express", "overnight", "pickup"]
+
+    def generate_t0(self, run_date: date) -> pd.DataFrame:
+        """Generate T0 dataset with nested JSON structures."""
+        self.reset()
+        records = []
+        base_time = datetime.combine(run_date - timedelta(days=30), datetime.min.time())
+
+        for i in range(1, self.row_count + 1):
+            created_at = self._random_datetime(base_time, datetime.combine(run_date, datetime.min.time()))
+
+            # Nested object: address
+            address = {
+                "street": f"{self.rng.randint(100, 9999)} {self._random_choice(['Main', 'Oak', 'Pine', 'Maple'])} St",
+                "city": self._random_choice(["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"]),
+                "state": self._random_choice(["NY", "CA", "IL", "TX", "AZ"]),
+                "zip": f"{self.rng.randint(10000, 99999)}",
+                "country": "USA",
+            }
+
+            # Nested array: tags (variable length)
+            num_tags = self.rng.randint(0, 4)
+            tags = self.rng.sample(self.TAGS, num_tags) if num_tags > 0 else []
+
+            # Nested array of objects: line_items
+            num_items = self.rng.randint(1, 5)
+            line_items = []
+            for j in range(num_items):
+                line_items.append({
+                    "product_id": self._generate_id("PROD", self.rng.randint(1, 500), 5),
+                    "name": f"Product {self.rng.randint(1, 100)}",
+                    "quantity": self.rng.randint(1, 10),
+                    "price": self._random_amount(5, 500),
+                    "discount_pct": self._random_amount(0, 30) if self.rng.random() > 0.7 else 0,
+                })
+
+            # Nested object: metadata with mixed types
+            metadata = {
+                "source": self._random_choice(["web", "mobile", "api", "pos"]),
+                "session_id": hashlib.md5(f"{i}{created_at}".encode()).hexdigest()[:16],
+                "is_guest": self.rng.random() > 0.7,
+                "referral_code": f"REF{self.rng.randint(1000, 9999)}" if self.rng.random() > 0.5 else None,
+                "utm_params": {
+                    "source": self._random_choice(["google", "facebook", "email", "direct"]),
+                    "medium": self._random_choice(["cpc", "organic", "social", "referral"]),
+                    "campaign": f"campaign_{self.rng.randint(1, 20)}" if self.rng.random() > 0.3 else None,
+                },
+            }
+
+            # Shipping preferences (nested object with optional fields)
+            shipping = {
+                "method": self._random_choice(self.SHIPPING_METHODS),
+                "instructions": f"Leave at door" if self.rng.random() > 0.7 else None,
+                "signature_required": self.rng.random() > 0.8,
+            }
+
+            records.append({
+                "order_id": self._generate_id("ORD", i),
+                "customer_id": self._generate_id("CUST", (i % 100) + 1, 5),
+                "category": self._random_choice(self.CATEGORIES),
+                "region": self._random_choice(self.REGIONS),
+                "total_amount": sum(item["price"] * item["quantity"] for item in line_items),
+                "address": json.dumps(address),  # JSON string column
+                "tags": tags,  # Native array
+                "line_items": line_items,  # Native array of objects
+                "metadata": metadata,  # Native nested object
+                "shipping": shipping,  # Native nested object
+                "created_at": created_at,
+                "updated_at": created_at,
+            })
+
+        return pd.DataFrame(records)
+
+    def generate_t1(self, run_date: date, t0_df: pd.DataFrame) -> pd.DataFrame:
+        """Generate T1 with updates to nested structures."""
+        self.reset()
+        for _ in range(self.row_count):
+            self.rng.random()
+
+        records = []
+        update_count = min(20, len(t0_df) // 5)
+
+        # Updates: modify nested fields
+        for idx in self.rng.sample(range(len(t0_df)), update_count):
+            row = t0_df.iloc[idx].to_dict()
+
+            # Update tags
+            if isinstance(row["tags"], list):
+                if self.rng.random() > 0.5 and len(row["tags"]) < 4:
+                    row["tags"] = row["tags"] + [self._random_choice(self.TAGS)]
+
+            # Update metadata
+            if isinstance(row["metadata"], dict):
+                row["metadata"] = dict(row["metadata"])  # Copy
+                row["metadata"]["last_modified"] = run_date.isoformat()
+
+            row["updated_at"] = datetime.combine(run_date, datetime.min.time())
+            records.append(row)
+
+        return pd.DataFrame(records)
+
+
+class WideSchemaGenerator(BaseSyntheticGenerator):
+    """Generate wide tables with 50+ columns, sparsity, and null patterns.
+
+    Useful for testing:
+    - Schema handling with many columns
+    - Null value propagation
+    - Sparse data patterns
+    - Type diversity in single tables
+    """
+
+    def __init__(
+        self,
+        seed: int = 42,
+        row_count: int = 100,
+        column_count: int = 60,
+        null_rate: float = 0.2,
+        sparse_rate: float = 0.3,
+    ):
+        super().__init__(seed=seed, row_count=row_count)
+        self.column_count = column_count
+        self.null_rate = null_rate  # Probability of null for nullable columns
+        self.sparse_rate = sparse_rate  # Probability of sparse columns being null
+
+    def _maybe_null(self, value: Any, rate: float = None) -> Optional[Any]:
+        """Return value or None based on null rate."""
+        rate = rate if rate is not None else self.null_rate
+        return None if self.rng.random() < rate else value
+
+    def generate_t0(self, run_date: date) -> pd.DataFrame:
+        """Generate T0 dataset with wide schema and controlled sparsity."""
+        self.reset()
+        records = []
+        base_time = datetime.combine(run_date - timedelta(days=30), datetime.min.time())
+
+        for i in range(1, self.row_count + 1):
+            created_at = self._random_datetime(base_time, datetime.combine(run_date, datetime.min.time()))
+
+            record: Dict[str, Any] = {
+                # Primary key columns (never null)
+                "record_id": self._generate_id("REC", i, 10),
+                "entity_key": self._generate_id("ENT", (i % 100) + 1, 6),
+
+                # Core columns (low null rate)
+                "name": f"Entity {i}",
+                "category": self._random_choice(["A", "B", "C", "D", "E"]),
+                "status": self._random_choice(["active", "inactive", "pending"]),
+                "created_at": created_at,
+                "updated_at": created_at,
+            }
+
+            # Integer columns (10 columns)
+            for j in range(1, 11):
+                col_name = f"int_col_{j:02d}"
+                value = self.rng.randint(0, 10000)
+                record[col_name] = self._maybe_null(value)
+
+            # Float columns (10 columns)
+            for j in range(1, 11):
+                col_name = f"float_col_{j:02d}"
+                value = self._random_amount(0, 100000, decimals=4)
+                record[col_name] = self._maybe_null(value)
+
+            # String columns (10 columns)
+            for j in range(1, 11):
+                col_name = f"str_col_{j:02d}"
+                value = f"value_{self.rng.randint(1, 1000)}"
+                record[col_name] = self._maybe_null(value)
+
+            # Boolean columns (5 columns)
+            for j in range(1, 6):
+                col_name = f"bool_col_{j:02d}"
+                value = self.rng.random() > 0.5
+                record[col_name] = self._maybe_null(value)
+
+            # Date columns (5 columns)
+            for j in range(1, 6):
+                col_name = f"date_col_{j:02d}"
+                value = self._random_date(run_date - timedelta(days=365), run_date)
+                record[col_name] = self._maybe_null(value)
+
+            # Timestamp columns (5 columns)
+            for j in range(1, 6):
+                col_name = f"ts_col_{j:02d}"
+                value = self._random_datetime(
+                    datetime.combine(run_date - timedelta(days=30), datetime.min.time()),
+                    datetime.combine(run_date, datetime.min.time()),
+                )
+                record[col_name] = self._maybe_null(value)
+
+            # Sparse columns (high null rate) - 10 columns
+            for j in range(1, 11):
+                col_name = f"sparse_col_{j:02d}"
+                value = f"sparse_value_{self.rng.randint(1, 100)}"
+                record[col_name] = self._maybe_null(value, rate=self.sparse_rate)
+
+            # Extra columns to reach column_count (if needed)
+            current_cols = len(record)
+            for j in range(current_cols, self.column_count):
+                col_name = f"extra_col_{j:02d}"
+                record[col_name] = self._maybe_null(f"extra_{self.rng.randint(1, 100)}")
+
+            records.append(record)
+
+        return pd.DataFrame(records)
+
+    def generate_t1(self, run_date: date, t0_df: pd.DataFrame) -> pd.DataFrame:
+        """Generate T1 with updates to various columns."""
+        self.reset()
+        for _ in range(self.row_count):
+            self.rng.random()
+
+        records = []
+        update_count = min(20, len(t0_df) // 5)
+
+        for idx in self.rng.sample(range(len(t0_df)), update_count):
+            row = t0_df.iloc[idx].to_dict()
+
+            # Update some columns randomly
+            row["status"] = self._random_choice(["active", "inactive", "pending", "archived"])
+            row["updated_at"] = datetime.combine(run_date, datetime.min.time())
+
+            # Update a few numeric columns
+            for j in self.rng.sample(range(1, 11), 3):
+                row[f"int_col_{j:02d}"] = self.rng.randint(0, 10000)
+                row[f"float_col_{j:02d}"] = self._random_amount(0, 100000)
+
+            records.append(row)
+
+        return pd.DataFrame(records)
+
+
+class LateDataGenerator(BaseSyntheticGenerator):
+    """Generate late-arriving and timezone-shifted time series data.
+
+    Useful for testing:
+    - Late data handling modes (allow, reject, quarantine)
+    - Timezone conversion and normalization
+    - Out-of-order event processing
+    - Backfill scenarios
+    """
+
+    TIMEZONES = [
+        "UTC",
+        "America/New_York",
+        "America/Los_Angeles",
+        "Europe/London",
+        "Europe/Paris",
+        "Asia/Tokyo",
+        "Asia/Shanghai",
+        "Australia/Sydney",
+    ]
+
+    EVENT_TYPES = ["click", "view", "purchase", "signup", "logout"]
+
+    def __init__(
+        self,
+        seed: int = 42,
+        row_count: int = 100,
+        late_rate: float = 0.15,
+        timezone_diversity: bool = True,
+    ):
+        super().__init__(seed=seed, row_count=row_count)
+        self.late_rate = late_rate
+        self.timezone_diversity = timezone_diversity
+
+    def _get_timezone(self) -> ZoneInfo:
+        """Get a random timezone if diversity enabled, else UTC."""
+        if self.timezone_diversity:
+            tz_name = self._random_choice(self.TIMEZONES)
+            return ZoneInfo(tz_name)
+        return ZoneInfo("UTC")
+
+    def generate_t0(self, run_date: date) -> pd.DataFrame:
+        """Generate T0 dataset with mixed timezones."""
+        self.reset()
+        records = []
+        base_time = datetime.combine(run_date - timedelta(days=7), datetime.min.time(), tzinfo=ZoneInfo("UTC"))
+        end_time = datetime.combine(run_date, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
+
+        for i in range(1, self.row_count + 1):
+            # Generate event in a random timezone
+            event_tz = self._get_timezone()
+            event_time_utc = self._random_datetime(base_time.replace(tzinfo=None), end_time.replace(tzinfo=None))
+            event_time_utc = event_time_utc.replace(tzinfo=ZoneInfo("UTC"))
+            event_time_local = event_time_utc.astimezone(event_tz)
+
+            records.append({
+                "event_id": self._generate_id("EVT", i, 10),
+                "user_id": self._generate_id("USR", (i % 100) + 1, 6),
+                "event_type": self._random_choice(self.EVENT_TYPES),
+                "event_ts_utc": event_time_utc,
+                "event_ts_local": event_time_local,
+                "timezone": str(event_tz),
+                "value": self._random_amount(0, 1000),
+                "session_id": hashlib.md5(f"{i}{event_time_utc}".encode()).hexdigest()[:12],
+                "is_late": False,
+                "arrival_delay_hours": 0,
+                "created_at": event_time_utc,
+            })
+
+        return pd.DataFrame(records)
+
+    def generate_t1(self, run_date: date, t0_df: pd.DataFrame) -> pd.DataFrame:
+        """Generate T1 with new events and some late arrivals."""
+        self.reset()
+        for _ in range(self.row_count):
+            self.rng.random()
+
+        records = []
+        new_count = self.row_count // 4
+        max_id = int(t0_df["event_id"].str.extract(r"(\d+)")[0].max())
+
+        event_time_utc = datetime.combine(run_date, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
+
+        for i in range(1, new_count + 1):
+            event_tz = self._get_timezone()
+            current_time = event_time_utc + timedelta(minutes=i)
+            event_time_local = current_time.astimezone(event_tz)
+
+            records.append({
+                "event_id": self._generate_id("EVT", max_id + i, 10),
+                "user_id": self._generate_id("USR", self.rng.randint(1, 100), 6),
+                "event_type": self._random_choice(self.EVENT_TYPES),
+                "event_ts_utc": current_time,
+                "event_ts_local": event_time_local,
+                "timezone": str(event_tz),
+                "value": self._random_amount(0, 1000),
+                "session_id": hashlib.md5(f"{max_id + i}{current_time}".encode()).hexdigest()[:12],
+                "is_late": False,
+                "arrival_delay_hours": 0,
+                "created_at": current_time,
+            })
+
+        return pd.DataFrame(records)
+
+    def generate_late_data(
+        self,
+        run_date: date,
+        t0_df: pd.DataFrame,
+        min_delay_hours: int = 24,
+        max_delay_hours: int = 168,  # Up to 7 days late
+    ) -> pd.DataFrame:
+        """Generate late-arriving events (backdated events that arrive after their event time).
+
+        These events have:
+        - event_ts_utc: The actual event time (in the past)
+        - created_at: The arrival/processing time (run_date)
+        - is_late: True
+        - arrival_delay_hours: How late the event arrived
+        """
+        self.reset()
+        records = []
+        late_count = max(1, int(self.row_count * self.late_rate))
+        max_id = int(t0_df["event_id"].str.extract(r"(\d+)")[0].max()) + 1000
+
+        arrival_time = datetime.combine(run_date, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
+
+        for i in range(1, late_count + 1):
+            # Event occurred in the past
+            delay_hours = self.rng.randint(min_delay_hours, max_delay_hours)
+            event_time_utc = arrival_time - timedelta(hours=delay_hours)
+
+            event_tz = self._get_timezone()
+            event_time_local = event_time_utc.astimezone(event_tz)
+
+            records.append({
+                "event_id": self._generate_id("EVT", max_id + i, 10),
+                "user_id": self._generate_id("USR", self.rng.randint(1, 100), 6),
+                "event_type": self._random_choice(self.EVENT_TYPES),
+                "event_ts_utc": event_time_utc,
+                "event_ts_local": event_time_local,
+                "timezone": str(event_tz),
+                "value": self._random_amount(0, 1000),
+                "session_id": hashlib.md5(f"{max_id + i}{event_time_utc}".encode()).hexdigest()[:12],
+                "is_late": True,
+                "arrival_delay_hours": delay_hours,
+                "created_at": arrival_time,  # Arrived now, but event was in the past
+            })
+
+        return pd.DataFrame(records)
+
+    def generate_out_of_order_batch(
+        self,
+        run_date: date,
+        batch_size: int = 50,
+    ) -> pd.DataFrame:
+        """Generate a batch of events that arrive out of order.
+
+        Some events are backdated (late), some are on-time, creating
+        a realistic out-of-order event stream.
+        """
+        self.reset()
+        records = []
+        arrival_time = datetime.combine(run_date, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
+
+        for i in range(1, batch_size + 1):
+            # Decide if this event is late or on-time
+            is_late = self.rng.random() < self.late_rate
+
+            if is_late:
+                # Event from the past arriving now
+                delay_hours = self.rng.randint(1, 72)
+                event_time_utc = arrival_time - timedelta(hours=delay_hours)
+            else:
+                # Event from recent past (within expected window)
+                event_time_utc = arrival_time - timedelta(minutes=self.rng.randint(0, 60))
+                delay_hours = 0
+
+            event_tz = self._get_timezone()
+            event_time_local = event_time_utc.astimezone(event_tz)
+
+            records.append({
+                "event_id": self._generate_id("EVT", 10000 + i, 10),
+                "user_id": self._generate_id("USR", self.rng.randint(1, 100), 6),
+                "event_type": self._random_choice(self.EVENT_TYPES),
+                "event_ts_utc": event_time_utc,
+                "event_ts_local": event_time_local,
+                "timezone": str(event_tz),
+                "value": self._random_amount(0, 1000),
+                "session_id": hashlib.md5(f"{10000 + i}{event_time_utc}".encode()).hexdigest()[:12],
+                "is_late": is_late,
+                "arrival_delay_hours": delay_hours,
+                "created_at": arrival_time,
+            })
+
+        # Shuffle to simulate out-of-order arrival
+        self.rng.shuffle(records)
+        return pd.DataFrame(records)
+
+
+class SchemaEvolutionGenerator(BaseSyntheticGenerator):
+    """Generate datasets that simulate schema evolution scenarios.
+
+    Useful for testing:
+    - Column additions (new nullable columns)
+    - Type widening (int -> bigint, float -> double)
+    - Column removals (deprecated columns)
+    - Schema drift detection
+    """
+
+    def generate_v1_schema(self, run_date: date) -> pd.DataFrame:
+        """Generate data with V1 schema (original columns)."""
+        self.reset()
+        records = []
+        base_time = datetime.combine(run_date - timedelta(days=30), datetime.min.time())
+
+        for i in range(1, self.row_count + 1):
+            records.append({
+                "id": i,
+                "name": f"Entity {i}",
+                "value": self.rng.randint(0, 1000),  # int type
+                "score": round(self.rng.uniform(0, 100), 2),  # float type
+                "status": self._random_choice(["active", "inactive"]),
+                "created_at": self._random_datetime(base_time, datetime.combine(run_date, datetime.min.time())),
+            })
+
+        return pd.DataFrame(records)
+
+    def generate_v2_schema_new_columns(self, run_date: date) -> pd.DataFrame:
+        """Generate data with V2 schema (adds new nullable columns)."""
+        self.reset()
+        records = []
+        base_time = datetime.combine(run_date - timedelta(days=30), datetime.min.time())
+
+        for i in range(1, self.row_count + 1):
+            records.append({
+                "id": i,
+                "name": f"Entity {i}",
+                "value": self.rng.randint(0, 1000),
+                "score": round(self.rng.uniform(0, 100), 2),
+                "status": self._random_choice(["active", "inactive"]),
+                "created_at": self._random_datetime(base_time, datetime.combine(run_date, datetime.min.time())),
+                # New columns in V2
+                "category": self._random_choice(["A", "B", "C"]) if self.rng.random() > 0.3 else None,
+                "priority": self.rng.randint(1, 5) if self.rng.random() > 0.2 else None,
+                "tags": ",".join(self.rng.sample(["tag1", "tag2", "tag3", "tag4"], self.rng.randint(0, 3))),
+            })
+
+        return pd.DataFrame(records)
+
+    def generate_v3_schema_type_widening(self, run_date: date) -> pd.DataFrame:
+        """Generate data with V3 schema (type widening: int -> bigint range)."""
+        self.reset()
+        records = []
+        base_time = datetime.combine(run_date - timedelta(days=30), datetime.min.time())
+
+        for i in range(1, self.row_count + 1):
+            records.append({
+                "id": i,
+                "name": f"Entity {i}",
+                "value": self.rng.randint(0, 10_000_000_000),  # Larger range (bigint)
+                "score": round(self.rng.uniform(0, 1000000), 6),  # More precision
+                "status": self._random_choice(["active", "inactive", "pending", "archived"]),
+                "created_at": self._random_datetime(base_time, datetime.combine(run_date, datetime.min.time())),
+                "category": self._random_choice(["A", "B", "C"]) if self.rng.random() > 0.3 else None,
+                "priority": self.rng.randint(1, 5) if self.rng.random() > 0.2 else None,
+                "tags": ",".join(self.rng.sample(["tag1", "tag2", "tag3", "tag4"], self.rng.randint(0, 3))),
+            })
+
+        return pd.DataFrame(records)
+
+    def generate_t0(self, run_date: date) -> pd.DataFrame:
+        """Default T0 generates V1 schema."""
+        return self.generate_v1_schema(run_date)
+
+
+# =============================================================================
+# Dimension Table Generators (for Join Testing - Story 1.6)
+# =============================================================================
+
+
+class CustomerDimensionGenerator(BaseSyntheticGenerator):
+    """Generate customer dimension data for join testing."""
+
+    TIERS = ["bronze", "silver", "gold", "platinum"]
+    REGIONS = ["north", "south", "east", "west", "central"]
+
+    def generate_t0(self, run_date: date) -> pd.DataFrame:
+        """Generate customer dimension table."""
+        self.reset()
+        records = []
+
+        for i in range(1, self.row_count + 1):
+            signup_date = self._random_date(run_date - timedelta(days=365), run_date - timedelta(days=30))
+            records.append({
+                "customer_id": self._generate_id("CUST", i, 5),
+                "customer_name": f"Customer {i}",
+                "email": f"customer{i}@example.com",
+                "tier": self._random_choice(self.TIERS),
+                "region": self._random_choice(self.REGIONS),
+                "signup_date": signup_date,
+                "lifetime_value": self._random_amount(0, 50000),
+                "is_active": self.rng.random() > 0.1,
+            })
+
+        return pd.DataFrame(records)
+
+
+class ProductDimensionGenerator(BaseSyntheticGenerator):
+    """Generate product dimension data for join testing."""
+
+    CATEGORIES = ["electronics", "clothing", "home", "books", "sports", "food"]
+    BRANDS = ["BrandA", "BrandB", "BrandC", "BrandD", "BrandE"]
+
+    def generate_t0(self, run_date: date) -> pd.DataFrame:
+        """Generate product dimension table."""
+        self.reset()
+        records = []
+
+        for i in range(1, self.row_count + 1):
+            records.append({
+                "product_id": self._generate_id("PROD", i, 5),
+                "product_name": f"Product {i}",
+                "category": self._random_choice(self.CATEGORIES),
+                "brand": self._random_choice(self.BRANDS),
+                "unit_cost": self._random_amount(1, 200),
+                "unit_price": self._random_amount(5, 500),
+                "is_active": self.rng.random() > 0.05,
+                "created_date": self._random_date(run_date - timedelta(days=365), run_date),
+            })
+
+        return pd.DataFrame(records)
+
+
+class SalesFactGenerator(BaseSyntheticGenerator):
+    """Generate sales fact data with foreign keys for join testing."""
+
+    def __init__(
+        self,
+        seed: int = 42,
+        row_count: int = 100,
+        customer_count: int = 50,
+        product_count: int = 100,
+    ):
+        super().__init__(seed=seed, row_count=row_count)
+        self.customer_count = customer_count
+        self.product_count = product_count
+
+    def generate_t0(self, run_date: date) -> pd.DataFrame:
+        """Generate sales fact table with FK references."""
+        self.reset()
+        records = []
+        base_time = datetime.combine(run_date - timedelta(days=30), datetime.min.time())
+
+        for i in range(1, self.row_count + 1):
+            sale_time = self._random_datetime(base_time, datetime.combine(run_date, datetime.min.time()))
+            quantity = self.rng.randint(1, 10)
+            unit_price = self._random_amount(10, 500)
+
+            # Include some orphan keys for testing (customer/product that doesn't exist)
+            customer_id = self._generate_id("CUST", self.rng.randint(1, self.customer_count + 5), 5)
+            product_id = self._generate_id("PROD", self.rng.randint(1, self.product_count + 5), 5)
+
+            records.append({
+                "sale_id": self._generate_id("SALE", i, 8),
+                "customer_id": customer_id,
+                "product_id": product_id,
+                "quantity": quantity,
+                "unit_price": unit_price,
+                "total_amount": round(quantity * unit_price, 2),
+                "discount_amount": self._random_amount(0, 50) if self.rng.random() > 0.7 else 0,
+                "sale_ts": sale_time,
+                "created_at": sale_time,
+            })
+
+        return pd.DataFrame(records)
+
+    def generate_t1(self, run_date: date, t0_df: pd.DataFrame) -> pd.DataFrame:
+        """Generate T1 sales data (new sales only, facts are typically append-only)."""
+        self.reset()
+        for _ in range(self.row_count):
+            self.rng.random()
+
+        records = []
+        new_count = self.row_count // 4
+        max_id = int(t0_df["sale_id"].str.extract(r"(\d+)")[0].max())
+
+        sale_time = datetime.combine(run_date, datetime.min.time())
+
+        for i in range(1, new_count + 1):
+            quantity = self.rng.randint(1, 10)
+            unit_price = self._random_amount(10, 500)
+
+            records.append({
+                "sale_id": self._generate_id("SALE", max_id + i, 8),
+                "customer_id": self._generate_id("CUST", self.rng.randint(1, self.customer_count), 5),
+                "product_id": self._generate_id("PROD", self.rng.randint(1, self.product_count), 5),
+                "quantity": quantity,
+                "unit_price": unit_price,
+                "total_amount": round(quantity * unit_price, 2),
+                "discount_amount": self._random_amount(0, 50) if self.rng.random() > 0.7 else 0,
+                "sale_ts": sale_time + timedelta(minutes=i),
+                "created_at": sale_time + timedelta(minutes=i),
+            })
+
+        return pd.DataFrame(records)
+
+
 # Factory function for creating generators
 def create_generator(domain: str, seed: int = 42, row_count: int = 100) -> BaseSyntheticGenerator:
-    """Create a generator for the specified domain."""
+    """Create a generator for the specified domain.
+
+    Available domains:
+    - claims: Healthcare claims data
+    - orders: E-commerce orders
+    - transactions: Financial transactions
+    - state: SCD-style state changes
+    - nested_json: Nested/JSON structures (Story 1.5)
+    - wide_schema: Wide tables with 60+ columns (Story 1.5)
+    - late_data: Late-arriving timezone-shifted events (Story 1.5)
+    - schema_evolution: Schema evolution scenarios (Story 1.5)
+    - customer_dim: Customer dimension table (Story 1.6)
+    - product_dim: Product dimension table (Story 1.6)
+    - sales_fact: Sales fact table (Story 1.6)
+    """
     generators = {
         "claims": ClaimsGenerator,
         "orders": OrdersGenerator,
         "transactions": TransactionsGenerator,
         "state": StateChangeGenerator,
+        # Edge case generators (Story 1.5)
+        "nested_json": NestedJsonGenerator,
+        "wide_schema": WideSchemaGenerator,
+        "late_data": LateDataGenerator,
+        "schema_evolution": SchemaEvolutionGenerator,
+        # Dimension/fact generators (Story 1.6)
+        "customer_dim": CustomerDimensionGenerator,
+        "product_dim": ProductDimensionGenerator,
+        "sales_fact": SalesFactGenerator,
     }
     generator_class = generators.get(domain, BaseSyntheticGenerator)
     return generator_class(seed=seed, row_count=row_count)

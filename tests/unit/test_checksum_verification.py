@@ -6,8 +6,6 @@ Story #12: Chunk File Metadata Integrity Verification
 import json
 from pathlib import Path
 
-import pytest
-
 from core.infrastructure.io.storage.checksum import (
     ChecksumVerificationResult,
     verify_checksum_manifest_with_result,
