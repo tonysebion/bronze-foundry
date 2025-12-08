@@ -1047,7 +1047,7 @@ Create comprehensive synthetic data test suite:
 
 ---
 
-### Gap #5: Error Handling & Retry Logic Undocumented
+### Gap #5: Error Handling & Retry Logic Undocumented – ✅ **FIXED**
 
 **Problem:**
 - No documentation of retry behavior for API/DB connections
@@ -1058,15 +1058,20 @@ Create comprehensive synthetic data test suite:
 **Impact:**
 **MEDIUM-HIGH** – Users cannot configure robust extraction pipelines for unreliable sources.
 
-**Files Affected:**
-- docs (no error handling guide)
-- Example configs (no retry configuration examples)
-
-**Recommendation:**
-- Document retry policies for each source type
-- Add error handling configuration section
-- Explain failure modes: fail-fast vs continue-on-error
-- Show examples of timeout, max_retries, backoff configuration
+**Fix Applied:**
+- Created comprehensive `docs/guides/error_handling.md` covering:
+  - Retry behavior with exponential backoff and defaults
+  - Circuit breaker patterns and states
+  - Rate limiting configuration (config + env var)
+  - Retryable vs non-retryable error classification
+  - Error mapping by backend type (S3, Azure, API, local)
+  - Failure modes (fail-fast vs continue-on-error)
+  - Debugging and monitoring guidance
+- Created resilient example configs in `docs/examples/configs/resilient/`:
+  - `resilient_api_example.yaml` - API with rate limiting
+  - `resilient_db_example.yaml` - Database with connection retry
+  - `resilient_file_example.yaml` - Cloud storage with resilience
+- Updated `docs/index.md` with links to new documentation
 
 ---
 
@@ -1343,7 +1348,7 @@ Create comprehensive synthetic data test suite:
 | #2 | CLI | 🔴 Critical | 1 hour | Quick Start blocker | ✅ **DONE** |
 | #3 | Testing | 🔴 Critical | 2 days | Runtime errors | ⏳ Pending |
 | #4 | Feature | 🔴 Critical | 3 days | Missing capability | ⏳ Pending |
-| #5 | Operations | 🟠 High | 2 days | Production reliability | ⏳ Pending |
+| #5 | Operations | 🟠 High | 2 days | Production reliability | ✅ **DONE** |
 | #6 | Config | 🟠 High | 2 hours | Cloud migration | ✅ **DONE** |
 | #7 | Config | 🟠 High | 3 hours | Config compatibility | ✅ **DONE** |
 | #8 | Performance | 🟠 High | 3 days | Scale issues | ⏳ Pending |
@@ -1374,7 +1379,7 @@ Create comprehensive synthetic data test suite:
 4. ⏳ Document incremental extraction (Gap #4)
 
 ### Sprint 2: Operations & Performance (1 week)
-5. ⏳ Add error handling guide (Gap #5)
+5. ✅ Add error handling guide (Gap #5) - **DONE**
 6. ✅ Fix storage pattern docs (Gap #6) - **DONE**
 7. ⏳ Create performance tuning guide (Gap #8)
 8. ⏳ Document monitoring/observability (Gap #10)
@@ -1407,20 +1412,21 @@ After addressing all gaps, the project should have:
 
 ## Files Modified
 
-### Completed (5 gaps fixed)
+### Completed (6 gaps fixed)
 - ✅ index.md - CLI flags, Python version, intent configs, minimal examples
 - ✅ README.md - Validation flags, storage patterns, intent configs, Python 3.9+
 - ✅ pyproject.toml - Python 3.9+ requirement
 - ✅ minimal - Created minimal examples
 - ✅ README.md - Tier structure
+- ✅ `docs/guides/error_handling.md` - Error handling & resilience guide (Gap #5)
+- ✅ `docs/examples/configs/resilient/` - Resilient pipeline examples (Gap #5)
 
-### Pending (15 gaps remaining)
+### Pending (14 gaps remaining)
 - ⏳ `tests/integration/test_synthetic_data_e2e.py` - NEW (Gap #1)
   - **MinIO Configuration**: http://localhost:9001/browser/mdf
   - **Test Data Location**: `s3://mdf/synthetic/`
 - ⏳ `tests/unit/config/test_validation.py` - Expand (Gap #3)
 - ⏳ `docs/guides/incremental_extraction.md` - NEW (Gap #4)
-- ⏳ `docs/guides/error_handling.md` - NEW (Gap #5)
 - ⏳ `docs/guides/performance_tuning.md` - NEW (Gap #8)
 - ⏳ `docs/guides/schema_evolution.md` - NEW (Gap #9)
 - ⏳ `docs/guides/monitoring.md` - NEW (Gap #10)
