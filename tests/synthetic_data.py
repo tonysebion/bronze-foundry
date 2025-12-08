@@ -905,6 +905,33 @@ class SchemaEvolutionGenerator(BaseSyntheticGenerator):
 
         return pd.DataFrame(records)
 
+    def generate_v4_schema_column_removal(self, run_date: date) -> pd.DataFrame:
+        """Generate data with V4 schema (removes deprecated columns).
+
+        Simulates removing the 'tags' column that was added in V2.
+        This tests backward-incompatible schema changes.
+        """
+        self.reset()
+        records = []
+        base_time = datetime.combine(run_date - timedelta(days=30), datetime.min.time())
+
+        for i in range(1, self.row_count + 1):
+            records.append({
+                "id": i,
+                "name": f"Entity {i}",
+                "value": self.rng.randint(0, 10_000_000_000),
+                "score": round(self.rng.uniform(0, 1000000), 6),
+                "status": self._random_choice(["active", "inactive", "pending", "archived"]),
+                "created_at": self._random_datetime(base_time, datetime.combine(run_date, datetime.min.time())),
+                "category": self._random_choice(["A", "B", "C"]) if self.rng.random() > 0.3 else None,
+                "priority": self.rng.randint(1, 5) if self.rng.random() > 0.2 else None,
+                # NOTE: 'tags' column removed in V4
+                # New column to replace it
+                "metadata_version": "v4",
+            })
+
+        return pd.DataFrame(records)
+
     def generate_t0(self, run_date: date) -> pd.DataFrame:
         """Default T0 generates V1 schema."""
         return self.generate_v1_schema(run_date)

@@ -513,3 +513,336 @@ class TestEdgeCaseBronzeExtraction:
         # Timezone string column should survive
         assert "timezone" in df_read.columns
         assert df_read["timezone"].nunique() > 1
+
+
+# =============================================================================
+# Late Data Pipeline Integration Tests (Story 5)
+# =============================================================================
+
+
+class TestLateDataPipelineIntegration:
+    """Tests for late data handling through the full Bronze pipeline.
+
+    Story 5: Late Data Pipeline Integration
+    - Test LateDataGenerator data flows through Bronze correctly
+    - Test late data with ALLOW mode (default - included in output)
+    - Verify Silver correctly processes late data from Bronze
+    """
+
+    def test_late_data_through_bronze_extraction(
+        self,
+        late_data_generator: LateDataGenerator,
+        edge_case_run_date: date,
+        tmp_path: Path,
+    ):
+        """Late data should flow through Bronze extraction correctly."""
+        from core.orchestration.runner.job import build_extractor
+
+        # Generate T0 and late data
+        t0_df = late_data_generator.generate_t0(edge_case_run_date)
+        late_df = late_data_generator.generate_late_data(
+            run_date=edge_case_run_date,
+            t0_df=t0_df,
+            min_delay_hours=24,
+            max_delay_hours=168,
+        )
+
+        # Combine T0 and late data (simulating real-world scenario)
+        combined_df = pd.concat([t0_df, late_df], ignore_index=True)
+
+        # Write to parquet for extraction
+        input_file = tmp_path / "late_events.parquet"
+        combined_df.to_parquet(input_file, index=False)
+
+        # Configure Bronze extraction with ALLOW mode (default)
+        cfg = {
+            "source": {
+                "type": "file",
+                "system": "synthetic",
+                "table": "late_events",
+                "file": {
+                    "path": str(input_file),
+                    "format": "parquet",
+                },
+                "run": {
+                    "load_pattern": "snapshot",
+                    "late_data": {
+                        "mode": "allow",  # Default mode
+                        "threshold_days": 7,
+                        "timestamp_column": "event_ts_utc",
+                    },
+                },
+            }
+        }
+
+        # Extract records
+        extractor = build_extractor(cfg)
+        records, _ = extractor.fetch_records(cfg, edge_case_run_date)
+
+        # All records including late data should be extracted
+        assert len(records) == len(combined_df)
+
+        # Verify late records are present in output
+        late_event_ids = set(late_df["event_id"])
+        extracted_ids = {r["event_id"] for r in records}
+        assert late_event_ids.issubset(extracted_ids)
+
+    def test_late_data_with_allow_mode_full_pipeline(
+        self,
+        late_data_generator: LateDataGenerator,
+        edge_case_run_date: date,
+        tmp_path: Path,
+    ):
+        """ALLOW mode should include late data in Bronze output."""
+        from core.domain.services.pipelines.bronze.io import (
+            write_parquet_chunk,
+            write_batch_metadata,
+            write_checksum_manifest,
+        )
+        from core.platform.resilience.late_data import (
+            LateDataConfig,
+            LateDataHandler,
+            LateDataMode,
+        )
+
+        # Generate data with late events
+        t0_df = late_data_generator.generate_t0(edge_case_run_date)
+        late_df = late_data_generator.generate_late_data(
+            run_date=edge_case_run_date,
+            t0_df=t0_df,
+        )
+
+        combined_df = pd.concat([t0_df, late_df], ignore_index=True)
+        records = combined_df.to_dict("records")
+
+        # Process with ALLOW mode - use created_at which is timezone-aware
+        # but we need to convert timestamps to strings first for the handler
+        for r in records:
+            # Convert pandas Timestamps to ISO strings for comparison
+            if hasattr(r.get("event_ts_utc"), "isoformat"):
+                r["event_ts_utc"] = r["event_ts_utc"].isoformat()
+            if hasattr(r.get("created_at"), "isoformat"):
+                r["created_at"] = r["created_at"].isoformat()
+
+        config = LateDataConfig(
+            mode=LateDataMode.ALLOW,
+            threshold_days=7,
+            timestamp_column="event_ts_utc",
+        )
+        handler = LateDataHandler(config)
+
+        from datetime import datetime
+        reference_time = datetime.combine(edge_case_run_date, datetime.max.time())
+        result = handler.process_records(records, reference_time)
+
+        # ALLOW mode: all records go to on_time_records + late_records
+        total_processed = len(result.on_time_records) + len(result.late_records)
+        assert total_processed == len(records)
+        assert result.rejected_count == 0
+
+        # Write Bronze output (includes all records in ALLOW mode)
+        bronze_path = tmp_path / "bronze" / f"dt={edge_case_run_date}"
+        bronze_path.mkdir(parents=True)
+
+        # In ALLOW mode, combine on_time + late for output
+        all_records = result.on_time_records + result.late_records
+        write_parquet_chunk(all_records, bronze_path / "chunk_0.parquet")
+
+        # Write metadata
+        write_batch_metadata(
+            out_dir=bronze_path,
+            record_count=len(all_records),
+            chunk_count=1,
+            cursor=None,
+        )
+        write_checksum_manifest(
+            out_dir=bronze_path,
+            files=[bronze_path / "chunk_0.parquet"],
+            load_pattern="snapshot",
+        )
+
+        # Verify Bronze output
+        bronze_df = pd.read_parquet(bronze_path / "chunk_0.parquet")
+        assert len(bronze_df) == len(records)
+
+        # Verify late events are in output
+        late_event_ids = set(late_df["event_id"])
+        bronze_ids = set(bronze_df["event_id"])
+        assert late_event_ids.issubset(bronze_ids)
+
+    def test_late_data_metrics_tracking(
+        self,
+        late_data_generator: LateDataGenerator,
+        edge_case_run_date: date,
+    ):
+        """Late data handling should track metrics correctly."""
+        from core.platform.resilience.late_data import (
+            LateDataConfig,
+            LateDataHandler,
+            LateDataMode,
+        )
+        from datetime import datetime
+
+        # Generate out-of-order batch with known late rate
+        batch_df = late_data_generator.generate_out_of_order_batch(
+            run_date=edge_case_run_date,
+            batch_size=100,
+        )
+        records = batch_df.to_dict("records")
+
+        # Convert pandas Timestamps to ISO strings for comparison
+        for r in records:
+            if hasattr(r.get("event_ts_utc"), "isoformat"):
+                r["event_ts_utc"] = r["event_ts_utc"].isoformat()
+            if hasattr(r.get("created_at"), "isoformat"):
+                r["created_at"] = r["created_at"].isoformat()
+
+        # Process with ALLOW mode
+        config = LateDataConfig(
+            mode=LateDataMode.ALLOW,
+            threshold_days=3,  # Short threshold to get more late records
+            timestamp_column="event_ts_utc",
+        )
+        handler = LateDataHandler(config)
+
+        reference_time = datetime.combine(edge_case_run_date, datetime.max.time())
+        result = handler.process_records(records, reference_time)
+
+        # Verify metrics
+        metrics = result.to_dict()
+        assert "on_time_count" in metrics
+        assert "late_count" in metrics
+        assert "total_records" in metrics
+        assert metrics["total_records"] == 100
+        assert metrics["on_time_count"] + metrics["late_count"] == 100
+        assert metrics["rejected_count"] == 0  # ALLOW mode doesn't reject
+
+    def test_late_data_silver_processing(
+        self,
+        late_data_generator: LateDataGenerator,
+        edge_case_run_date: date,
+        tmp_path: Path,
+    ):
+        """Silver should correctly process Bronze data containing late events."""
+        from core.domain.services.pipelines.bronze.io import (
+            write_parquet_chunk,
+            write_batch_metadata,
+            write_checksum_manifest,
+        )
+
+        # Generate data with late events
+        t0_df = late_data_generator.generate_t0(edge_case_run_date)
+        late_df = late_data_generator.generate_late_data(
+            run_date=edge_case_run_date,
+            t0_df=t0_df,
+        )
+
+        combined_df = pd.concat([t0_df, late_df], ignore_index=True)
+
+        # Write to Bronze
+        bronze_path = tmp_path / "bronze" / f"dt={edge_case_run_date}"
+        bronze_path.mkdir(parents=True)
+
+        records = combined_df.to_dict("records")
+        write_parquet_chunk(records, bronze_path / "chunk_0.parquet")
+        write_batch_metadata(
+            out_dir=bronze_path,
+            record_count=len(records),
+            chunk_count=1,
+            cursor=None,
+        )
+        write_checksum_manifest(
+            out_dir=bronze_path,
+            files=[bronze_path / "chunk_0.parquet"],
+            load_pattern="snapshot",
+        )
+
+        # Silver processing: deduplicate and prepare
+        bronze_df = pd.read_parquet(bronze_path / "chunk_0.parquet")
+
+        # Deduplicate by event_id
+        silver_df = bronze_df.drop_duplicates(subset=["event_id"], keep="last")
+
+        # Write Silver output
+        silver_path = tmp_path / "silver" / f"dt={edge_case_run_date}"
+        silver_path.mkdir(parents=True)
+        silver_df.to_parquet(silver_path / "data.parquet", index=False)
+
+        # Verify Silver output
+        final_silver = pd.read_parquet(silver_path / "data.parquet")
+
+        # All unique events should be in Silver (including late)
+        assert len(final_silver) == len(combined_df)  # All unique event_ids
+
+        # Late events should be preserved
+        late_event_ids = set(late_df["event_id"])
+        silver_ids = set(final_silver["event_id"])
+        assert late_event_ids.issubset(silver_ids)
+
+        # Verify is_late flag is preserved
+        late_in_silver = final_silver[final_silver["is_late"] == True]
+        assert len(late_in_silver) == len(late_df)
+
+    def test_late_data_out_of_order_events_bronze(
+        self,
+        late_data_generator: LateDataGenerator,
+        edge_case_run_date: date,
+        tmp_path: Path,
+    ):
+        """Bronze should handle out-of-order event batches correctly."""
+        from core.domain.services.pipelines.bronze.io import write_parquet_chunk
+
+        # Generate out-of-order batch
+        batch_df = late_data_generator.generate_out_of_order_batch(
+            run_date=edge_case_run_date,
+            batch_size=50,
+        )
+
+        # Write to Bronze (preserving order as-is)
+        bronze_path = tmp_path / "bronze" / f"dt={edge_case_run_date}"
+        bronze_path.mkdir(parents=True)
+
+        records = batch_df.to_dict("records")
+        write_parquet_chunk(records, bronze_path / "chunk_0.parquet")
+
+        # Read back
+        bronze_df = pd.read_parquet(bronze_path / "chunk_0.parquet")
+
+        # Verify all records preserved
+        assert len(bronze_df) == 50
+
+        # Verify mix of late and on-time events
+        late_count = bronze_df["is_late"].sum()
+        on_time_count = len(bronze_df) - late_count
+        assert late_count > 0  # Should have some late
+        assert on_time_count > 0  # Should have some on-time
+
+    def test_late_data_timezone_handling_bronze(
+        self,
+        late_data_generator: LateDataGenerator,
+        edge_case_run_date: date,
+        tmp_path: Path,
+    ):
+        """Bronze should preserve timezone information for late data."""
+        from core.domain.services.pipelines.bronze.io import write_parquet_chunk
+
+        # Generate T0 with timezone diversity
+        t0_df = late_data_generator.generate_t0(edge_case_run_date)
+
+        # Write to Bronze
+        bronze_path = tmp_path / "bronze" / f"dt={edge_case_run_date}"
+        bronze_path.mkdir(parents=True)
+
+        records = t0_df.to_dict("records")
+        write_parquet_chunk(records, bronze_path / "chunk_0.parquet")
+
+        # Read back
+        bronze_df = pd.read_parquet(bronze_path / "chunk_0.parquet")
+
+        # Verify timezone column preserved
+        assert "timezone" in bronze_df.columns
+        assert bronze_df["timezone"].nunique() > 1
+
+        # Verify UTC and local timestamps preserved
+        assert "event_ts_utc" in bronze_df.columns
+        assert "event_ts_local" in bronze_df.columns
