@@ -155,8 +155,8 @@ def verify_bronze_metadata(bronze_path: Path) -> Dict[str, Any]:
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     checksums = json.loads(checksums_path.read_text(encoding="utf-8"))
 
-    # Verify required metadata fields
-    required_fields = ["run_datetime", "system", "table", "chunk_count", "record_count"]
+    # Verify required metadata fields (actual field names from Bronze output)
+    required_fields = ["timestamp", "system", "table", "chunk_count", "record_count"]
     for field in required_fields:
         assert field in metadata, f"Missing required metadata field: {field}"
 
@@ -183,7 +183,8 @@ def verify_checksum_integrity(bronze_path: Path) -> bool:
     checksums = json.loads(checksums_path.read_text(encoding="utf-8"))
 
     for file_info in checksums["files"]:
-        filename = file_info["filename"]
+        # Checksum files use 'path' key, not 'filename'
+        filename = file_info.get("path") or file_info.get("filename")
         expected_sha256 = file_info["sha256"]
         file_path = bronze_path / filename
 

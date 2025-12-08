@@ -330,6 +330,7 @@ class TestSilverPipelineE2E:
                 "version": 1,
                 "natural_keys": ["claim_id"],
                 "order_column": "updated_at",
+                "event_ts_column": "created_at",
                 "input_storage": "local",
             },
         })
