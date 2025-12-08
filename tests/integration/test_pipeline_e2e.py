@@ -14,10 +14,8 @@ This module tests:
 
 from __future__ import annotations
 
-import json
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict
 
 import pandas as pd
 import pytest
@@ -384,7 +382,7 @@ class TestSilverPipelineE2E:
             verify_checksum=False,
         )
 
-        result = processor.run()
+        processor.run()
 
         # Read Silver output
         silver_files = list(silver_partition.rglob("*.parquet"))

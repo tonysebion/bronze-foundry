@@ -287,6 +287,7 @@ class ApiExtractor(BaseExtractor, ResilientExtractorMixin):
         headers: Dict[str, str],
         params: Dict[str, Any],
         timeout: int,
+        api_cfg: Dict[str, Any],
         auth: Optional[Tuple[str, str]] = None,
     ) -> requests.Response:
         """Make HTTP request with retry logic (exponential backoff + jitter)."""
@@ -375,7 +376,9 @@ class ApiExtractor(BaseExtractor, ResilientExtractorMixin):
         state = build_pagination_state(pagination_cfg, params)
 
         def fetch_page(current_params: Dict[str, Any]) -> Dict[str, Any]:
-            resp = self._make_request(session, url, headers, current_params, timeout, auth)
+            resp = self._make_request(
+                session, url, headers, current_params, timeout, api_cfg, auth
+            )
             result: Dict[str, Any] = resp.json()
             return result
 

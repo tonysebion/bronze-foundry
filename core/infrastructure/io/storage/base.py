@@ -16,7 +16,7 @@ import logging
 from abc import abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Mapping, Optional, TypeVar, Union, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, TYPE_CHECKING
 
 from core.platform.resilience import ResilienceMixin
 from core.platform.resilience.constants import (
@@ -163,6 +163,12 @@ class BaseCloudStorage(StorageBackend, ResilienceMixin):
             cooldown_seconds=DEFAULT_COOLDOWN_SECONDS,
             half_open_max_calls=DEFAULT_HALF_OPEN_MAX_CALLS,
         )
+        # Maintain backwards-compatible breaker attributes
+        self._breaker_upload = self._breakers["upload"]
+        self._breaker_download = self._breakers["download"]
+        self._breaker_list = self._breakers["list"]
+        self._breaker_delete = self._breakers["delete"]
+
         self._storage_config = config
         self._bronze_cfg = config.get("bronze", {})
         self._retry_config = self._bronze_cfg.get("retry")
@@ -183,11 +189,11 @@ class BaseCloudStorage(StorageBackend, ResilienceMixin):
             return remote_path
         candidate = f"{self._prefix}/{remote_path}".strip("/")
         return candidate
-        # Maintain backward-compatible attribute names
-        self._breaker_upload = self._breakers["upload"]
-        self._breaker_download = self._breakers["download"]
-        self._breaker_list = self._breakers["list"]
-        self._breaker_delete = self._breakers["delete"]
+
+    @property
+    def prefix(self) -> str:
+        """Normalized prefix applied to all remote paths."""
+        return self._prefix
 
     @abstractmethod
     def _should_retry(self, exc: BaseException) -> bool:

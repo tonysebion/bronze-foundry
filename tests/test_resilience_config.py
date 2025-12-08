@@ -1,5 +1,3 @@
-import os
-
 import pytest
 
 from core.platform.resilience.config import parse_retry_config, resolve_rate_limit_config
