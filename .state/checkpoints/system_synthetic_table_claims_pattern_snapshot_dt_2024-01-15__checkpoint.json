@@ -1,0 +1,20 @@
+{
+  "checkpoint_id": "79422dbf-a61f-49bc-857f-8e444834da75",
+  "source_key": "synthetic.claims",
+  "run_id": "08467c19-7a32-44e6-b117-ef6701f7850b",
+  "run_date": "2024-01-15",
+  "partition_path": "system=synthetic/table=claims/pattern=snapshot/dt=2024-01-15/",
+  "status": "completed",
+  "watermark": {
+    "column": null,
+    "value": null,
+    "type": "timestamp"
+  },
+  "stats": {
+    "record_count": 100,
+    "chunk_count": 2,
+    "artifact_count": 4
+  },
+  "started_at": "2025-12-08T11:00:58.565498Z",
+  "completed_at": "2025-12-08T11:00:58.643698Z"
+}

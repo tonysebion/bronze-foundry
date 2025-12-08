@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import pandas as pd
 
@@ -34,7 +34,7 @@ def load_golden_file(name: str) -> Dict[str, Any]:
     path = GOLDEN_DIR / f"{name}.json"
     if not path.exists():
         raise FileNotFoundError(f"Golden file not found: {path}")
-    return json.loads(path.read_text(encoding="utf-8"))
+    return cast(Dict[str, Any], json.loads(path.read_text(encoding="utf-8")))
 
 
 def load_test_config(name: str) -> Dict[str, Any]:
@@ -51,7 +51,7 @@ def load_test_config(name: str) -> Dict[str, Any]:
     path = CONFIGS_DIR / f"{name}.yaml"
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {path}")
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
+    return cast(Dict[str, Any], yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
 def verify_dataframe_first_row(

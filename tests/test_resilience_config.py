@@ -1,5 +1,7 @@
 import pytest
 
+from typing import Any, Dict
+
 from core.platform.resilience.config import parse_retry_config, resolve_rate_limit_config
 from core.platform.resilience.constants import (
     DEFAULT_BACKOFF_MULTIPLIER,
@@ -42,15 +44,15 @@ def test_resolve_rate_limit_config_precedence(monkeypatch):
 
 
 def test_resolve_rate_limit_config_run_fallback(monkeypatch):
-    cfg = {}
-    run_cfg = {"rate_limit_rps": 2.5}
+    cfg: Dict[str, Any] = {}
+    run_cfg: Dict[str, Any] = {"rate_limit_rps": 2.5}
     result = resolve_rate_limit_config(cfg, run_cfg, env_var="BRONZE_TEST_RPS")
     assert result == (2.5, None)
 
 
 def test_resolve_rate_limit_config_env_fallback(monkeypatch):
-    cfg = {}
-    run_cfg = {}
+    cfg: Dict[str, Any] = {}
+    run_cfg: Dict[str, Any] = {}
     monkeypatch.setenv("BRONZE_TEST_RPS", "1.2")
     result = resolve_rate_limit_config(cfg, run_cfg, env_var="BRONZE_TEST_RPS")
     assert result == (1.2, None)

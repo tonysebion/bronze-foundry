@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from typing import Dict
 
 import pandas as pd
 import pytest
@@ -306,7 +307,7 @@ class TestSilverPipelineE2E:
         run_bronze_extraction,
     ) -> Path:
         """Run Bronze extraction and return path for Silver processing."""
-        result = run_bronze_extraction()
+        result: Dict[str, Path] = run_bronze_extraction()
         return result["bronze_path"]
 
     @pytest.fixture

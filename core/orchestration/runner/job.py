@@ -37,6 +37,16 @@ from core.foundation.catalog.hooks import (
     report_schema_snapshot,
     report_lineage,
 )
+from core.foundation.state import (
+    Watermark,
+    WatermarkStore,
+    WatermarkType,
+    build_watermark_store,
+    compute_max_watermark,
+    CheckpointStore,
+    CheckpointConflictError,
+    build_checkpoint_store,
+)
 
 logger = logging.getLogger(__name__)
 ensure_extractors_loaded()
@@ -76,19 +86,188 @@ class ExtractJob:
         self.previous_manifest_schema: Optional[List[Dict[str, Any]]] = None
         self._schema_checker = SchemaEvolutionChecker(context.cfg)
 
+        # Checkpoint and watermark state
+        self._watermark_store: Optional[WatermarkStore] = None
+        self._checkpoint_store: Optional[CheckpointStore] = None
+        self._watermark: Optional[Watermark] = None
+        self._checkpoint_enabled = self._get_checkpoint_enabled()
+
     @property
     def source_cfg(self) -> Dict[str, Any]:
 
         return cast(Dict[str, Any], self.cfg["source"])
 
+    def _get_checkpoint_enabled(self) -> bool:
+        """Check if checkpoint tracking is enabled."""
+        run_cfg = self.cfg.get("source", {}).get("run", {})
+        return run_cfg.get("checkpoint_enabled", True)
+
+    def _get_watermark_config(self) -> tuple[Optional[str], WatermarkType]:
+        """Get watermark column and type from config."""
+        run_cfg = self.source_cfg.get("run", {})
+        watermark_column = run_cfg.get("watermark_column")
+        watermark_type_str = run_cfg.get("watermark_type", "timestamp")
+        try:
+            watermark_type = WatermarkType(watermark_type_str)
+        except ValueError:
+            watermark_type = WatermarkType.TIMESTAMP
+        return watermark_column, watermark_type
+
+    def _is_incremental_pattern(self) -> bool:
+        """Check if current load pattern requires watermark tracking."""
+        if not self.load_pattern:
+            run_cfg = self.source_cfg.get("run", {})
+            self.load_pattern = resolve_load_pattern(run_cfg)
+        return self.load_pattern in (
+            LoadPattern.INCREMENTAL_APPEND,
+            LoadPattern.INCREMENTAL_MERGE,
+        )
+
+    def _load_watermark(self) -> Optional[Watermark]:
+        """Load watermark for incremental patterns."""
+        if not self._is_incremental_pattern():
+            return None
+
+        watermark_column, watermark_type = self._get_watermark_config()
+        if not watermark_column:
+            logger.warning(
+                "Incremental pattern %s requires watermark_column in config",
+                self.load_pattern.value if self.load_pattern else "unknown",
+            )
+            return None
+
+        self._watermark_store = build_watermark_store(self.cfg)
+        watermark = self._watermark_store.get(
+            self.source_cfg["system"],
+            self.source_cfg["table"],
+            watermark_column,
+            watermark_type,
+        )
+        if watermark.watermark_value:
+            logger.info(
+                "Loaded watermark for %s.%s: %s=%s",
+                self.source_cfg["system"],
+                self.source_cfg["table"],
+                watermark_column,
+                watermark.watermark_value,
+            )
+        else:
+            logger.info(
+                "No existing watermark for %s.%s (first run)",
+                self.source_cfg["system"],
+                self.source_cfg["table"],
+            )
+        return watermark
+
+    def _save_watermark(
+        self, records: List[Dict[str, Any]], cursor: Optional[str]
+    ) -> Optional[str]:
+        """Save updated watermark after successful extraction."""
+        if not self._watermark or not self._watermark_store:
+            return cursor
+
+        watermark_column = self._watermark.watermark_column
+        new_watermark_value = cursor or compute_max_watermark(
+            records, watermark_column, self._watermark.watermark_value
+        )
+
+        if new_watermark_value and new_watermark_value != self._watermark.watermark_value:
+            self._watermark.update(
+                new_value=new_watermark_value,
+                run_id=self.ctx.run_id,
+                run_date=self.run_date,
+                record_count=len(records),
+            )
+            self._watermark_store.save(self._watermark)
+            logger.info(
+                "Updated watermark for %s.%s: %s=%s",
+                self.source_cfg["system"],
+                self.source_cfg["table"],
+                watermark_column,
+                new_watermark_value,
+            )
+        return new_watermark_value
+
+    def _acquire_checkpoint(self) -> None:
+        """Acquire checkpoint lock for idempotency."""
+        if not self._checkpoint_enabled:
+            return
+
+        self._checkpoint_store = build_checkpoint_store(self.cfg)
+        watermark_column, watermark_type = self._get_watermark_config()
+        source_key = f"{self.source_cfg['system']}.{self.source_cfg['table']}"
+
+        try:
+            checkpoint = self._checkpoint_store.acquire_lock(
+                partition_path=self.relative_path,
+                source_key=source_key,
+                run_id=self.ctx.run_id,
+                run_date=self.run_date.isoformat(),
+                watermark_column=watermark_column,
+                watermark_type=watermark_type.value if watermark_type else "timestamp",
+            )
+            logger.info(
+                "Acquired checkpoint lock for %s (checkpoint_id=%s)",
+                self.relative_path,
+                checkpoint.checkpoint_id,
+            )
+        except CheckpointConflictError as e:
+            logger.warning("Checkpoint conflict: %s", e)
+            raise
+
+    def _release_checkpoint(
+        self,
+        success: bool,
+        record_count: int = 0,
+        chunk_count: int = 0,
+        watermark_value: Optional[str] = None,
+        error_message: Optional[str] = None,
+    ) -> None:
+        """Release checkpoint lock and update status."""
+        if not self._checkpoint_enabled or not self._checkpoint_store:
+            return
+
+        self._checkpoint_store.release_lock(
+            partition_path=self.relative_path,
+            run_id=self.ctx.run_id,
+            success=success,
+            record_count=record_count,
+            chunk_count=chunk_count,
+            artifact_count=len(self.created_files),
+            watermark_value=watermark_value,
+            error_message=error_message,
+        )
+        logger.info(
+            "Released checkpoint for %s (success=%s)",
+            self.relative_path,
+            success,
+        )
+
     def run(self) -> int:
         try:
             return self._run()
-        except Exception:
+        except CheckpointConflictError:
+            # Checkpoint conflicts are not failures - partition already processed
+            raise
+        except Exception as e:
+            self._release_checkpoint(
+                success=False,
+                error_message=str(e),
+            )
             self._cleanup_on_failure()
             raise
 
     def _run(self) -> int:
+        # Acquire checkpoint lock for idempotency
+        self._acquire_checkpoint()
+
+        # Load watermark for incremental patterns
+        self._watermark = self._load_watermark()
+
+        # Inject watermark value into config for extractor to use
+        if self._watermark and self._watermark.watermark_value:
+            self.cfg.setdefault("_runtime", {})["watermark_value"] = self._watermark.watermark_value
+
         extractor = build_extractor(self.cfg, self.ctx.env_config)
         logger.info(
             "Starting extract for %s.%s on %s",
@@ -96,18 +275,32 @@ class ExtractJob:
             self.source_cfg["table"],
             self.run_date,
         )
+
         records, new_cursor = extractor.fetch_records(self.cfg, self.run_date)
         logger.info("Retrieved %s records from extractor", len(records))
         if not records:
             logger.warning("No records returned from extractor")
+            self._release_checkpoint(success=True, record_count=0, chunk_count=0)
             return 0
 
         self.schema_snapshot = infer_schema(records)
 
         chunk_count, chunk_files = self._process_chunks(records)
         self.created_files.extend(chunk_files)
+
+        # Save updated watermark
+        final_watermark = self._save_watermark(records, new_cursor)
+
         self._emit_metadata(
             record_count=len(records), chunk_count=chunk_count, cursor=new_cursor
+        )
+
+        # Release checkpoint with success
+        self._release_checkpoint(
+            success=True,
+            record_count=len(records),
+            chunk_count=chunk_count,
+            watermark_value=final_watermark,
         )
 
         logger.info("Finished Bronze extract run successfully")

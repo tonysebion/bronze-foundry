@@ -486,13 +486,14 @@ def bronze_s3_pipeline_config(
                 "path": str(temp_dir / "input"),
                 "format": "parquet",
             },
-            "run": {
-                "load_pattern": "snapshot",
-                "local_output_dir": str(temp_dir / "output"),
-                "storage_enabled": True,
-                "max_rows_per_file": 0,
-                "cleanup_on_failure": True,
-            },
+        "run": {
+            "load_pattern": "snapshot",
+            "local_output_dir": str(temp_dir / "output"),
+            "storage_enabled": True,
+            "max_rows_per_file": 0,
+            "cleanup_on_failure": True,
+            "checkpoint_enabled": False,
+        },
         },
     }
 

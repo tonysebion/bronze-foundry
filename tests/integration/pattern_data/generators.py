@@ -225,13 +225,14 @@ class PatternTestDataGenerator:
         max_id = rows
 
         result_batches = {"t0": t0_df}
+        total_inserts: Dict[str, int] = {}
         metadata = {
             "pattern": "incremental_append",
             "t0_rows": rows,
             "insert_rate": insert_rate,
             "new_per_batch": new_per_batch,
             "seed": self.seed,
-            "total_inserts": {},
+            "total_inserts": total_inserts,
         }
 
         # Generate incremental batches (new records only)
@@ -249,7 +250,7 @@ class PatternTestDataGenerator:
 
             batch_df = pd.DataFrame(new_records)
             result_batches[batch_name] = batch_df
-            metadata["total_inserts"][batch_name] = len(batch_df)
+            total_inserts[batch_name] = len(batch_df)
             metadata[f"{batch_name}_rows"] = len(batch_df)
 
         return PatternScenario(
@@ -296,6 +297,7 @@ class PatternTestDataGenerator:
         current_state = t0_df.copy()
 
         result_batches = {"t0": t0_df}
+        changes: Dict[str, Dict[str, Any]] = {}
         metadata = {
             "pattern": "incremental_merge",
             "t0_rows": rows,
@@ -304,7 +306,7 @@ class PatternTestDataGenerator:
             "updates_per_batch": updates_per_batch,
             "inserts_per_batch": inserts_per_batch,
             "seed": self.seed,
-            "changes": {},
+            "changes": changes,
         }
 
         # Generate incremental batches (updates + inserts)
@@ -354,7 +356,7 @@ class PatternTestDataGenerator:
                         [current_state, pd.DataFrame([record])], ignore_index=True
                     )
 
-            metadata["changes"][batch_name] = {
+            changes[batch_name] = {
                 "updated_ids": updated_ids,
                 "inserted_ids": inserted_ids,
                 "update_count": len(updated_ids),
@@ -416,13 +418,17 @@ class PatternTestDataGenerator:
         t0_df = pd.DataFrame(t0_records)
 
         result_batches = {"t0": t0_df}
+        version_counts: Dict[str, Dict[int, int]] = {
+            "t0": {eid: 1 for eid in range(1, entities + 1)}
+        }
+        changes: Dict[str, Dict[str, Any]] = {}
         metadata = {
             "pattern": "current_history",
             "entity_count": entities,
             "changes_per_entity": changes_per_entity,
             "seed": self.seed,
-            "version_counts": {"t0": {eid: 1 for eid in range(1, entities + 1)}},
-            "changes": {},
+            "version_counts": version_counts,
+            "changes": changes,
         }
 
         # Generate change batches
@@ -456,7 +462,7 @@ class PatternTestDataGenerator:
             batch_df = pd.DataFrame(batch_records)
             result_batches[batch_name] = batch_df
 
-            metadata["changes"][batch_name] = {
+            changes[batch_name] = {
                 "changed_entities": changed_entities,
                 "change_count": len(changed_entities),
             }

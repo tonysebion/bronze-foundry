@@ -365,15 +365,14 @@ class AssertionValidator:
 
         if "files_present" in assertions:
             expected = assertions["files_present"]
-            # Check if checksums dict has any files
             files = checksums.get("files", [])
-            actual = len(files) > 0
+            files_present = len(files) > 0
             self.report.add(
                 AssertionResult(
                     name="checksum.files_present",
-                    passed=actual == expected,
+                    passed=files_present == expected,
                     expected=expected,
-                    actual=actual,
+                    actual=files_present,
                     message="Checksum files presence mismatch",
                 )
             )
@@ -381,27 +380,27 @@ class AssertionValidator:
         if "file_count" in assertions:
             expected = assertions["file_count"]
             files = checksums.get("files", [])
-            actual = len(files)
+            file_count = len(files)
             self.report.add(
                 AssertionResult(
                     name="checksum.file_count",
-                    passed=actual == expected,
+                    passed=file_count == expected,
                     expected=expected,
-                    actual=actual,
+                    actual=file_count,
                     message="Checksum file count mismatch",
                 )
             )
 
         if "checksums_valid" in assertions and assertions["checksums_valid"]:
-            # This would require re-computing checksums - mark as passed if present
             files = checksums.get("files", [])
             all_have_checksums = all(f.get("checksum") for f in files)
+            checksum_status = "checksums present" if all_have_checksums else "missing checksums"
             self.report.add(
                 AssertionResult(
                     name="checksum.valid",
                     passed=all_have_checksums,
                     expected="all files have checksums",
-                    actual="checksums present" if all_have_checksums else "missing checksums",
+                    actual=checksum_status,
                     message="Some files missing checksums",
                 )
             )

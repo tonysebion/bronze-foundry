@@ -4,6 +4,7 @@ This package contains state tracking for incremental extraction:
 - storage: Base class for state storage backends (local, S3)
 - watermark: Watermark tracking for incremental loads (timestamps, cursors)
 - manifest: File manifest tracking for file_batch sources
+- checkpoint: Extraction checkpoint for resumption and conflict detection
 """
 
 from .storage import StateStorageBackend
@@ -19,6 +20,14 @@ from .manifest import (
     FileManifest,
     ManifestTracker,
 )
+from .checkpoint import (
+    Checkpoint,
+    CheckpointLock,
+    CheckpointStatus,
+    CheckpointStore,
+    CheckpointConflictError,
+    build_checkpoint_store,
+)
 
 __all__ = [
     # Storage base
@@ -33,4 +42,11 @@ __all__ = [
     "FileEntry",
     "FileManifest",
     "ManifestTracker",
+    # Checkpoint
+    "Checkpoint",
+    "CheckpointLock",
+    "CheckpointStatus",
+    "CheckpointStore",
+    "CheckpointConflictError",
+    "build_checkpoint_store",
 ]
