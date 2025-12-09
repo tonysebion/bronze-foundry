@@ -51,6 +51,10 @@ from core.domain.services.pipelines.silver.io import (
     partition_dataframe,
     SilverModelPlanner,
 )
+from core.domain.services.pipelines.metadata import (
+    build_batch_metadata_extra,
+    build_checksum_metadata_extra,
+)
 from core.domain.services.pipelines.silver.writer import get_silver_writer
 from core.domain.services.pipelines.silver.models import (
     SilverModel,
@@ -938,33 +942,34 @@ class SilverPromotionService:
         context: PromotionContext,
         outputs: Mapping[str, List[Path]],
     ) -> None:
+        metadata_payload = build_batch_metadata_extra(
+            load_pattern=context.load_pattern.value,
+            bronze_path=str(context.run_context.bronze_path),
+            domain=context.domain,
+            entity=context.entity,
+            primary_keys=context.options.run_options.primary_keys,
+            order_column=context.options.run_options.order_column,
+            version=context.version,
+            load_partition_name=context.load_partition_name,
+            include_pattern_folder=context.include_pattern_folder,
+            partition_columns=context.options.run_options.partition_columns,
+            write_parquet=context.options.run_options.write_parquet,
+            write_csv=context.options.run_options.write_csv,
+            parquet_compression=context.options.run_options.parquet_compression,
+            normalization=context.options.normalization_cfg,
+            schema=context.options.schema_cfg,
+            error_handling=context.options.error_cfg,
+            artifacts={
+                label: [p.name for p in paths] for label, paths in outputs.items()
+            },
+            require_checksum=context.options.run_options.require_checksum,
+            silver_model=context.silver_model.value,
+        )
         metadata_path = write_batch_metadata(
             context.silver_partition,
             record_count=record_count,
             chunk_count=chunk_count,
-            extra_metadata={
-                "load_pattern": context.load_pattern.value,
-                "bronze_path": str(context.run_context.bronze_path),
-                "primary_keys": context.options.run_options.primary_keys,
-                "order_column": context.options.run_options.order_column,
-                "domain": context.domain,
-                "entity": context.entity,
-                "version": context.version,
-                "load_partition_name": context.load_partition_name,
-                "include_pattern_folder": context.include_pattern_folder,
-                "partition_columns": context.options.run_options.partition_columns,
-                "write_parquet": context.options.run_options.write_parquet,
-                "write_csv": context.options.run_options.write_csv,
-                "parquet_compression": context.options.run_options.parquet_compression,
-                "normalization": context.options.normalization_cfg,
-                "schema": context.options.schema_cfg,
-                "error_handling": context.options.error_cfg,
-                "artifacts": {
-                    label: [p.name for p in paths] for label, paths in outputs.items()
-                },
-                "require_checksum": context.options.run_options.require_checksum,
-                "silver_model": context.silver_model.value,
-            },
+            extra_metadata=metadata_payload,
         )
         logger.debug("Wrote Silver metadata to %s", metadata_path)
 
@@ -994,13 +999,13 @@ class SilverPromotionService:
         }
 
         rc = context.run_context
-        extra = {
-            "load_pattern": context.load_pattern.value,
-            "bronze_path": str(rc.bronze_path),
-            "schema": schema_snapshot,
-            "stats": stats,
-            "runtime_seconds": runtime_seconds,
-        }
+        extra = build_checksum_metadata_extra(
+            load_pattern=context.load_pattern.value,
+            bronze_path=str(rc.bronze_path),
+            schema_snapshot=schema_snapshot,
+            stats=stats,
+            runtime_seconds=runtime_seconds,
+        )
         manifest_path = write_checksum_manifest(
             context.silver_partition,
             files,

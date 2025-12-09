@@ -13,7 +13,7 @@ from azure.core.exceptions import AzureError, ResourceNotFoundError
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient, ContainerClient
 
-from .base import BaseCloudStorage, HealthCheckResult
+from .base import BaseCloudStorage, HealthCheckResult, HealthCheckTracker
 from .helpers import get_env_value
 
 logger = logging.getLogger(__name__)
@@ -157,93 +157,64 @@ class AzureStorage(BaseCloudStorage):
         Returns:
             HealthCheckResult with permission checks, capabilities, and any errors
         """
-        errors: List[str] = []
-        permissions: Dict[str, bool] = {
-            "read": False,
-            "write": False,
-            "list": False,
-            "delete": False,
-        }
-        capabilities: Dict[str, bool] = {
-            "versioning": False,
-            "multipart_upload": True,  # Azure always supports block blobs
-        }
-
-        start_time = time.monotonic()
+        tracker = HealthCheckTracker(
+            capabilities={
+                "versioning": False,
+                "multipart_upload": True,  # Azure always supports block blobs
+            },
+        )
         test_blob_name = self._build_remote_path(f"_health_check_{uuid.uuid4().hex}.tmp")
         test_content = b"health_check_test"
 
         try:
-            # Check container exists
             try:
                 self.container.get_container_properties()
             except ResourceNotFoundError:
-                errors.append(f"Container '{self.container_name}' not found")
-                return HealthCheckResult(
-                    is_healthy=False,
-                    errors=errors,
-                    capabilities=capabilities,
-                    checked_permissions=permissions,
-                    latency_ms=(time.monotonic() - start_time) * 1000,
-                )
-            except AzureError as e:
-                errors.append(f"Container access failed: {type(e).__name__}")
-                return HealthCheckResult(
-                    is_healthy=False,
-                    errors=errors,
-                    capabilities=capabilities,
-                    checked_permissions=permissions,
-                    latency_ms=(time.monotonic() - start_time) * 1000,
-                )
+                tracker.add_error(f"Container '{self.container_name}' not found")
+                return tracker.finalize()
+            except AzureError as exc:
+                tracker.add_error(f"Container access failed: {type(exc).__name__}")
+                return tracker.finalize()
 
-            # Test write permission
             try:
                 self.container.upload_blob(test_blob_name, test_content, overwrite=True)
-                permissions["write"] = True
-            except AzureError as e:
-                errors.append(f"Write permission failed: {type(e).__name__}")
+                tracker.permissions["write"] = True
+            except AzureError as exc:
+                tracker.add_error(f"Write permission failed: {type(exc).__name__}")
 
-            # Test read permission
-            if permissions["write"]:
+            if tracker.permissions["write"]:
                 try:
                     blob = self.container.get_blob_client(test_blob_name)
                     content = blob.download_blob().readall()
-                    permissions["read"] = content == test_content
-                    if not permissions["read"]:
-                        errors.append("Read content mismatch")
-                except AzureError as e:
-                    errors.append(f"Read permission failed: {type(e).__name__}")
+                    tracker.permissions["read"] = content == test_content
+                    if not tracker.permissions["read"]:
+                        tracker.add_error("Read content mismatch")
+                except AzureError as exc:
+                    tracker.add_error(f"Read permission failed: {type(exc).__name__}")
 
-            # Test list permission
             try:
-                list(self.container.list_blobs(name_starts_with=self._build_remote_path("_health_check_")))
-                permissions["list"] = True
-            except AzureError as e:
-                errors.append(f"List permission failed: {type(e).__name__}")
+                list(
+                    self.container.list_blobs(
+                        name_starts_with=self._build_remote_path("_health_check_")
+                    )
+                )
+                tracker.permissions["list"] = True
+            except AzureError as exc:
+                tracker.add_error(f"List permission failed: {type(exc).__name__}")
 
-            # Test delete permission
-            if permissions["write"]:
+            if tracker.permissions["write"]:
                 try:
                     self.container.delete_blob(test_blob_name)
-                    permissions["delete"] = True
-                except AzureError as e:
-                    errors.append(f"Delete permission failed: {type(e).__name__}")
+                    tracker.permissions["delete"] = True
+                except AzureError as exc:
+                    tracker.add_error(f"Delete permission failed: {type(exc).__name__}")
 
-        except AzureError as e:
-            errors.append(f"Azure connection error: {type(e).__name__}")
-        except Exception as e:
-            errors.append(f"Unexpected error during health check: {e}")
+        except AzureError as exc:
+            tracker.add_error(f"Azure connection error: {type(exc).__name__}")
+        except Exception as exc:
+            tracker.add_error(f"Unexpected error during health check: {exc}")
 
-        latency_ms = (time.monotonic() - start_time) * 1000
-        is_healthy = all(permissions.values()) and len(errors) == 0
-
-        return HealthCheckResult(
-            is_healthy=is_healthy,
-            capabilities=capabilities,
-            errors=errors,
-            latency_ms=latency_ms,
-            checked_permissions=permissions,
-        )
+        return tracker.finalize()
 
     def upload_file(self, local_path: str, remote_path: str) -> bool:
         """Upload a file to Azure Blob Storage.

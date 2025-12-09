@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import time
 from abc import abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
@@ -86,6 +87,41 @@ class HealthCheckResult:
         if self.errors:
             parts.append(f"errors={len(self.errors)}")
         return " ".join(parts)
+
+
+@dataclass
+class HealthCheckTracker:
+    """Track permissions/capabilities during a storage health check."""
+
+    capabilities: Dict[str, bool]
+    permissions: Optional[Dict[str, bool]] = None
+    errors: List[str] = field(default_factory=list)
+    start_time: float = field(default_factory=time.monotonic)
+
+    def __post_init__(self) -> None:
+        if self.permissions is None:
+            self.permissions = {
+                "read": False,
+                "write": False,
+                "list": False,
+                "delete": False,
+            }
+
+    def add_error(self, message: str) -> None:
+        """Record a permission or connectivity error."""
+        self.errors.append(message)
+
+    def finalize(self) -> HealthCheckResult:
+        """Return a HealthCheckResult representing the current state."""
+        latency_ms = (time.monotonic() - self.start_time) * 1000
+        is_healthy = all(self.permissions.values()) and not self.errors
+        return HealthCheckResult(
+            is_healthy=is_healthy,
+            capabilities=dict(self.capabilities),
+            errors=list(self.errors),
+            latency_ms=latency_ms,
+            checked_permissions=dict(self.permissions),
+        )
 
 
 # =============================================================================

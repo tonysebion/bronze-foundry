@@ -7,6 +7,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from core.domain.services.pipelines.bronze.io import write_batch_metadata, write_checksum_manifest
 from core.foundation.primitives.patterns import LoadPattern
 from core.foundation.time_utils import utc_isoformat
+from core.domain.services.pipelines.metadata import (
+    build_batch_metadata_extra,
+    build_checksum_metadata_extra,
+)
 
 
 def infer_schema(records: List[Dict[str, Any]]) -> List[Dict[str, str]]:
@@ -80,16 +84,23 @@ def emit_bronze_metadata(
                 )
             )
         )
-    metadata_payload = {
-        "batch_timestamp": utc_isoformat(),
-        "run_date": run_date_str,
-        "system": system,
-        "table": table,
-        "partition_path": relative_path,
-        "file_formats": formats,
-        "load_pattern": load_pattern.value,
-        "reference_mode": build_reference_info(reference_mode, out_dir),
-    }
+    metadata_payload = build_batch_metadata_extra(
+        load_pattern=load_pattern.value,
+        bronze_path=str(out_dir),
+        domain=system,
+        entity=table,
+        write_parquet=formats.get("parquet"),
+        write_csv=formats.get("csv"),
+        extra={
+            "batch_timestamp": utc_isoformat(),
+            "run_date": run_date_str,
+            "system": system,
+            "table": table,
+            "partition_path": relative_path,
+            "file_formats": formats,
+            "reference_mode": build_reference_info(reference_mode, out_dir),
+        },
+    )
     metadata_path = write_batch_metadata(
         out_dir,
         record_count=record_count,
@@ -97,19 +108,24 @@ def emit_bronze_metadata(
         cursor=cursor,
         extra_metadata=metadata_payload,
     )
-    checksum_metadata = {
-        "system": system,
-        "table": table,
-        "run_date": run_date_str,
-        "config_name": reference_mode and reference_mode.get("config_name"),
-        "schema": schema_snapshot,
-        "stats": {
+    checksum_metadata = build_checksum_metadata_extra(
+        load_pattern=load_pattern.value,
+        bronze_path=str(out_dir),
+        schema_snapshot=schema_snapshot,
+        stats={
             "record_count": record_count,
             "chunk_count": chunk_count,
             "artifact_count": len(created_files) + 1,
         },
-        "load_pattern": load_pattern.value,
-    }
+    )
+    checksum_metadata.update(
+        {
+            "system": system,
+            "table": table,
+            "run_date": run_date_str,
+            "config_name": reference_mode and reference_mode.get("config_name"),
+        }
+    )
     manifest_path = write_checksum_manifest(
         out_dir,
         created_files + [metadata_path],
