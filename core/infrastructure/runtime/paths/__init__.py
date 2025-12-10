@@ -1,8 +1,6 @@
-"""Legacy entrypoint for path/partition helpers re-exporting the partition builder."""
+"""Path helpers package (kept for compatibility)."""
 
-from __future__ import annotations
-
-from core.infrastructure.runtime.paths.partition_builder import (
+from .partition_builder import (
     BronzePartition,
     SilverPartition,
     build_bronze_partition,
@@ -15,7 +13,7 @@ __all__ = [
     "BronzePartition",
     "SilverPartition",
     "build_bronze_partition",
-    "build_silver_partition",
     "build_bronze_relative_path",
+    "build_silver_partition",
     "build_silver_partition_path",
 ]

@@ -10,7 +10,11 @@ Tests Silver transformation patterns:
 import pandas as pd
 import pytest
 
-from core.domain.services.pipelines.silver.lookups import LookupConfig, LookupEnricher, LookupJoinKey
+from core.infrastructure.pipelines.silver.lookups import (
+    LookupConfig,
+    LookupEnricher,
+    LookupJoinKey,
+)
 from core.domain.services.pipelines.silver.joins import (
     JoinConfig,
     JoinSource,

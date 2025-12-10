@@ -24,7 +24,7 @@ from core.domain.services.pipelines.silver.joins import (
     JoinSource,
     MultiSourceJoiner,
 )
-from core.domain.services.pipelines.silver.lookups import (
+from core.infrastructure.pipelines.silver.lookups import (
     LookupConfig,
     LookupEnricher,
     LookupJoinKey,

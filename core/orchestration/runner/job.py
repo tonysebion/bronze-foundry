@@ -7,11 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
 from core.domain.services.pipelines.bronze.base import emit_bronze_metadata, infer_schema
-from core.domain.services.processing.chunk_config import (
-    build_chunk_writer_config,
-    compute_output_formats,
-    resolve_load_pattern,
-)
+from core.domain.services.processing.chunk_config import resolve_load_pattern
 from core.infrastructure.runtime.context import RunContext
 from core.infrastructure.runtime import (
     Layer,
@@ -24,10 +20,8 @@ from core.domain.adapters.extractors.factory import (
     ensure_extractors_loaded,
     get_extractor,
 )
-from core.domain.services.pipelines.bronze.io import chunk_records
 from core.foundation.primitives.patterns import LoadPattern
-from core.infrastructure.runtime.chunking import ChunkProcessor, ChunkWriter
-from core.infrastructure.io.storage import get_storage_backend
+from core.infrastructure.runtime.chunk_coordinator import ChunkCoordinator
 from core.domain.services.schema import SchemaEvolutionChecker
 from core.orchestration.runner.artifact_cleanup import ArtifactCleanup
 from core.orchestration.runner.manifest_inspector import ManifestInspector
@@ -320,41 +314,25 @@ class ExtractJob:
             self.load_pattern.describe(),
         )
 
-        max_rows_per_file = int(run_cfg.get("max_rows_per_file", 0))
-        max_file_size_mb = run_cfg.get("max_file_size_mb")
-        chunks = chunk_records(records, max_rows_per_file, max_file_size_mb)
-
-        platform_cfg = self.cfg["platform"]
-        bronze_output = platform_cfg["bronze"]["output_defaults"]
-        self.output_formats = compute_output_formats(run_cfg, bronze_output)
-
-        storage_enabled = run_cfg.get(
-            "storage_enabled", run_cfg.get("s3_enabled", False)
-        )
-        storage_backend = get_storage_backend(platform_cfg) if storage_enabled else None
-        if storage_backend:
-            logger.info(
-                "Initialized %s storage backend", storage_backend.get_backend_type()
-            )
-
         self._out_dir.mkdir(parents=True, exist_ok=True)
         self._inspect_existing_manifest()
 
-        writer_config, self.storage_plan = build_chunk_writer_config(
-            bronze_output,
-            run_cfg,
-            self._out_dir,
-            self.relative_path,
-            self.load_pattern,
-            storage_backend,
-            self.output_formats,
+        coordinator = ChunkCoordinator()
+        result = coordinator.write_chunks(
+            records=records,
+            run_cfg=run_cfg,
+            platform_cfg=self.cfg["platform"],
+            load_pattern=self.load_pattern,
+            bronze_path=self._out_dir,
+            relative_path=self.relative_path,
         )
 
-        parallel_workers = int(run_cfg.get("parallel_workers", 1))
-        writer = ChunkWriter(writer_config)
-        processor = ChunkProcessor(writer, parallel_workers)
-        chunk_files = processor.process(chunks)
-        return len(chunk_files), chunk_files
+        self.storage_plan = result.storage_plan
+        self.output_formats = result.output_formats
+        self._out_dir.mkdir(parents=True, exist_ok=True)
+        self._inspect_existing_manifest()
+
+        return result.chunk_count, result.chunk_files
 
     def _inspect_existing_manifest(self) -> None:
         """Inspect existing manifest and handle accordingly.

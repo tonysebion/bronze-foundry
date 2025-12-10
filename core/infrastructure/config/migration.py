@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from core.foundation.primitives.exceptions import emit_compat
+from .compat import emit_compat
 from core.foundation.primitives.patterns import LoadPattern
 from core.foundation.primitives.entity_kinds import (
     EntityKind,

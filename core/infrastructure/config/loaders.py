@@ -12,7 +12,7 @@ from .models.dataset import DatasetConfig, is_new_intent_config
 from .models.environment import EnvironmentConfig, S3ConnectionConfig
 from .models.root import RootConfig, parse_root_config
 from .migration import dataset_to_runtime_config, legacy_to_dataset
-from core.foundation.primitives.exceptions import emit_compat
+from .compat import emit_compat, ensure_config_version
 from .placeholders import apply_env_substitution
 from .validation import validate_config_dict
 from .v2_validation import validate_v2_config_dict
@@ -83,11 +83,10 @@ def load_config(
         )
     validated = validate_config_dict(cfg)
     typed = parse_root_config(validated)
-    if "config_version" not in validated:
-        if strict:
-            raise ValueError("Missing required config_version in strict mode")
-        emit_compat("Config missing config_version; defaulting to 1", code="CFG004")
-    if strict and int(validated.get("config_version", 1) or 1) >= 2:
+    if strict and "config_version" not in validated:
+        raise ValueError("Missing required config_version in strict mode")
+    config_version = ensure_config_version(validated)
+    if strict and int(config_version) >= 2:
         validate_v2_config_dict(validated)
     # Return typed RootConfig instance
     return typed
