@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from core.domain.services.processing.chunk_processor import ChunkProcessor
+from core.infrastructure.runtime.chunking import ChunkProcessor
 from core.orchestration.parallel import run_parallel_extracts, _safe_run_extract
 from core.infrastructure.runtime.context import RunContext
 from core.foundation.primitives.patterns import LoadPattern

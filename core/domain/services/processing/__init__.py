@@ -7,7 +7,7 @@ from .chunk_config import (
     compute_output_formats,
     resolve_load_pattern,
 )
-from .chunk_processor import ChunkProcessor, ChunkWriter
+from core.infrastructure.runtime.chunking import ChunkProcessor, ChunkWriter
 
 __all__ = [
     "ChunkProcessor",

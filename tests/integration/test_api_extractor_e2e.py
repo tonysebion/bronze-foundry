@@ -429,10 +429,9 @@ class TestApiExtractorAuth:
         records = generate_test_records(3)
         mock_response = generate_api_response(records)
 
-        base_config["source"]["api"]["auth"] = {
-            "type": "bearer",
-            "token_env": "TEST_API_TOKEN",
-        }
+        # Use flat config keys as expected by build_api_auth
+        base_config["source"]["api"]["auth_type"] = "bearer"
+        base_config["source"]["api"]["auth_token_env"] = "TEST_API_TOKEN"
 
         with patch.dict("os.environ", {"TEST_API_TOKEN": "test-token-123"}):
             with patch("requests.Session.get") as mock_get:
@@ -459,11 +458,10 @@ class TestApiExtractorAuth:
         records = generate_test_records(3)
         mock_response = generate_api_response(records)
 
-        base_config["source"]["api"]["auth"] = {
-            "type": "api_key",
-            "header_name": "X-API-Key",
-            "key_env": "TEST_API_KEY",
-        }
+        # Use flat config keys as expected by build_api_auth
+        base_config["source"]["api"]["auth_type"] = "api_key"
+        base_config["source"]["api"]["auth_key_header"] = "X-API-Key"
+        base_config["source"]["api"]["auth_key_env"] = "TEST_API_KEY"
 
         with patch.dict("os.environ", {"TEST_API_KEY": "secret-key-456"}):
             with patch("requests.Session.get") as mock_get:

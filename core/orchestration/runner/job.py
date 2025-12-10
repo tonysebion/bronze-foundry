@@ -26,7 +26,7 @@ from core.domain.adapters.extractors.factory import (
 )
 from core.domain.services.pipelines.bronze.io import chunk_records
 from core.foundation.primitives.patterns import LoadPattern
-from core.domain.services.processing.chunk_processor import ChunkProcessor, ChunkWriter
+from core.infrastructure.runtime.chunking import ChunkProcessor, ChunkWriter
 from core.infrastructure.io.storage import get_storage_backend
 from core.domain.services.schema import SchemaEvolutionChecker
 from core.orchestration.runner.artifact_cleanup import ArtifactCleanup

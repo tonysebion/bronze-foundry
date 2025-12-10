@@ -51,7 +51,7 @@ from core.domain.services.pipelines.silver.io import (
     partition_dataframe,
     SilverModelPlanner,
 )
-from core.domain.services.pipelines.metadata import (
+from core.infrastructure.runtime.metadata_helpers import (
     build_batch_metadata_extra,
     build_checksum_metadata_extra,
 )
