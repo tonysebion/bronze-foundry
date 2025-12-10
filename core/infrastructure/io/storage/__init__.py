@@ -11,7 +11,6 @@ from .base import (
     get_storage_backend,
     list_backends,
     register_backend,
-    register_storage_backend,
     resolve_backend_type,
 )
 from .checksum import (
@@ -52,7 +51,6 @@ __all__ = [
     "get_storage_backend",
     "list_backends",
     "register_backend",
-    "register_storage_backend",
     "resolve_backend_type",
     "AzureStorage",
     "S3Storage",

@@ -451,13 +451,6 @@ def get_backend_factory(
     return factory
 
 
-def register_storage_backend(
-    name: str,
-) -> Callable[[Callable[[Dict[str, Any]], Any]], Callable[[Dict[str, Any]], Any]]:
-    """Alias for register_backend for backward compatibility."""
-    return register_backend(name)
-
-
 # =============================================================================
 # Built-in Backend Factories
 # =============================================================================
