@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime as _datetime
+
 from core.infrastructure.runtime.paths.partition_builder import (
     BronzePartition,
     SilverPartition,
@@ -10,6 +12,8 @@ from core.infrastructure.runtime.paths.partition_builder import (
     build_silver_partition,
     build_silver_partition_path,
 )
+
+datetime = _datetime
 
 __all__ = [
     "BronzePartition",

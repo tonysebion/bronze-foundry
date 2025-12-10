@@ -19,13 +19,13 @@ from core.infrastructure.config import (
     ensure_root_config,
     load_configs,
 )
+from core.infrastructure.runtime.cli import configure_logging_from_args, select_webhooks
 from core.infrastructure.runtime.context import RunContext, build_run_context, load_run_context
 from core.domain.services.pipelines.bronze.io import (
     write_batch_metadata,
     verify_checksum_manifest,
     write_checksum_manifest,
 )
-from core.foundation.primitives.logging import setup_logging
 from core.foundation.primitives.patterns import LoadPattern
 from core.infrastructure.runtime.paths import (
     build_bronze_partition,
@@ -1140,18 +1140,7 @@ class SilverPromotionService:
         if extra:
             payload.update(extra)
 
-        if self._run_options:
-            urls = (
-                self._run_options.on_success_webhooks
-                if success
-                else self._run_options.on_failure_webhooks
-            )
-        else:
-            urls = (
-                self.args.on_success_webhook
-                if success
-                else self.args.on_failure_webhook
-            )
+        urls = select_webhooks(self.args, self._run_options, success=success)
         fire_webhooks(urls, payload)
 
         event = "silver_promotion_completed" if success else "silver_promotion_failed"
@@ -1353,10 +1342,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-    setup_logging(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format_type=args.log_format,
-    )
+    configure_logging_from_args(args)
 
     service = SilverPromotionService(parser, args)
     return service.execute()

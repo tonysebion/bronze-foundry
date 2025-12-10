@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
 from core.domain.services.pipelines.bronze.base import emit_bronze_metadata, infer_schema
-from core.domain.services.processing.chunk_config import resolve_load_pattern
+from core.infrastructure.runtime.chunk_config import resolve_load_pattern
+from core.infrastructure.io.storage.plan import StoragePlan
 from core.infrastructure.runtime.context import RunContext
 from core.infrastructure.runtime import (
     Layer,
@@ -15,8 +16,9 @@ from core.infrastructure.runtime import (
     build_run_metadata,
     write_run_metadata,
 )
+from core.infrastructure.runtime.chunking import ChunkProcessor as _ChunkProcessor, ChunkWriter as _ChunkWriter
 from core.infrastructure.io.extractors.base import BaseExtractor
-from core.domain.adapters.extractors.factory import (
+from core.infrastructure.io.extractors.loader import (
     ensure_extractors_loaded,
     get_extractor,
 )
@@ -43,6 +45,8 @@ from core.foundation.state import (
 )
 
 logger = logging.getLogger(__name__)
+ChunkProcessor = _ChunkProcessor
+ChunkWriter = _ChunkWriter
 ensure_extractors_loaded()
 
 
@@ -73,8 +77,6 @@ class ExtractJob:
         self.created_files: List[Path] = []
         self.load_pattern: Optional[LoadPattern] = context.load_pattern
         self.output_formats: Dict[str, bool] = {}
-        from core.domain.services.processing.chunk_config import StoragePlan
-
         self.storage_plan: Optional[StoragePlan] = None
         self.schema_snapshot: List[Dict[str, str]] = []
         self.previous_manifest_schema: Optional[List[Dict[str, Any]]] = None
@@ -325,6 +327,8 @@ class ExtractJob:
             load_pattern=self.load_pattern,
             bronze_path=self._out_dir,
             relative_path=self.relative_path,
+            chunk_writer_cls=ChunkWriter,
+            chunk_processor_cls=ChunkProcessor,
         )
 
         self.storage_plan = result.storage_plan

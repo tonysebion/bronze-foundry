@@ -1,5 +1,9 @@
 """Path helpers package (kept for compatibility)."""
 
+from __future__ import annotations
+
+from datetime import datetime as _datetime
+
 from .partition_builder import (
     BronzePartition,
     SilverPartition,
@@ -9,6 +13,8 @@ from .partition_builder import (
     build_silver_partition_path,
 )
 
+datetime = _datetime
+
 __all__ = [
     "BronzePartition",
     "SilverPartition",
@@ -16,4 +22,5 @@ __all__ = [
     "build_bronze_relative_path",
     "build_silver_partition",
     "build_silver_partition_path",
+    "datetime",
 ]

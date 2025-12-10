@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type
 
-from core.domain.services.processing.chunk_config import (
+from core.infrastructure.runtime.chunk_config import (
     build_chunk_writer_config,
     compute_output_formats,
 )
@@ -42,6 +42,8 @@ class ChunkCoordinator:
         load_pattern: LoadPattern,
         bronze_path: Path,
         relative_path: str,
+        chunk_writer_cls: Type[ChunkWriter] | None = None,
+        chunk_processor_cls: Type[ChunkProcessor] | None = None,
     ) -> ChunkWriteResult:
         bronze_output = platform_cfg["bronze"]["output_defaults"]
         parallel_workers = int(run_cfg.get("parallel_workers", 1))
@@ -69,8 +71,10 @@ class ChunkCoordinator:
             output_formats,
         )
 
-        writer = ChunkWriter(writer_config)
-        processor = ChunkProcessor(writer, parallel_workers)
+        writer_cls = chunk_writer_cls or ChunkWriter
+        processor_cls = chunk_processor_cls or ChunkProcessor
+        writer = writer_cls(writer_config)
+        processor = processor_cls(writer, parallel_workers)
         chunk_files = processor.process(chunks)
 
         return ChunkWriteResult(

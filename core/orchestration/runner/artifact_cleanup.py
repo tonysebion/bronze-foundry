@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.domain.services.processing.chunk_config import StoragePlan
+    from core.infrastructure.io.storage.plan import StoragePlan
 
 logger = logging.getLogger(__name__)
 

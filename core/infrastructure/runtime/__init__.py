@@ -21,6 +21,7 @@ from .file_io import (
     write_records_to_parquet,
 )
 from .metadata_models import (
+    ArchitectureLayer,
     DataClassification,
     Layer,
     OwnerInfo,
@@ -69,13 +70,20 @@ __all__ = [
     "build_bronze_relative_path",
     "build_silver_partition_path",
     # Metadata
+    "DataClassification",
+    "OwnerInfo",
     "Layer",
+    "ArchitectureLayer",
     "RunStatus",
     "QualityRuleResult",
     "RunMetadata",
     "generate_run_id",
     "build_run_metadata",
     "write_run_metadata",
+    "compute_config_hash",
+    "get_code_version",
+    "get_metadata_path",
+    "load_run_metadata",
     # File I/O
     "DataFrameLoader",
     "DataFrameWriter",

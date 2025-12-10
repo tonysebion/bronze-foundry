@@ -1,8 +1,7 @@
 """Processing primitives for Bronze/Silver pipelines."""
 
-from .chunk_config import (
-    ChunkWriterConfig,
-    StoragePlan,
+from core.infrastructure.io.storage.plan import ChunkWriterConfig, StoragePlan
+from core.infrastructure.runtime.chunk_config import (
     build_chunk_writer_config,
     compute_output_formats,
     resolve_load_pattern,
