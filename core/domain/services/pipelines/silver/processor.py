@@ -17,8 +17,7 @@ from core.infrastructure.config import (
 from core.infrastructure.io.storage import (
     ChecksumVerificationResult,
     QuarantineResult,
-    StorageURI,
-    create_filesystem,
+    prepare_bronze_s3_filesystem,
 )
 from core.infrastructure.runtime.file_io import DataFrameLoader
 
@@ -214,26 +213,10 @@ class SilverProcessor:
                 "Please provide an environment config when initializing SilverProcessor."
             )
 
-        bucket_ref = self.dataset.bronze.output_bucket or "bronze_data"
-        bucket = self.env_config.s3.get_bucket(bucket_ref)
-
-        bronze_key = str(self.bronze_path).replace("\\", "/")
-        if bronze_key.startswith("./"):
-            bronze_key = bronze_key[2:]
-
-        if self.dataset.bronze.output_prefix:
-            bronze_key = f"{self.dataset.bronze.output_prefix.rstrip('/')}/{bronze_key}"
-
-        s3_uri = StorageURI(
-            backend="s3",
-            bucket=bucket,
-            key=bronze_key,
-            original=f"s3://{bucket}/{bronze_key}",
+        uri, fs = prepare_bronze_s3_filesystem(
+            self.dataset, self.bronze_path, self.env_config
         )
-
-        fs = create_filesystem(s3_uri, self.env_config)
-        fsspec_path = s3_uri.to_fsspec_path(self.env_config)
-
+        fsspec_path = uri.to_fsspec_path(self.env_config)
         return DataFrameLoader.from_s3(fsspec_path, fs)
 
     def _dispatch_patterns(

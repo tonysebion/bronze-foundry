@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
-from core.domain.services.pipelines.bronze.base import emit_bronze_metadata, infer_schema
+from core.domain.services.pipelines.bronze.base import infer_schema
 from core.infrastructure.runtime.chunk_config import resolve_load_pattern
 from core.infrastructure.io.storage.plan import StoragePlan
 from core.infrastructure.runtime.context import RunContext
@@ -16,6 +16,7 @@ from core.infrastructure.runtime import (
     build_run_metadata,
     write_run_metadata,
 )
+from core.infrastructure.runtime.metadata_helpers import emit_bronze_metadata
 from core.infrastructure.runtime.chunking import ChunkProcessor as _ChunkProcessor, ChunkWriter as _ChunkWriter
 from core.infrastructure.io.extractors.base import BaseExtractor
 from core.infrastructure.io.extractors.loader import (

@@ -38,6 +38,7 @@ from .policy import (
     validate_storage_metadata,
 )
 from .path_utils import build_partition_path, sanitize_partition_value
+from .bronze import build_bronze_storage_uri, prepare_bronze_s3_filesystem
 from .azure import AzureStorage
 from .s3 import S3Storage
 from .uri import StorageURI
@@ -78,5 +79,7 @@ __all__ = [
     "StoragePlan",
     "build_partition_path",
     "sanitize_partition_value",
+    "build_bronze_storage_uri",
+    "prepare_bronze_s3_filesystem",
     "StorageURI",
 ]

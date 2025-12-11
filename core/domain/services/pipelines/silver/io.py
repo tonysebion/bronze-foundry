@@ -13,6 +13,7 @@ from core.infrastructure.runtime.file_io import (
     DataFrameMerger,
     DataFrameWriter,
 )
+from core.infrastructure.io.storage import build_partition_path
 
 logger = logging.getLogger(__name__)
 
@@ -248,9 +249,11 @@ class DatasetWriter:
         written_files: List[Path] = []
 
         for path_parts, partition_df in partitions:
-            target_dir = self.base_dir
-            for part in path_parts:
-                target_dir = target_dir / part
+            target_dir = (
+                self.base_dir / build_partition_path(*path_parts)
+                if path_parts
+                else self.base_dir
+            )
             cleaned_df = handle_error_rows(
                 partition_df,
                 self.primary_keys,
@@ -283,9 +286,11 @@ class DatasetWriter:
         ]
         written_files: List[Path] = []
         for path_parts, partition_df in partitions:
-            target_dir = self.base_dir
-            for part in path_parts:
-                target_dir = target_dir / part
+            target_dir = (
+                self.base_dir / build_partition_path(*path_parts)
+                if path_parts
+                else self.base_dir
+            )
             cleaned_df = handle_error_rows(
                 partition_df,
                 self.primary_keys,
@@ -328,6 +333,13 @@ class SilverModelPlanner:
             "current": artifact_names.get("current", "current"),
         }
         self.silver_model = silver_model
+        self._artifact_builders = {
+            SilverModel.PERIODIC_SNAPSHOT: self._build_periodic_snapshot,
+            SilverModel.INCREMENTAL_MERGE: self._build_incremental_merge,
+            SilverModel.FULL_MERGE_DEDUPE: self._build_full_merge_dedupe,
+            SilverModel.SCD_TYPE_1: self._build_scd_type_1,
+            SilverModel.SCD_TYPE_2: self._build_scd_type_2,
+        }
 
     def render(
         self, df: pd.DataFrame, chunk_tag: str | None = None
@@ -354,21 +366,29 @@ class SilverModelPlanner:
         return self._build_artifacts(df)
 
     def _build_artifacts(self, df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
-        if self.silver_model == SilverModel.PERIODIC_SNAPSHOT:
-            return {"full_snapshot": df}
-        if self.silver_model == SilverModel.INCREMENTAL_MERGE:
-            return {"cdc": df}
-        if self.silver_model == SilverModel.FULL_MERGE_DEDUPE:
-            deduped = self._dedupe_frame(df)
-            return {"full_snapshot": deduped}
-        if self.silver_model == SilverModel.SCD_TYPE_1:
-            deduped = self._dedupe_frame(df)
-            return {"current": deduped}
-        if self.silver_model == SilverModel.SCD_TYPE_2:
-            deduped = self._dedupe_frame(df)
-            history = self._build_history_frame(df, deduped)
-            return {"history": history, "current": deduped}
-        raise ValueError(f"Unsupported silver model '{self.silver_model.value}'")
+        builder = self._artifact_builders.get(self.silver_model)
+        if not builder:
+            raise ValueError(f"Unsupported silver model '{self.silver_model.value}'")
+        return builder(df)
+
+    def _build_periodic_snapshot(self, df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+        return {"full_snapshot": df}
+
+    def _build_incremental_merge(self, df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+        return {"cdc": df}
+
+    def _build_full_merge_dedupe(self, df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+        deduped = self._dedupe_frame(df)
+        return {"full_snapshot": deduped}
+
+    def _build_scd_type_1(self, df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+        deduped = self._dedupe_frame(df)
+        return {"current": deduped}
+
+    def _build_scd_type_2(self, df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+        deduped = self._dedupe_frame(df)
+        history = self._build_history_frame(df, deduped)
+        return {"history": history, "current": deduped}
 
     def _dedupe_frame(self, df: pd.DataFrame) -> pd.DataFrame:
         if not self.primary_keys:
