@@ -9,17 +9,23 @@ This module provides:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 from core.foundation.primitives.patterns import LoadPattern
+from core.foundation.time_utils import utc_now
+
+DatetimeProvider = Callable[[], datetime]
 
 
-def _runtime_datetime():
-    from core.infrastructure.runtime import paths as runtime_paths
+_datetime_provider: DatetimeProvider = utc_now
 
-    return runtime_paths.datetime
+
+def set_datetime_provider(provider: DatetimeProvider) -> None:
+    """Override the datetime provider for testing/deterministic behavior."""
+    global _datetime_provider
+    _datetime_provider = provider
 
 
 def _bronze_config(cfg: Dict[str, Any]) -> tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
@@ -198,17 +204,17 @@ def build_bronze_relative_path(cfg: dict, run_date: date) -> str:
         partition = build_bronze_partition(cfg, run_date)
         return partition.relative_path().as_posix() + "/"
     elif partition_strategy == "hourly":
-        current_hour = _runtime_datetime().now().strftime("%H")
+        current_hour = _datetime_provider().strftime("%H")
         return f"{base_path}{date_key}={run_date.isoformat()}/hour={current_hour}/"
     elif partition_strategy == "timestamp":
-        timestamp = _runtime_datetime().now().strftime("%Y%m%d_%H%M")
+        timestamp = _datetime_provider().strftime("%Y%m%d_%H%M")
         return f"{base_path}{date_key}={run_date.isoformat()}/batch={timestamp}/"
     elif partition_strategy == "batch_id":
         import uuid
 
         batch_id = run_cfg.get(
             "batch_id"
-        ) or f"{_runtime_datetime().now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        ) or f"{_datetime_provider().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
         return f"{base_path}{date_key}={run_date.isoformat()}/batch_id={batch_id}/"
     else:
         return f"{base_path}{date_key}={run_date.isoformat()}/"

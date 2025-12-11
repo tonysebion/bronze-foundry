@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, List, Mapping, Optional, TypeVar, TYPE_CHECKING
 
+from core.platform.observability.hooks import ResilienceStateHook, emit_resilience_state
 from core.platform.resilience.config import parse_retry_config
 from core.platform.resilience.constants import (
     DEFAULT_FAILURE_THRESHOLD,
@@ -26,7 +27,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-StateChangeHook = Callable[[str, Optional[str], str], None]
+StateChangeHook = ResilienceStateHook
+
+_DEFAULT_OBSERVABILITY_HOOK: ResilienceStateHook = emit_resilience_state
 
 T = TypeVar("T")
 
@@ -171,13 +174,15 @@ class ResilienceMixin:
     def _notify_observability(
         self, breaker_key: Optional[str], state: str
     ) -> None:
-        hook = getattr(self, "_observability_hook", None)
-        if not hook:
-            return
-        try:
-            hook(self._component_name, breaker_key, state)
-        except Exception as exc:  # pragma: no cover - best effort
-            logger.debug("Observability hook failed: %s", exc)
+        hooks: List[ResilienceStateHook] = [_DEFAULT_OBSERVABILITY_HOOK]
+        custom = getattr(self, "_observability_hook", None)
+        if custom:
+            hooks.append(custom)
+        for hook in hooks:
+            try:
+                hook(self._component_name, breaker_key, state)
+            except Exception as exc:  # pragma: no cover - best effort
+                logger.debug("Observability hook failed: %s", exc)
 
     def _get_breaker(self, breaker_key: Optional[str] = None) -> "CircuitBreaker":
         """Get the appropriate circuit breaker.

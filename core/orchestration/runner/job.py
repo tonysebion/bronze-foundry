@@ -25,8 +25,8 @@ from core.infrastructure.io.extractors.loader import (
 from core.foundation.primitives.patterns import LoadPattern
 from core.infrastructure.runtime.chunk_coordinator import ChunkCoordinator
 from core.domain.services.schema import SchemaEvolutionChecker
-from core.orchestration.runner.artifact_cleanup import ArtifactCleanup
-from core.orchestration.runner.manifest_inspector import ManifestInspector
+from core.infrastructure.io.artifact_cleanup import ArtifactCleanup
+from core.infrastructure.io.storage.manifest import ManifestInspector
 from core.foundation.catalog.hooks import (
     report_quality_snapshot,
     report_run_metadata,

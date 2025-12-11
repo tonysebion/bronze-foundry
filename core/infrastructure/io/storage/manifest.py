@@ -1,8 +1,4 @@
-"""Manifest inspection for Bronze extraction.
-
-Handles inspection of existing manifest files to determine
-whether a partition can be processed or needs cleanup.
-"""
+"""Manifest inspection helpers moved into the infrastructure layer."""
 
 from __future__ import annotations
 
@@ -11,8 +7,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from core.domain.services.pipelines.bronze.io import verify_checksum_manifest
 from core.foundation.primitives.patterns import LoadPattern
+from core.infrastructure.io.storage.checksum import verify_checksum_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -38,35 +34,18 @@ class ManifestInspectionResult:
 
 
 class ManifestInspector:
-    """Inspects existing manifest files in Bronze partitions.
-
-    Determines whether:
-    - A valid manifest exists (partition already processed)
-    - A partial/corrupted manifest exists (needs cleanup)
-    - No manifest exists (new partition)
-    """
+    """Inspect Bronze manifests and derive necessary state."""
 
     def __init__(
         self,
         output_dir: Path,
         load_pattern: Optional[LoadPattern] = None,
     ) -> None:
-        """Initialize inspector.
-
-        Args:
-            output_dir: Bronze output directory to inspect
-            load_pattern: Expected load pattern for validation
-        """
         self.output_dir = output_dir
         self.load_pattern = load_pattern
         self.manifest_path = output_dir / "_checksums.json"
 
     def inspect(self) -> ManifestInspectionResult:
-        """Inspect the manifest in the output directory.
-
-        Returns:
-            ManifestInspectionResult with inspection findings
-        """
         if not self.manifest_path.exists():
             return ManifestInspectionResult(exists=False)
 
@@ -78,20 +57,14 @@ class ManifestInspector:
                 expected_pattern=expected_pattern,
             )
             schema = self._extract_schema(manifest)
-
-            # Valid manifest means partition already processed
             return ManifestInspectionResult(
                 exists=True,
                 valid=True,
-                needs_cleanup=False,
                 previous_schema=schema,
             )
-
         except (ValueError, FileNotFoundError) as exc:
-            # Invalid/incomplete manifest needs cleanup
             loaded_manifest = self._load_manifest_json()
             schema = self._extract_schema(loaded_manifest)
-
             return ManifestInspectionResult(
                 exists=True,
                 valid=False,
@@ -101,7 +74,6 @@ class ManifestInspector:
             )
 
     def _load_manifest_json(self) -> Optional[Dict[str, Any]]:
-        """Load manifest JSON without validation."""
         if not self.manifest_path.exists():
             return None
         try:
@@ -111,8 +83,9 @@ class ManifestInspector:
         except Exception:
             return None
 
-    def _extract_schema(self, manifest: Optional[Dict[str, Any]]) -> Optional[List[Dict[str, Any]]]:
-        """Extract schema from manifest if present."""
+    def _extract_schema(
+        self, manifest: Optional[Dict[str, Any]]
+    ) -> Optional[List[Dict[str, Any]]]:
         if not manifest:
             return None
         schema = manifest.get("schema")

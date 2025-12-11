@@ -10,13 +10,9 @@ from typing import Any, Dict, List
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
-from .base import (
-    BaseCloudStorage,
-    HealthCheckResult,
-    HealthCheckTracker,
-    attempt_health_check_action,
-)
+from .base import BaseCloudStorage, HealthCheckResult, HealthCheckTracker
 from .helpers import get_env_value
+from .health_checks import validate_storage_permissions
 
 logger = logging.getLogger(__name__)
 
@@ -183,12 +179,10 @@ class S3Storage(BaseCloudStorage):
                 "multipart_upload": True,  # S3 always supports multipart
             },
         )
-        permissions = tracker.permissions
         test_key = self._build_remote_path(f"_health_check_{uuid.uuid4().hex}.tmp")
         test_content = b"health_check_test"
 
         try:
-            # Check bucket exists
             try:
                 self.client.head_bucket(Bucket=self.bucket)
             except ClientError as e:
@@ -196,64 +190,32 @@ class S3Storage(BaseCloudStorage):
                 tracker.add_error(f"Bucket access failed: {error_code}")
                 return tracker.finalize()
 
-            write_success = attempt_health_check_action(
+            validate_storage_permissions(
                 tracker,
-                lambda: self.client.put_object(
+                write_action=lambda: self.client.put_object(
                     Bucket=self.bucket,
                     Key=test_key,
                     Body=test_content,
                 ),
-                error_message="Write permission failed",
-                error_formatter=_format_s3_error,
-            )
-            if write_success is not None:
-                permissions["write"] = True
-
-            if permissions["write"]:
-                read_content = attempt_health_check_action(
-                    tracker,
-                    lambda: self.client.get_object(
-                        Bucket=self.bucket, Key=test_key
-                    )["Body"].read(),
-                    error_message="Read permission failed",
-                    error_formatter=_format_s3_error,
-                )
-                if read_content is not None:
-                    permissions["read"] = read_content == test_content
-                    if not permissions["read"]:
-                        tracker.add_error("Read content mismatch")
-
-            list_result = attempt_health_check_action(
-                tracker,
-                lambda: self.client.list_objects_v2(
+                read_action=lambda: self.client.get_object(
+                    Bucket=self.bucket, Key=test_key
+                )["Body"].read(),
+                list_action=lambda: self.client.list_objects_v2(
                     Bucket=self.bucket,
                     Prefix=self._build_remote_path("_health_check_"),
                     MaxKeys=1,
                 ),
-                error_message="List permission failed",
+                delete_action=lambda: self.client.delete_object(
+                    Bucket=self.bucket, Key=test_key
+                ),
+                read_validator=lambda content: content == test_content,
                 error_formatter=_format_s3_error,
             )
-            if list_result is not None:
-                permissions["list"] = True
 
-            if permissions["write"]:
-                delete_result = attempt_health_check_action(
-                    tracker,
-                    lambda: self.client.delete_object(
-                        Bucket=self.bucket, Key=test_key
-                    ),
-                    error_message="Delete permission failed",
-                    error_formatter=_format_s3_error,
-                )
-                if delete_result is not None:
-                    permissions["delete"] = True
-
-            # Check versioning capability
             try:
                 versioning = self.client.get_bucket_versioning(Bucket=self.bucket)
                 tracker.capabilities["versioning"] = versioning.get("Status") == "Enabled"
             except ClientError:
-                # Not an error - versioning check is optional
                 pass
 
         except BotoCoreError as e:

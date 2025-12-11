@@ -1,17 +1,13 @@
-"""Artifact cleanup utilities for Bronze extraction.
-
-Provides consistent cleanup logic for local and remote artifacts.
-"""
+"""Artifact cleanup logic for Bronze partitions and remote storage."""
 
 from __future__ import annotations
 
 import logging
 import shutil
 from pathlib import Path
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional
 
-if TYPE_CHECKING:
-    from core.infrastructure.io.storage.plan import StoragePlan
+from core.infrastructure.io.storage.plan import StoragePlan
 
 logger = logging.getLogger(__name__)
 
@@ -19,32 +15,17 @@ __all__ = ["ArtifactCleanup"]
 
 
 class ArtifactCleanup:
-    """Handles cleanup of local and remote artifacts.
-
-    Provides consistent cleanup logic for:
-    - Full directory cleanup (for resets/reruns)
-    - Individual file cleanup (for failure recovery)
-    """
+    """Handles cleanup of local and remote artifacts."""
 
     def __init__(
         self,
         output_dir: Path,
-        storage_plan: Optional["StoragePlan"] = None,
+        storage_plan: Optional[StoragePlan] = None,
     ) -> None:
-        """Initialize cleanup helper.
-
-        Args:
-            output_dir: Local output directory
-            storage_plan: Optional storage plan for remote cleanup
-        """
         self.output_dir = output_dir
         self.storage_plan = storage_plan
 
     def cleanup_directory(self) -> None:
-        """Remove and recreate the output directory.
-
-        Used when resetting a partition for a clean rerun.
-        """
         if not self.output_dir.exists():
             return
 
@@ -53,12 +34,6 @@ class ArtifactCleanup:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def cleanup_files(self, files: List[Path], cleanup_enabled: bool = True) -> None:
-        """Clean up individual files on failure.
-
-        Args:
-            files: List of file paths to clean up
-            cleanup_enabled: Whether cleanup is enabled (from config)
-        """
         if not cleanup_enabled or not files:
             return
 
@@ -69,7 +44,6 @@ class ArtifactCleanup:
             self._cleanup_remote_file(file_path)
 
     def _cleanup_local_file(self, file_path: Path) -> None:
-        """Remove a local file if it exists."""
         try:
             if file_path.exists():
                 file_path.unlink()
@@ -78,7 +52,6 @@ class ArtifactCleanup:
             logger.warning("Failed to cleanup local file %s: %s", file_path, error)
 
     def _cleanup_remote_file(self, file_path: Path) -> None:
-        """Remove a remote file if storage plan is configured."""
         if not self.storage_plan:
             return
 
