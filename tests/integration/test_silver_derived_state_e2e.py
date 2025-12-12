@@ -171,7 +171,7 @@ def read_silver_output(silver_path: Path) -> Dict[str, pd.DataFrame]:
     Returns:
         Dict with keys like 'state_current', 'state_history' mapped to DataFrames.
     """
-    result = {}
+    result: Dict[str, pd.DataFrame] = {}
     for parquet_file in silver_path.rglob("*.parquet"):
         # Determine view from parent directory or filename
         parent_name = parquet_file.parent.name
@@ -448,6 +448,7 @@ class TestDerivedStateSCD1Mode:
         current_df = outputs.get("state_current")
         if current_df is None:
             current_df = outputs.get("default")
+        assert current_df is not None, "Expected state_current or default output"
 
         # ENT001 should have status=completed (latest)
         ent001 = current_df[current_df["entity_id"] == "ENT001"].iloc[0]
@@ -746,6 +747,7 @@ class TestDerivedStateIncrementalUpdates:
         current_df = outputs.get("state_current")
         if current_df is None:
             current_df = outputs.get("default")
+        assert current_df is not None, "Expected state_current or default output"
 
         # Should have 4 unique entities (3 initial + 1 new)
         assert len(current_df) == 4, f"Expected 4 entities, got {len(current_df)}"

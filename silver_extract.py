@@ -31,6 +31,7 @@ from core.infrastructure.runtime.paths import (
     build_bronze_partition,
     build_bronze_relative_path,
     build_silver_partition_path,
+    infer_bronze_relative_path,
 )
 from core.foundation.catalog.hooks import (
     notify_catalog,
@@ -123,13 +124,6 @@ def load_bronze_records(bronze_path: Path) -> pd.DataFrame:
 
     return combined
 
-
-def derive_relative_partition(bronze_path: Path) -> Path:
-    parts = list(bronze_path.parts)
-    for idx, part in enumerate(parts):
-        if part.startswith("system="):
-            return Path(*parts[idx:])
-    return Path(bronze_path.name)
 
 
 def _default_silver_cfg() -> Dict[str, Any]:
@@ -867,7 +861,7 @@ class SilverPromotionService:
                 pattern_folder=pattern_folder,
             )
         else:
-            partition = silver_base / derive_relative_partition(bronze_path)
+            partition = silver_base / infer_bronze_relative_path(bronze_path)
 
         return partition
 

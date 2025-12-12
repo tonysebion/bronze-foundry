@@ -227,6 +227,16 @@ def build_bronze_relative_path(cfg: dict, run_date: date) -> str:
         return f"{base_path}{date_key}={run_date.isoformat()}/"
 
 
+def infer_bronze_relative_path(bronze_path: Path) -> Path:
+    """Infer the Bronze partition relative path from a resolved Bronze directory."""
+
+    parts = list(bronze_path.parts)
+    for idx, part in enumerate(parts):
+        if part.startswith("system="):
+            return Path(*parts[idx:])
+    return Path(bronze_path.name)
+
+
 def build_silver_partition_path(
     silver_base: Path,
     domain: str,

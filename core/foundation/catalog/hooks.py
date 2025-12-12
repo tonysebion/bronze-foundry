@@ -80,15 +80,19 @@ def _dispatch_catalog_event(
         logger.warning("Failed to dispatch '%s' to catalog: %s", event_name, exc)
 
 
-def set_om_client(client: OpenMetadataClientProtocol) -> None:
+def set_om_client(client: Optional[OpenMetadataClientProtocol]) -> None:
     """Set the OpenMetadata client for integration mode.
 
     Args:
-        client: OpenMetadata client instance that implements OpenMetadataClientProtocol
+        client: OpenMetadata client instance that implements OpenMetadataClientProtocol,
+                or None to disable integration mode
     """
     global _om_client
     _om_client = client
-    logger.info("OpenMetadata client configured for catalog integration")
+    if client is not None:
+        logger.info("OpenMetadata client configured for catalog integration")
+    else:
+        logger.info("OpenMetadata client cleared, reverting to logging mode")
 
 
 def get_om_client() -> Optional[OpenMetadataClientProtocol]:

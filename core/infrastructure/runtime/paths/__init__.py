@@ -11,6 +11,7 @@ from .partition_builder import (
     build_bronze_relative_path,
     build_silver_partition,
     build_silver_partition_path,
+    infer_bronze_relative_path,
     reset_datetime_provider,
     set_datetime_provider,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "SilverPartition",
     "build_bronze_partition",
     "build_bronze_relative_path",
+    "infer_bronze_relative_path",
     "build_silver_partition",
     "build_silver_partition_path",
     "reset_datetime_provider",

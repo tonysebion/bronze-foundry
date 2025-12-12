@@ -1,7 +1,7 @@
 ﻿from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable, cast
 from urllib import error
 
 import pytest
@@ -109,7 +109,7 @@ def test_hooks_toggle() -> None:
     assert hooks.get_om_client() is None
     assert hooks.is_om_enabled() is False
 
-    stub = object()
+    stub: Any = object()
     hooks.set_om_client(stub)
     assert hooks.get_om_client() is stub
     assert hooks.is_om_enabled() is True

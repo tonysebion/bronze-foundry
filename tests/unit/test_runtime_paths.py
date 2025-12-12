@@ -195,3 +195,15 @@ def test_build_silver_partition_path_respects_overrides() -> None:
         run_date=date(2025, 1, 1),
     )
     assert path_no_pattern.as_posix() == "/data/domain=domain/entity=entity/v3/load_date=2025-01-01"
+
+
+def test_infer_bronze_relative_path_from_nested_directory() -> None:
+    bronze_dir = Path("/tmp/output/system=sys/table=table/pattern=full/dt=2025-01-01")
+    inferred = paths.infer_bronze_relative_path(bronze_dir)
+    assert inferred == Path("system=sys/table=table/pattern=full/dt=2025-01-01")
+
+
+def test_infer_bronze_relative_path_fallbacks_to_basename() -> None:
+    bronze_dir = Path("/tmp/unrelated/path")
+    inferred = paths.infer_bronze_relative_path(bronze_dir)
+    assert inferred == Path("path")

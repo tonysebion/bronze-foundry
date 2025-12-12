@@ -14,7 +14,7 @@ requiring real database endpoints.
 from __future__ import annotations
 
 from datetime import date
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -31,7 +31,7 @@ def generate_db_records(
     count: int,
     start_id: int = 1,
     cursor_column: Optional[str] = None,
-) -> List[Tuple[Any, ...]]:
+) -> List[Union[Tuple[str, str, str, float], Tuple[str, str, str, float, str]]]:
     """Generate mock database row tuples.
 
     Args:
@@ -135,7 +135,7 @@ class MockCursor:
         self.executed_query = query
         self.executed_params = params
 
-    def fetchmany(self, size: int = None) -> List[Tuple[Any, ...]]:
+    def fetchmany(self, size: Optional[int] = None) -> List[Tuple[Any, ...]]:
         """Return next batch of rows."""
         fetch_size = size or self.batch_size
         if self.position >= len(self.rows):
