@@ -114,7 +114,6 @@ packages = [
     "core.domain.services.pipelines",
     "core.domain.services.pipelines.bronze",
     "core.domain.services.pipelines.silver",
-    "core.domain.services.processing",
     "core.domain.catalog",
     "core.orchestration",
     "core.orchestration.runner",

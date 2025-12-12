@@ -1,8 +1,8 @@
-"""Compatibility shim exposing Bronze storage and writer dataclasses."""
+"""Exposes Bronze storage and writer dataclasses from infrastructure."""
 
 from __future__ import annotations
 
-from core.domain.services.processing import ChunkWriterConfig, StoragePlan
+from core.infrastructure.io.storage.plan import ChunkWriterConfig, StoragePlan
 
 __all__ = [
     "ChunkWriterConfig",
