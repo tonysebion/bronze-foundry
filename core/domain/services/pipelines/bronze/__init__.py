@@ -10,13 +10,11 @@ from __future__ import annotations
 
 from . import io
 from . import base
-from . import models
 
 from core.infrastructure.io.storage.plan import ChunkWriterConfig, StoragePlan
 
 __all__ = [
     "io",
-    "models",
     "base",
     "StoragePlan",
     "ChunkWriterConfig",
